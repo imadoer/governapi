@@ -1,0 +1,35 @@
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: [
+    './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/components/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+  ],
+  theme: {
+    extend: {
+      colors: {
+        bg0: "var(--bg-0)",
+        bg1: "var(--bg-1)", 
+        bg2: "var(--bg-2)",
+        'ink-0': "var(--ink-0)",
+        'ink-1': "var(--ink-1)",
+        'acc-cyan': "var(--acc-cyan)",
+        'acc-indigo': "var(--acc-indigo)",
+        'acc-violet': "var(--acc-violet)",
+        'acc-lime': "var(--acc-lime)",
+        'acc-amber': "var(--acc-amber)",
+      },
+      boxShadow: {
+        'glow-cyan': 'var(--glow-cyan)',
+        'glow-indigo': 'var(--glow-indigo)',
+        'glow-violet': 'var(--glow-violet)',
+        'glow-lime': 'var(--glow-lime)',
+        'glow-amber': 'var(--glow-amber)',
+      },
+      backdropBlur: {
+        'minimal': '1px',
+      }
+    },
+  },
+  plugins: [],
+}

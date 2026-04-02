@@ -1,0 +1,53 @@
+import { logger } from "../../../../utils/logging/logger";
+import { NextResponse } from "next/server";
+
+export async function GET() {
+  try {
+    const scanResults = (global as any).lastScanResults || null;
+
+    if (!scanResults) {
+      return NextResponse.json({
+        overallScore: 0,
+        apis: [],
+        totalAPIs: 0,
+        message: "No scan results available. Run a security scan first.",
+      });
+    }
+
+    const vulnCount = scanResults.vulnerabilities?.length || 0;
+    const criticalVulns =
+      scanResults.vulnerabilities?.filter((v: any) => v.severity === "CRITICAL")
+        .length || 0;
+    const highVulns =
+      scanResults.vulnerabilities?.filter((v: any) => v.severity === "HIGH")
+        .length || 0;
+
+    let healthScore = 100;
+    healthScore -= criticalVulns * 30;
+    healthScore -= highVulns * 15;
+    healthScore -= (vulnCount - criticalVulns - highVulns) * 5;
+    healthScore = Math.max(0, healthScore);
+
+    const apis = [
+      {
+        name: new URL(scanResults.target_url).hostname,
+        health_score: healthScore,
+        last_scan: scanResults.scanned_at,
+        vulnerability_count: vulnCount,
+        risk_level: scanResults.overall_risk,
+      },
+    ];
+
+    return NextResponse.json({
+      overallScore: healthScore,
+      apis,
+      totalAPIs: 1,
+      lastUpdated: scanResults.scanned_at,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { error: (error as Error)?.message },
+      { status: 500 },
+    );
+  }
+}

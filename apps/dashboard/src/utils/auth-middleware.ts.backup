@@ -1,0 +1,29 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { UserAuthService } from '../services/auth/UserAuthService'
+
+export async function validateApiRequest(request: NextRequest) {
+  const authHeader = request.headers.get('authorization')
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return { 
+      valid: false, 
+      response: NextResponse.json({ error: 'Missing authorization header' }, { status: 401 })
+    }
+  }
+
+  const sessionToken = authHeader.substring(7) // Remove 'Bearer '
+  const authResult = await UserAuthService.validateSession(sessionToken)
+  
+  if (!authResult.success) {
+    return {
+      valid: false,
+      response: NextResponse.json({ error: 'Invalid or expired session' }, { status: 401 })
+    }
+  }
+
+  return {
+    valid: true,
+    user: authResult.user,
+    company: authResult.company,
+    tenantId: authResult.company?.id
+  }
+}

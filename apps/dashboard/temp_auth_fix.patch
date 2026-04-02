@@ -1,0 +1,20 @@
+--- src/services/auth.ts.backup
++++ src/services/auth.ts
+@@ -310,7 +310,7 @@
+   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+   let result = '';
+   for (let i = 0; i < length; i++) {
+-    result += chars.charAt(Math.floor(Math.random() * chars.length));
++    result += chars.charAt(Math.floor(Math.random() * chars.length));
+   }
+   return result;
+ }
+@@ -376,7 +376,7 @@
+     throw new Error('Invalid API key format or customer not found');
+   }
+ 
+-  const tenantId = `tenant_${Date.now()}_${Math.random().toString(36).substr(2, 8)}` as TenantId;
++  const tenantId = crypto.randomUUID() as TenantId;
+   
+   return {
+     success: true,

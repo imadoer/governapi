@@ -1,0 +1,32 @@
+
+> dashboard@0.1.0 build
+> next build
+
+ ⚠ outputFileTracingRoot should be absolute, using: /home/aigov/governapi-restored
+   ▲ Next.js 15.5.2
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 16.3s
+   Linting and checking validity of types ...
+ ⨯ ESLint: Failed to load plugin '@next/next' declared in ' » eslint-config-next/core-web-vitals » /home/aigov/governapi-restored/node_modules/eslint-config-next/index.js': Cannot find module '@next/eslint-plugin-next' Require stack: - /home/aigov/governapi-restored/apps/dashboard/__placeholder__.js Referenced from: /home/aigov/governapi-restored/node_modules/eslint-config-next/index.js
+Failed to compile.
+
+./config/route.ts:5:3
+Type error: Type '"2024-06-20"' is not assignable to type '"2025-08-27.basil"'.
+
+[0m [90m 3 |[39m
+ [90m 4 |[39m [36mconst[39m stripe [33m=[39m [36mnew[39m [33mStripe[39m(process[33m.[39menv[33m.[39m[33mSTRIPE_SECRET_KEY[39m [33m||[39m [32m'sk_test_placeholder'[39m[33m,[39m {
+[31m[1m>[22m[39m[90m 5 |[39m   apiVersion[33m:[39m [32m'2024-06-20'[39m
+ [90m   |[39m   [31m[1m^[22m[39m
+ [90m 6 |[39m })
+ [90m 7 |[39m
+ [90m 8 |[39m [36mexport[39m [36masync[39m [36mfunction[39m [33mPOST[39m(request[33m:[39m [33mNextRequest[39m) {[0m
+Next.js build worker exited with code: 1 and signal: null
+npm error Lifecycle script `build` failed with error:
+npm error code 1
+npm error path /home/aigov/governapi-restored/apps/dashboard
+npm error workspace dashboard@0.1.0
+npm error location /home/aigov/governapi-restored/apps/dashboard
+npm error command failed
+npm error command sh -c next build

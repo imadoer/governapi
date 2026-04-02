@@ -1,0 +1,111 @@
+/**
+ * Extended Database Service - Enterprise Features
+ */
+import { createClient } from '@supabase/supabase-js';
+import {
+  TenantId,
+  createTenantId
+} from '../core/types';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+export interface CustomerApiKey {
+  id: string;
+  tenantId: TenantId;
+  apiKey: string;
+  keyName: string;
+  dailyLimit: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface CustomerRequest {
+  id: string;
+  tenantId: TenantId;
+  apiKey: string;
+  requestUrl: string;
+  method: string;
+  securityScore: number;
+  threatDetected: boolean;
+  threatType?: string;
+  responseTimeMs: number;
+  sourceIp: string;
+  userAgent?: string;
+  createdAt: string;
+}
+
+export interface BlockedThreat {
+  id: string;
+  tenantId: TenantId;
+  ipAddress: string;
+  threatType?: string;
+  blockReason: string;
+  blockedUntil?: string;
+  blockedBy: string;
+  createdAt: string;
+}
+
+export interface SecurityScan {
+  id: string;
+  tenantId: TenantId;
+  scanType: string;
+  status: string;
+  findings: any;
+  createdAt: string;
+}
+
+class ExtendedDatabaseManager {
+  private static instance: ExtendedDatabaseManager;
+  private client = createClient(supabaseUrl, supabaseKey);
+
+  private constructor() {}
+
+  static getInstance(): ExtendedDatabaseManager {
+    if (!ExtendedDatabaseManager.instance) {
+      ExtendedDatabaseManager.instance = new ExtendedDatabaseManager();
+    }
+    return ExtendedDatabaseManager.instance;
+  }
+
+  // Public getter for supabase client
+  get supabase() {
+    return this.client;
+  }
+
+  async getSecurityScans(tenantId: string): Promise<SecurityScan[]> {
+    const { data, error } = await this.client
+      .from('security_scans')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  }
+
+  async getCustomerRequests(tenantId: string, limit = 100): Promise<CustomerRequest[]> {
+    const { data, error } = await this.client
+      .from('customer_requests')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+    return data || [];
+  }
+
+  async getBlockedThreats(tenantId: string): Promise<BlockedThreat[]> {
+    const { data, error } = await this.client
+      .from('blocked_threats')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  }
+}
+
+export const extendedDatabase = ExtendedDatabaseManager.getInstance();

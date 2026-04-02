@@ -1,0 +1,134 @@
+{
+  "project": "GovernAPI",
+  "language": "typescript",
+  "framework": "nextjs",
+  "version": "1.0.0",
+  "description": "Automated frontend maintenance agent for GovernAPI",
+  
+  "watchPaths": [
+    "src/app",
+    "src/components",
+    "src/app/dashboard"
+  ],
+  
+  "ignorePaths": [
+    "src/app/api",
+    "src/infrastructure",
+    "src/utils/auth-middleware.ts",
+    "node_modules",
+    ".env*",
+    ".git",
+    "package-lock.json",
+    "*.log"
+  ],
+  
+  "tasks": {
+    "style_consistency": {
+      "enabled": true,
+      "description": "Ensure Tailwind classes match design system",
+      "rules": [
+        "Check for inline styles and convert to Tailwind",
+        "Validate color tokens match theme",
+        "Ensure consistent spacing (px-6, py-8, etc.)",
+        "Check for deprecated classes"
+      ]
+    },
+    "token_sync": {
+      "enabled": true,
+      "description": "Sync design tokens across components",
+      "tokens": {
+        "colors": {
+          "primary": "cyan-500",
+          "secondary": "violet-500",
+          "background": "slate-900",
+          "text": "white",
+          "muted": "slate-400"
+        },
+        "spacing": {
+          "card": "p-6",
+          "section": "py-32",
+          "gap": "gap-6"
+        },
+        "borders": {
+          "default": "border-white/10",
+          "hover": "border-cyan-500/50"
+        }
+      }
+    },
+    "ui_fixes": {
+      "enabled": true,
+      "description": "Fix common UI inconsistencies",
+      "checks": [
+        "Broken image links",
+        "Missing alt text",
+        "Inconsistent button styles",
+        "Duplicate IDs",
+        "Accessibility issues"
+      ]
+    },
+    "component_optimization": {
+      "enabled": true,
+      "description": "Optimize component performance",
+      "rules": [
+        "Check for unused imports",
+        "Validate prop types",
+        "Ensure proper key props in lists",
+        "Check for console.log statements"
+      ]
+    }
+  },
+  
+  "commit": {
+    "open_pull_request": true,
+    "branch_prefix": "autocode/",
+    "branch_format": "autocode/{date}-{task}",
+    "commit_message_format": "🤖 Autocode: {task} - {description}",
+    "reviewer": "owner",
+    "auto_merge": false,
+    "labels": ["autocode", "maintenance", "frontend"]
+  },
+  
+  "tests": {
+    "run_before_commit": true,
+    "commands": [
+      "npm run lint",
+      "npx tsc --noEmit"
+    ],
+    "on_failure": "abort"
+  },
+  
+  "notifications": {
+    "on_success": {
+      "enabled": true,
+      "channels": ["slack", "github"]
+    },
+    "on_failure": {
+      "enabled": true,
+      "channels": ["email", "slack"]
+    },
+    "slack_webhook_secret": "SLACK_WEBHOOK"
+  },
+  
+  "safety": {
+    "never_modify": [
+      "src/app/api/**",
+      "src/infrastructure/**",
+      "src/utils/auth-middleware.ts",
+      ".env*",
+      "package.json",
+      "next.config.js"
+    ],
+    "require_approval": [
+      "src/app/layout.tsx",
+      "src/app/page.tsx",
+      "src/app/login/page.tsx"
+    ],
+    "max_files_per_pr": 10,
+    "max_lines_per_file": 50
+  },
+  
+  "schedule": {
+    "daily_maintenance": "0 3 * * *",
+    "weekly_deep_scan": "0 2 * * 0"
+  }
+}

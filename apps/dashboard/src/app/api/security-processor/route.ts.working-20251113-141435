@@ -1,0 +1,131 @@
+import { NextRequest, NextResponse } from "next/server";
+import { validateApiRequest } from "../../../utils/auth-middleware";
+import { logger } from "../../../utils/logging/logger";
+import { checkRateLimit, logRequest } from "../../../utils/rate-limiting";
+import { isIPBlocked, blockIP } from "../../../utils/ip-blocking";
+import { validateStripeSignature } from "../../../utils/webhook-validation";
+import { ENV } from "../../../utils/env-validation";
+
+export async function GET(request: NextRequest) {
+  return processRequest(request);
+}
+
+export async function POST(request: NextRequest) {
+  return processRequest(request);
+}
+
+export async function PUT(request: NextRequest) {
+  return processRequest(request);
+}
+
+export async function DELETE(request: NextRequest) {
+  return processRequest(request);
+}
+
+async function processRequest(request: NextRequest) {
+  console.log("Security processor running for:", request.url);
+  const { searchParams } = new URL(request.url);
+  const target = searchParams.get("target") || request.nextUrl.pathname;
+  const requiresAuth = request.headers.get("x-requires-auth") === "true";
+  console.log("DEBUG security-processor received auth header:", request.headers.get("x-requires-auth"), "requiresAuth:", requiresAuth);
+  const requiresRateLimit = request.headers.get("x-requires-rate-limit") === "true";
+  const requestId = searchParams.get("rid") || crypto.randomUUID();
+  const ip = searchParams.get("ip") || "unknown";
+
+  try {
+    // IP blocking check
+    console.log("RequiresAuth check:", requiresAuth, "IP:", ip);
+    if (requiresAuth) {
+      const blocked = await isIPBlocked(1, ip);
+      if (blocked) {
+        logger.securityEvent("Blocked IP attempted access", { target, ip });
+        return NextResponse.json({ error: "Access denied" }, { status: 403 });
+      }
+    }
+
+    const authHeaders: Record<string, string> = {};
+
+    // Authentication validation
+    console.log("RequiresAuth check:", requiresAuth, "IP:", ip);
+    if (requiresAuth) {
+      const authCheck = await validateApiRequest(request);
+      if (!authCheck.valid) {
+        logger.securityEvent("Authentication failed", { target, ip });
+        return authCheck.response;
+      }
+
+      if (authCheck.tenantId) authHeaders["x-tenant-id"] = authCheck.tenantId.toString();
+      if (authCheck.user?.id) authHeaders["x-user-id"] = authCheck.user.id.toString();
+
+      // Rate limiting
+      if (requiresRateLimit && authCheck.tenantId) {
+        const rateLimit = await checkRateLimit(authCheck.company?.apiKey || "", ip);
+        if (!rateLimit.allowed) {
+          logger.securityEvent("Rate limit exceeded", { target, ip });
+          return NextResponse.json(
+            {
+              error: "Rate limit exceeded",
+              resetTime: rateLimit.resetTime,
+            },
+            { status: 429 },
+          );
+        }
+        await logRequest(authCheck.company?.apiKey || "", ip, target, request.method);
+      }
+    }
+
+    // Forward authenticated request
+    console.log("Debug - target:", target);
+    console.log("Debug - request.url:", request.url);
+    const targetUrl = `http://localhost:3000${target}`;
+    // Read body if present
+    let bodyContent: string | undefined;
+    if (["POST", "PUT", "PATCH"].includes(request.method)) {
+      try {
+        bodyContent = await request.text();
+      } catch (e) {
+        bodyContent = undefined;
+      }
+    }
+
+    const response = await fetch(targetUrl, {
+      method: request.method,
+      headers: {
+        "x-internal-request": "true",
+        authorization: request.headers.get("authorization") || "",
+        "content-type":
+          request.headers.get("content-type") || "application/json",
+        "x-request-id": requestId,
+        ...authHeaders,
+      },
+      body: bodyContent,
+    });
+
+    const data = await response.text();
+    logger.apiRequest(request.method, target, { requestId, ip });
+
+    return new NextResponse(data, {
+      status: response.status,
+      headers: {
+        "x-internal-request": "true",
+        "content-type":
+          response.headers.get("content-type") || "application/json",
+        "x-request-id": requestId,
+      },
+    });
+  } catch (error) {
+    logger.error("Security processor error", {
+      requestId,
+      target,
+      ip,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
+  }
+}
+
+// Import at top if not already there
+import { AdvancedThreatDetector } from "../../../services/advanced-threat-detector";

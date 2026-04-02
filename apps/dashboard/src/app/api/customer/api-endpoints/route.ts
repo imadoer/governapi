@@ -1,0 +1,267 @@
+import { logger } from "../../../../utils/logging/logger";
+import { NextRequest, NextResponse } from "next/server";
+import { database } from "../../../../infrastructure/database";
+
+export async function GET(request: NextRequest) {
+  const tenantId = request.headers.get("x-tenant-id");
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: "Authentication required" },
+      { status: 401 },
+    );
+  }
+
+  try {
+    const url = new URL(request.url);
+    const status = url.searchParams.get("status");
+    const method = url.searchParams.get("method");
+    const limit = parseInt(url.searchParams.get("limit") || "50");
+    const offset = parseInt(url.searchParams.get("offset") || "0");
+
+    // Build dynamic query with filters
+    let query = `
+      SELECT a.*, 
+             COUNT(sr.id) as scan_count,
+             MAX(sr.created_at) as last_scan_date,
+             AVG(sr.security_score) as avg_security_score,
+             COUNT(v.id) as vulnerability_count
+      FROM apis a
+      LEFT JOIN scan_results sr ON a.id = sr.api_id
+      LEFT JOIN vulnerabilities v ON a.id = v.api_id AND v.status != 'resolved'
+      WHERE a.tenant_id = $1`;
+
+    const params: any[] = [tenantId];
+    let paramIndex = 2;
+
+    if (status) {
+      query += ` AND a.status = $${paramIndex}`;
+      params.push(status);
+      paramIndex++;
+    }
+
+    if (method) {
+      query += ` AND a.method = $${paramIndex}`;
+      params.push(method.toUpperCase());
+      paramIndex++;
+    }
+
+    query += ` GROUP BY a.id ORDER BY a.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    params.push(limit.toString(), offset.toString());
+
+    const endpoints = await database.queryMany(query, params);
+
+    // Get endpoint statistics
+    const endpointStats = await database.queryOne(
+      `SELECT 
+         COUNT(*) as total_endpoints,
+         COUNT(CASE WHEN status = 'active' THEN 1 END) as active_endpoints,
+         COUNT(CASE WHEN last_scanned IS NOT NULL THEN 1 END) as monitored_endpoints,
+         COUNT(DISTINCT method) as unique_methods,
+         AVG(uptime_percentage) as avg_uptime,
+         AVG(security_score) as avg_security_score
+       FROM apis WHERE tenant_id = $1`,
+      [tenantId],
+    );
+
+    // Get method distribution
+    const methodDistribution = await database.queryMany(
+      `SELECT method, COUNT(*) as count
+       FROM apis 
+       WHERE tenant_id = $1 
+       GROUP BY method 
+       ORDER BY count DESC`,
+      [tenantId],
+    );
+
+    // Get security status summary
+    const securitySummary = await database.queryOne(
+      `SELECT 
+         COUNT(CASE WHEN v.severity = 'CRITICAL' THEN 1 END) as critical_vulns,
+         COUNT(CASE WHEN v.severity = 'HIGH' THEN 1 END) as high_vulns,
+         COUNT(CASE WHEN v.severity = 'MEDIUM' THEN 1 END) as medium_vulns,
+         COUNT(CASE WHEN v.severity = 'LOW' THEN 1 END) as low_vulns
+       FROM vulnerabilities v
+       JOIN apis a ON v.api_id = a.id
+       WHERE a.tenant_id = $1 AND v.status != 'resolved'`,
+      [tenantId],
+    );
+
+    const formattedEndpoints = endpoints.map((endpoint) => ({
+      id: endpoint.id,
+      name: endpoint.name,
+      url: endpoint.url,
+      method: endpoint.method,
+      description: endpoint.description,
+      status: endpoint.status,
+      securityScore: endpoint.security_score,
+      uptimePercentage: endpoint.uptime_percentage,
+      responseTime: endpoint.response_time,
+      lastScanned: endpoint.last_scanned,
+      createdAt: endpoint.created_at,
+      updatedAt: endpoint.updated_at,
+      analytics: {
+        scanCount: parseInt(endpoint.scan_count || "0"),
+        lastScanDate: endpoint.last_scan_date,
+        averageSecurityScore: endpoint.avg_security_score
+          ? Math.round(parseFloat(endpoint.avg_security_score))
+          : null,
+        vulnerabilityCount: parseInt(endpoint.vulnerability_count || "0"),
+      },
+    }));
+
+    return NextResponse.json({
+      success: true,
+      endpoints: formattedEndpoints,
+      statistics: {
+        total: parseInt(endpointStats?.total_endpoints || "0"),
+        active: parseInt(endpointStats?.active_endpoints || "0"),
+        monitored: parseInt(endpointStats?.monitored_endpoints || "0"),
+        uniqueMethods: parseInt(endpointStats?.unique_methods || "0"),
+        averageUptime: endpointStats?.avg_uptime
+          ? Math.round(parseFloat(endpointStats.avg_uptime))
+          : null,
+        averageSecurityScore: endpointStats?.avg_security_score
+          ? Math.round(parseFloat(endpointStats.avg_security_score))
+          : null,
+      },
+      methodDistribution: methodDistribution.map((dist) => ({
+        method: dist.method,
+        count: parseInt(dist.count || "0"),
+      })),
+      securitySummary: {
+        critical: parseInt(securitySummary?.critical_vulns || "0"),
+        high: parseInt(securitySummary?.high_vulns || "0"),
+        medium: parseInt(securitySummary?.medium_vulns || "0"),
+        low: parseInt(securitySummary?.low_vulns || "0"),
+      },
+      pagination: {
+        limit,
+        offset,
+        hasMore: formattedEndpoints.length === limit,
+      },
+    });
+  } catch (error) {
+    logger.error("API endpoints fetch error:", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json(
+      { error: "Failed to fetch API endpoints" },
+      { status: 500 },
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  const tenantId = request.headers.get("x-tenant-id");
+  const userId = request.headers.get("x-user-id");
+
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: "Authentication required" },
+      { status: 401 },
+    );
+  }
+
+  try {
+    const { name, url, method, description, tags = [] } = await request.json();
+
+    if (!name || !url || !method) {
+      return NextResponse.json(
+        { error: "Name, URL, and method are required" },
+        { status: 400 },
+      );
+    }
+
+    // Validate URL format
+    try {
+      const parsedUrl = new URL(url);
+      if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+        return NextResponse.json(
+          { error: "Invalid URL protocol. Only HTTP and HTTPS are allowed" },
+          { status: 400 },
+        );
+      }
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid URL format" },
+        { status: 400 },
+      );
+    }
+
+    // Validate HTTP method
+    const validMethods = [
+      "GET",
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE",
+      "HEAD",
+      "OPTIONS",
+    ];
+    if (!validMethods.includes(method.toUpperCase())) {
+      return NextResponse.json(
+        { error: "Invalid HTTP method" },
+        { status: 400 },
+      );
+    }
+
+    // Check for duplicate endpoint
+    const existingEndpoint = await database.queryOne(
+      "SELECT id FROM apis WHERE tenant_id = $1 AND url = $2 AND method = $3",
+      [tenantId, url, method.toUpperCase()],
+    );
+
+    if (existingEndpoint) {
+      return NextResponse.json(
+        { error: "API endpoint with this URL and method already exists" },
+        { status: 409 },
+      );
+    }
+
+    // Create new API endpoint
+    const newEndpoint = await database.queryOne(
+      `INSERT INTO apis (tenant_id, name, url, method, description, tags, status, created_by, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW()) RETURNING *`,
+      [
+        tenantId,
+        name,
+        url,
+        method.toUpperCase(),
+        description || "",
+        JSON.stringify(tags),
+        "active",
+        userId || "system",
+      ],
+    );
+
+    if (!newEndpoint) {
+      return NextResponse.json(
+        { error: "Failed to create API endpoint" },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      endpoint: {
+        id: newEndpoint.id,
+        name: newEndpoint.name,
+        url: newEndpoint.url,
+        method: newEndpoint.method,
+        description: newEndpoint.description,
+        tags: Array.isArray(newEndpoint.tags) ? newEndpoint.tags : [],
+        status: newEndpoint.status,
+        createdAt: newEndpoint.created_at,
+      },
+      message: "API endpoint created successfully",
+    });
+  } catch (error) {
+    logger.error("API endpoint creation error:", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json(
+      { error: "Failed to create API endpoint" },
+      { status: 500 },
+    );
+  }
+}

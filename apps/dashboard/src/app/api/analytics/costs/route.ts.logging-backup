@@ -1,0 +1,99 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { database } from '../../../../infrastructure/database'
+
+export async function GET(req: NextRequest) {
+  // Get tenant ID from middleware-injected headers
+  const tenantId = req.headers.get('x-tenant-id')
+  if (!tenantId) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+  }
+
+  try {
+    // Get API usage data for authenticated tenant only
+    const apis = await database.queryMany(
+      'SELECT * FROM apis WHERE tenant_id = $1',
+      [tenantId]
+    )
+
+    // Get recent scans for cost calculation (last 30 days)
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+    const scans = await database.queryMany(
+      'SELECT * FROM scans WHERE tenant_id = $1 AND created_at >= $2',
+      [tenantId, thirtyDaysAgo]
+    )
+
+    // Calculate costs with proper tenant isolation
+    const costs = {
+      total: 0,
+      byApi: {},
+      savings: 0,
+      threats_blocked: 0,
+      scans_performed: scans.length,
+      apis_monitored: apis.length
+    }
+
+    // Calculate API monitoring costs
+    const apiMonitoringCost = apis.length * 5 // $5 per API per month
+
+    // Calculate scanning costs
+    let scanningCost = 0
+    for (const scan of scans) {
+      const baseCost = 0.10 // $0.10 per scan
+      scanningCost += baseCost
+      
+      // Calculate savings from blocked threats
+      if (scan.analysis) {
+        try {
+          const analysis = typeof scan.analysis === 'string' ? JSON.parse(scan.analysis) : scan.analysis
+          const criticalVulns = analysis.vulnerabilities?.filter(v => v.severity === 'CRITICAL')?.length || 0
+          const highVulns = analysis.vulnerabilities?.filter(v => v.severity === 'HIGH')?.length || 0
+          
+          costs.threats_blocked += criticalVulns + highVulns
+          costs.savings += (criticalVulns * 1000) + (highVulns * 500) // Estimated cost of breach
+        } catch (error) {
+          console.log('Failed to parse scan analysis:', error)
+        }
+      }
+    }
+
+    costs.total = apiMonitoringCost + scanningCost
+
+    // Get usage analytics for current month
+    const monthStart = new Date()
+    monthStart.setDate(1)
+    monthStart.setHours(0, 0, 0, 0)
+    
+    const monthlyUsage = await database.queryMany(
+      'SELECT COUNT(*) as requests FROM api_usage WHERE tenant_id = $1 AND timestamp >= $2',
+      [tenantId, monthStart.toISOString()]
+    )
+
+    const totalRequests = parseInt(monthlyUsage[0]?.requests || '0')
+    const requestCost = totalRequests * 0.001 // $0.001 per request
+
+    return NextResponse.json({
+      success: true,
+      monthly_cost: Math.round((costs.total + requestCost) * 100) / 100,
+      monthly_savings: Math.round(costs.savings * 100) / 100,
+      threats_blocked: costs.threats_blocked,
+      roi_percentage: Math.round((costs.savings / (costs.total + requestCost || 1)) * 100),
+      breakdown: {
+        api_monitoring: Math.round(apiMonitoringCost * 100) / 100,
+        security_scanning: Math.round(scanningCost * 100) / 100,
+        api_requests: Math.round(requestCost * 100) / 100
+      },
+      usage_stats: {
+        apis_monitored: costs.apis_monitored,
+        scans_performed: costs.scans_performed,
+        total_requests: totalRequests
+      }
+    })
+
+  } catch (error) {
+    console.error('Analytics costs error:', error)
+    return NextResponse.json({ 
+      success: false, 
+      error: 'Failed to calculate cost analytics' 
+    }, { status: 500 })
+  }
+}

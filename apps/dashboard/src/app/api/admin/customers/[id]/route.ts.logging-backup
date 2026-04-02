@@ -1,0 +1,58 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { validateApiRequest } from '../../../../../utils/auth-middleware'
+import { database } from '../../../../../infrastructure/database'
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  // Validate authentication first
+  const authCheck = await validateApiRequest(request)
+  if (!authCheck.valid) {
+    return authCheck.response
+  }
+
+  // Check if user has admin role
+  if (authCheck.user?.role !== 'admin') {
+    return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+  }
+
+  try {
+    const { id } = await params
+    
+    // CONVERTED TO POSTGRESQL - Preserve exact same data structure
+    const customer = await database.queryOne(
+      `SELECT
+        u.id, u.email, u.first_name, u.last_name, u.created_at,
+        c.company_name, c.subscription_plan, c.subscription_status, c.api_key
+       FROM users u
+       LEFT JOIN companies c ON u.company_id = c.id
+       WHERE u.id = $1`,
+      [id]
+    );
+
+    if (!customer) {
+      return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
+    }
+
+    // ALL EXISTING BUSINESS LOGIC PRESERVED - Reconstruct nested structure to match original
+    const customerData = {
+      id: customer.id,
+      email: customer.email,
+      first_name: customer.first_name,
+      last_name: customer.last_name,
+      created_at: customer.created_at,
+      companies: customer.company_name ? {
+        company_name: customer.company_name,
+        subscription_plan: customer.subscription_plan,
+        subscription_status: customer.subscription_status,
+        api_key: customer.api_key
+      } : null
+    };
+
+    return NextResponse.json({ customer: customerData });
+  } catch (error) {
+    console.error('Admin customer fetch error:', error);
+    return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
+  }
+}

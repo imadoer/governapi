@@ -1,0 +1,163 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { database } from '../../../../infrastructure/database'
+
+export async function GET(request: NextRequest) {
+  const tenantId = request.headers.get('x-tenant-id')
+  if (!tenantId) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+  }
+
+  try {
+    const url = new URL(request.url)
+    const framework = url.searchParams.get('framework')
+    const timeframe = url.searchParams.get('timeframe') || '30d'
+
+    // Get compliance analytics data
+    const complianceOverview = await database.queryOne(
+      `SELECT 
+         COUNT(DISTINCT ccr.framework_id) as frameworks_assessed,
+         AVG(ccr.compliance_percentage) as avg_compliance_score,
+         COUNT(cf.id) as total_findings,
+         COUNT(CASE WHEN cf.severity = 'CRITICAL' THEN 1 END) as critical_findings,
+         COUNT(CASE WHEN cf.status = 'resolved' THEN 1 END) as resolved_findings
+       FROM compliance_check_results ccr
+       LEFT JOIN compliance_findings cf ON ccr.tenant_id = cf.tenant_id
+       WHERE ccr.tenant_id = $1`,
+      [tenantId]
+    )
+
+    // Get compliance trends over time
+    const complianceTrends = await database.queryMany(
+      `SELECT 
+         DATE_TRUNC('week', last_assessment) as week,
+         framework_name,
+         AVG(compliance_percentage) as avg_score
+       FROM compliance_check_results 
+       WHERE tenant_id = $1 AND last_assessment >= NOW() - INTERVAL '${timeframe}'
+       GROUP BY DATE_TRUNC('week', last_assessment), framework_name
+       ORDER BY week ASC`,
+      [tenantId]
+    )
+
+    // Get framework-specific compliance scores
+    const frameworkScores = await database.queryMany(
+      `SELECT 
+         ccr.framework_name,
+         ccr.compliance_percentage,
+         ccr.last_assessment,
+         COUNT(cf.id) as findings_count,
+         COUNT(CASE WHEN cf.severity IN ('CRITICAL', 'HIGH') THEN 1 END) as high_priority_findings
+       FROM compliance_check_results ccr
+       LEFT JOIN compliance_findings cf ON ccr.framework_id = cf.framework_id AND ccr.tenant_id = cf.tenant_id
+       WHERE ccr.tenant_id = $1 ${framework ? 'AND ccr.framework_name = $2' : ''}
+       GROUP BY ccr.framework_name, ccr.compliance_percentage, ccr.last_assessment
+       ORDER BY ccr.compliance_percentage DESC`,
+      framework ? [tenantId, framework] : [tenantId]
+    )
+
+    // Get compliance gaps analysis
+    const complianceGaps = await database.queryMany(
+      `SELECT 
+         cf.control_id,
+         cf.control_name,
+         cf.framework_name,
+         cf.severity,
+         cf.status,
+         cf.discovered_at,
+         cf.due_date
+       FROM compliance_findings cf
+       WHERE cf.tenant_id = $1 AND cf.status != 'resolved'
+       ORDER BY 
+         CASE cf.severity 
+           WHEN 'CRITICAL' THEN 1 
+           WHEN 'HIGH' THEN 2 
+           WHEN 'MEDIUM' THEN 3 
+           ELSE 4 
+         END,
+         cf.discovered_at DESC
+       LIMIT 20`,
+      [tenantId]
+    )
+
+    // Calculate compliance maturity score
+    const maturityFactors = await database.queryOne(
+      `SELECT 
+         COUNT(DISTINCT sp.id) as active_policies,
+         COUNT(DISTINCT sr.id) as recent_scans,
+         COUNT(DISTINCT ca.id) as completed_audits,
+         AVG(CASE WHEN ccr.compliance_percentage >= 80 THEN 1 ELSE 0 END) as high_compliance_rate
+       FROM companies c
+       LEFT JOIN security_policies sp ON c.id = sp.tenant_id AND sp.is_active = true
+       LEFT JOIN scan_results sr ON c.id = sr.tenant_id AND sr.created_at >= NOW() - INTERVAL '30 days'
+       LEFT JOIN compliance_audits ca ON c.id = ca.tenant_id AND ca.status = 'completed'
+       LEFT JOIN compliance_check_results ccr ON c.id = ccr.tenant_id
+       WHERE c.id = $1`,
+      [tenantId]
+    )
+
+    // Calculate maturity score (0-100)
+    const activePolicies = parseInt(maturityFactors?.active_policies || '0')
+    const recentScans = parseInt(maturityFactors?.recent_scans || '0')
+    const completedAudits = parseInt(maturityFactors?.completed_audits || '0')
+    const highComplianceRate = parseFloat(maturityFactors?.high_compliance_rate || '0')
+
+    const maturityScore = Math.min(100, Math.round(
+      (activePolicies > 0 ? 25 : 0) +
+      (recentScans > 0 ? 25 : 0) +
+      (completedAudits > 0 ? 25 : 0) +
+      (highComplianceRate * 25)
+    ))
+
+    return NextResponse.json({
+      success: true,
+      complianceAnalytics: {
+        overview: {
+          frameworksAssessed: parseInt(complianceOverview?.frameworks_assessed || '0'),
+          averageComplianceScore: complianceOverview?.avg_compliance_score 
+            ? Math.round(parseFloat(complianceOverview.avg_compliance_score))
+            : null,
+          totalFindings: parseInt(complianceOverview?.total_findings || '0'),
+          criticalFindings: parseInt(complianceOverview?.critical_findings || '0'),
+          resolvedFindings: parseInt(complianceOverview?.resolved_findings || '0'),
+          maturityScore
+        },
+        trends: complianceTrends.map(trend => ({
+          week: trend.week,
+          frameworkName: trend.framework_name,
+          averageScore: Math.round(parseFloat(trend.avg_score || '0'))
+        })),
+        frameworkScores: frameworkScores.map(score => ({
+          frameworkName: score.framework_name,
+          compliancePercentage: Math.round(parseFloat(score.compliance_percentage || '0')),
+          lastAssessment: score.last_assessment,
+          findingsCount: parseInt(score.findings_count || '0'),
+          highPriorityFindings: parseInt(score.high_priority_findings || '0'),
+          status: parseFloat(score.compliance_percentage || '0') >= 80 
+            ? 'compliant' 
+            : parseFloat(score.compliance_percentage || '0') >= 60 
+            ? 'partially_compliant' 
+            : 'non_compliant'
+        })),
+        complianceGaps: complianceGaps.map(gap => ({
+          controlId: gap.control_id,
+          controlName: gap.control_name,
+          frameworkName: gap.framework_name,
+          severity: gap.severity,
+          status: gap.status,
+          discoveredAt: gap.discovered_at,
+          dueDate: gap.due_date
+        })),
+        maturityBreakdown: {
+          activePolicies,
+          recentScans,
+          completedAudits,
+          highComplianceRate: Math.round(highComplianceRate * 100)
+        }
+      }
+    })
+
+  } catch (error) {
+    console.error('Compliance analytics error:', error)
+    return NextResponse.json({ error: 'Failed to fetch compliance analytics' }, { status: 500 })
+  }
+}

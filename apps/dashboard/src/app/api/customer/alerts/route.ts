@@ -1,0 +1,323 @@
+import { logger } from "../../../../utils/logging/logger";
+import { NextRequest, NextResponse } from "next/server";
+import { database } from "../../../../infrastructure/database";
+
+export async function GET(request: NextRequest) {
+  const tenantId = request.headers.get("x-tenant-id");
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: "Authentication required" },
+      { status: 401 },
+    );
+  }
+
+  try {
+    const url = new URL(request.url);
+    const severity = url.searchParams.get("severity");
+    const status = url.searchParams.get("status");
+    const limit = parseInt(url.searchParams.get("limit") || "50");
+    const offset = parseInt(url.searchParams.get("offset") || "0");
+
+    // Build dynamic query with filters
+    let query = `
+      SELECT a.*, ar.rule_name, ar.conditions
+      FROM alerts a
+      LEFT JOIN alert_rules ar ON a.rule_id = ar.id
+      WHERE a.tenant_id = $1`;
+
+    const params: any[] = [tenantId];
+    let paramIndex = 2;
+
+    if (severity) {
+      query += ` AND a.severity = $${paramIndex}`;
+      params.push(severity);
+      paramIndex++;
+    }
+
+    if (status) {
+      query += ` AND a.status = $${paramIndex}`;
+      params.push(status);
+      paramIndex++;
+    }
+
+    query += ` ORDER BY a.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    params.push(limit.toString(), offset.toString());
+
+    const alerts = await database.queryMany(query, params);
+
+    // Get alert statistics
+    const alertStats = await database.queryOne(
+      `SELECT 
+         COUNT(*) as total_alerts,
+         COUNT(CASE WHEN status = 'open' THEN 1 END) as open_alerts,
+         COUNT(CASE WHEN status = 'acknowledged' THEN 1 END) as acknowledged_alerts,
+         COUNT(CASE WHEN status = 'resolved' THEN 1 END) as resolved_alerts,
+         COUNT(CASE WHEN severity = 'CRITICAL' THEN 1 END) as critical_alerts,
+         COUNT(CASE WHEN severity = 'HIGH' THEN 1 END) as high_alerts,
+         COUNT(CASE WHEN created_at >= NOW() - INTERVAL '24 hours' THEN 1 END) as alerts_24h
+       FROM alerts WHERE tenant_id = $1`,
+      [tenantId],
+    );
+
+    // Get alert trends by hour
+    const alertTrends = await database.queryMany(
+      `SELECT 
+         DATE_TRUNC('hour', created_at) as hour,
+         COUNT(*) as alert_count,
+         COUNT(CASE WHEN severity = 'CRITICAL' THEN 1 END) as critical_count
+       FROM alerts 
+       WHERE tenant_id = $1 AND created_at >= NOW() - INTERVAL '24 hours'
+       GROUP BY DATE_TRUNC('hour', created_at)
+       ORDER BY hour ASC`,
+      [tenantId],
+    );
+
+    // Get top alert sources
+    const topSources = await database.queryMany(
+      `SELECT alert_source, COUNT(*) as alert_count,
+              COUNT(CASE WHEN severity IN ('CRITICAL', 'HIGH') THEN 1 END) as high_severity_count
+       FROM alerts 
+       WHERE tenant_id = $1 AND created_at >= NOW() - INTERVAL '7 days'
+       GROUP BY alert_source
+       ORDER BY alert_count DESC
+       LIMIT 10`,
+      [tenantId],
+    );
+
+    const formattedAlerts = alerts.map((alert) => ({
+      id: alert.id,
+      title: alert.title,
+      description: alert.description,
+      severity: alert.severity,
+      status: alert.status,
+      alertSource: alert.alert_source,
+      sourceId: alert.source_id,
+      ruleId: alert.rule_id,
+      ruleName: alert.rule_name,
+      conditions:
+        typeof alert.conditions === "string"
+          ? JSON.parse(alert.conditions)
+          : alert.conditions,
+      metadata:
+        typeof alert.metadata === "string"
+          ? JSON.parse(alert.metadata)
+          : alert.metadata,
+      createdAt: alert.created_at,
+      acknowledgedAt: alert.acknowledged_at,
+      resolvedAt: alert.resolved_at,
+      assignedTo: alert.assigned_to,
+    }));
+
+    return NextResponse.json({
+      success: true,
+      alerts: formattedAlerts,
+      statistics: {
+        total: parseInt(alertStats?.total_alerts || "0"),
+        open: parseInt(alertStats?.open_alerts || "0"),
+        acknowledged: parseInt(alertStats?.acknowledged_alerts || "0"),
+        resolved: parseInt(alertStats?.resolved_alerts || "0"),
+        critical: parseInt(alertStats?.critical_alerts || "0"),
+        high: parseInt(alertStats?.high_alerts || "0"),
+        last24Hours: parseInt(alertStats?.alerts_24h || "0"),
+      },
+      trends: alertTrends.map((trend) => ({
+        hour: trend.hour,
+        alertCount: parseInt(trend.alert_count || "0"),
+        criticalCount: parseInt(trend.critical_count || "0"),
+      })),
+      topSources: topSources.map((source) => ({
+        alertSource: source.alert_source,
+        alertCount: parseInt(source.alert_count || "0"),
+        highSeverityCount: parseInt(source.high_severity_count || "0"),
+      })),
+      pagination: {
+        limit,
+        offset,
+        hasMore: formattedAlerts.length === limit,
+      },
+    });
+  } catch (error) {
+    logger.error("Alerts API error:", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json(
+      { error: "Failed to fetch alerts" },
+      { status: 500 },
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  const tenantId = request.headers.get("x-tenant-id");
+  const userId = request.headers.get("x-user-id");
+
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: "Authentication required" },
+      { status: 401 },
+    );
+  }
+
+  try {
+    const {
+      title,
+      description,
+      severity,
+      alertSource,
+      sourceId,
+      metadata = {},
+    } = await request.json();
+
+    if (!title || !description || !severity || !alertSource) {
+      return NextResponse.json(
+        {
+          error: "Title, description, severity, and alert source are required",
+        },
+        { status: 400 },
+      );
+    }
+
+    // Validate severity
+    const validSeverities = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
+    if (!validSeverities.includes(severity)) {
+      return NextResponse.json(
+        { error: "Invalid severity. Allowed: " + validSeverities.join(", ") },
+        { status: 400 },
+      );
+    }
+
+    // Create new alert
+    const newAlert = await database.queryOne(
+      `INSERT INTO alerts (tenant_id, title, description, severity, status, alert_source, source_id, metadata, created_by, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW()) RETURNING *`,
+      [
+        tenantId,
+        title,
+        description,
+        severity,
+        "open",
+        alertSource,
+        sourceId,
+        JSON.stringify(metadata),
+        userId || "system",
+      ],
+    );
+
+    if (!newAlert) {
+      return NextResponse.json(
+        { error: "Failed to create alert" },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      alert: {
+        id: newAlert.id,
+        title: newAlert.title,
+        description: newAlert.description,
+        severity: newAlert.severity,
+        status: newAlert.status,
+        alertSource: newAlert.alert_source,
+        sourceId: newAlert.source_id,
+        createdAt: newAlert.created_at,
+      },
+      message: "Alert created successfully",
+    });
+  } catch (error) {
+    logger.error("Alert creation error:", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json(
+      { error: "Failed to create alert" },
+      { status: 500 },
+    );
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  const tenantId = request.headers.get("x-tenant-id");
+  const userId = request.headers.get("x-user-id");
+
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: "Authentication required" },
+      { status: 401 },
+    );
+  }
+
+  try {
+    const { alertId, status, assignedTo } = await request.json();
+
+    if (!alertId || !status) {
+      return NextResponse.json(
+        { error: "Alert ID and status are required" },
+        { status: 400 },
+      );
+    }
+
+    // Validate status
+    const validStatuses = ["open", "acknowledged", "resolved", "closed"];
+    if (!validStatuses.includes(status)) {
+      return NextResponse.json(
+        { error: "Invalid status. Allowed: " + validStatuses.join(", ") },
+        { status: 400 },
+      );
+    }
+
+    // Update alert
+    let updateQuery =
+      "UPDATE alerts SET status = $1, updated_by = $2, updated_at = NOW()";
+    const updateParams = [status, userId || "system"];
+    let paramIndex = 3;
+
+    if (status === "acknowledged") {
+      updateQuery += `, acknowledged_at = NOW(), acknowledged_by = $${paramIndex}`;
+      updateParams.push(userId || "system");
+      paramIndex++;
+    } else if (status === "resolved" || status === "closed") {
+      updateQuery += `, resolved_at = NOW(), resolved_by = $${paramIndex}`;
+      updateParams.push(userId || "system");
+      paramIndex++;
+    }
+
+    if (assignedTo) {
+      updateQuery += `, assigned_to = $${paramIndex}`;
+      updateParams.push(assignedTo);
+      paramIndex++;
+    }
+
+    updateQuery += ` WHERE id = $${paramIndex} AND tenant_id = $${paramIndex + 1} RETURNING *`;
+    updateParams.push(alertId, tenantId);
+
+    const updatedAlert = await database.queryOne(updateQuery, updateParams);
+
+    if (!updatedAlert) {
+      return NextResponse.json(
+        { error: "Alert not found or unauthorized" },
+        { status: 404 },
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      alert: {
+        id: updatedAlert.id,
+        status: updatedAlert.status,
+        acknowledgedAt: updatedAlert.acknowledged_at,
+        resolvedAt: updatedAlert.resolved_at,
+        assignedTo: updatedAlert.assigned_to,
+        updatedAt: updatedAlert.updated_at,
+      },
+      message: "Alert updated successfully",
+    });
+  } catch (error) {
+    logger.error("Alert update error:", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json(
+      { error: "Failed to update alert" },
+      { status: 500 },
+    );
+  }
+}

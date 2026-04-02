@@ -1,0 +1,49 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { database } from '../../../infrastructure/database'
+
+function getUserFromToken(req: NextRequest) {
+  const authHeader = req.headers.get('authorization')
+  if (!authHeader?.startsWith('Bearer ')) {
+    return null
+  }
+  const token = authHeader.substring(7)
+  return { userId: token, email: 'user@example.com' }
+}
+
+export async function GET(req: NextRequest) {
+  try {
+    const user = getUserFromToken(req)
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const policies = await database.queryMany(
+      'SELECT * FROM policies WHERE user_id = $1 ORDER BY created_at DESC',
+      [user.userId]
+    )
+
+    return NextResponse.json({ policies: policies || [] })
+  } catch (error) {
+    return NextResponse.json({ error: 'Failed to fetch policies' }, { status: 500 })
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const user = getUserFromToken(req)
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { name, rules, enabled = true } = await req.json()
+
+    const newPolicy = await database.queryOne(
+      'INSERT INTO policies (user_id, name, rules, enabled, created_at) VALUES ($1, $2, $3, $4, NOW()) RETURNING *',
+      [user.userId, name, JSON.stringify(rules), enabled]
+    )
+
+    return NextResponse.json({ policy: newPolicy })
+  } catch (error) {
+    return NextResponse.json({ error: 'Failed to create policy' }, { status: 500 })
+  }
+}

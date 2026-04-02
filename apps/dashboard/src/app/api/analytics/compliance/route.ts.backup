@@ -1,0 +1,82 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { validateApiRequest } from '../../../../utils/auth-middleware'
+import { database } from '../../../../infrastructure/database'
+
+export async function GET(request: NextRequest) {
+  // Validate authentication first
+  const authCheck = await validateApiRequest(request)
+  if (!authCheck.valid) {
+    return authCheck.response
+  }
+
+  // Customer users should only see their own tenant data
+  const tenantId = authCheck.tenantId
+
+  try {
+    // Get violations data using PostgreSQL
+    let violations = []
+    try {
+      violations = await database.queryMany(
+        'SELECT * FROM violations WHERE tenant_id = $1 AND status = $2',
+        [tenantId, 'active']
+      )
+    } catch (error) {
+      console.log('violations table not found, using empty array')
+    }
+
+    // Get policies data using PostgreSQL
+    let policies = []
+    try {
+      policies = await database.queryMany(
+        'SELECT * FROM policies WHERE tenant_id = $1 AND enabled = $2',
+        [tenantId, true]
+      )
+    } catch (error) {
+      console.log('policies table not found, using empty array')
+    }
+
+    // Calculate real compliance score based on actual data
+    const totalChecks = (policies?.length || 1) * 10
+    const violations_count = violations?.length || 0
+    const baseScore = Math.max(0, Math.round(((totalChecks - violations_count) / totalChecks) * 100))
+
+    // Calculate framework-specific scores based on actual compliance data
+    const frameworks = {}
+    
+    // Get framework-specific violations and policies
+    const frameworkNames = ['SOC2', 'GDPR', 'PCI-DSS', 'HIPAA']
+    
+    for (const framework of frameworkNames) {
+      try {
+        const frameworkViolations = await database.queryMany(
+          'SELECT COUNT(*) as count FROM violations WHERE tenant_id = $1 AND framework = $2 AND status = $3',
+          [tenantId, framework, 'active']
+        )
+        
+        const frameworkPolicies = await database.queryMany(
+          'SELECT COUNT(*) as count FROM policies WHERE tenant_id = $1 AND framework = $2 AND enabled = $3',
+          [tenantId, framework, true]
+        )
+        
+        const fViolations = parseInt(frameworkViolations[0]?.count || 0)
+        const fPolicies = parseInt(frameworkPolicies[0]?.count || 1)
+        const fScore = Math.max(0, Math.round(((fPolicies * 10 - fViolations) / (fPolicies * 10)) * 100))
+        
+        frameworks[framework] = fScore
+      } catch (error) {
+        // Fallback to base score if framework-specific data not available
+        frameworks[framework] = baseScore
+      }
+    }
+
+    return NextResponse.json({
+      overall_score: baseScore,
+      frameworks,
+      violations: violations_count,
+      policies: policies?.length || 0
+    })
+  } catch (error) {
+    console.error('Analytics compliance error:', error)
+    return NextResponse.json({ error: 'Failed to fetch compliance analytics' }, { status: 500 })
+  }
+}

@@ -1,0 +1,415 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import {
+  ShieldCheckIcon,
+  EnvelopeIcon,
+  LockClosedIcon,
+  ArrowRightIcon,
+  ExclamationCircleIcon,
+  UserIcon,
+  BuildingOfficeIcon,
+} from "@heroicons/react/24/outline";
+
+export default function LoginPageContent() {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Login form state
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  // Register form state
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [regEmail, setRegEmail] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [regPassword, setRegPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  // Get plan from URL
+  const plan = searchParams.get("plan") || "developer";
+
+  useEffect(() => {
+    const modeParam = searchParams.get("mode");
+    if (modeParam === "register" || modeParam === "signup") {
+      setMode("register");
+    }
+  }, [searchParams]);
+
+  const getPlanDescription = () => {
+    switch (plan.toLowerCase()) {
+      case "professional":
+        return "Start your Professional plan";
+      case "enterprise":
+        return "Create your Enterprise account";
+      default:
+        return "Get started for free";
+    }
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+
+    try {
+      console.log('Attempting login...', { email });
+      
+      const response = await fetch("/api/auth/customer/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const result = await response.json();
+      console.log('Login response:', result);
+
+      if (result.success) {
+        console.log('Login successful, storing session...');
+        sessionStorage.setItem("user", JSON.stringify(result.user));
+        sessionStorage.setItem("company", JSON.stringify(result.company));
+        sessionStorage.setItem("sessionToken", result.sessionToken);
+        
+        console.log('Redirecting to dashboard...');
+        // Use hard redirect instead of router.push
+        window.location.href = "/dashboard";
+      } else {
+        console.error('Login failed:', result.error);
+        setError(result.error || "Login failed");
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      setError("Login failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+
+    if (regPassword !== confirmPassword) {
+      setError("Passwords do not match");
+      setLoading(false);
+      return;
+    }
+
+    if (regPassword.length < 8) {
+      setError("Password must be at least 8 characters");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/auth/customer/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firstName,
+          lastName,
+          email: regEmail,
+          companyName,
+          password: regPassword,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        sessionStorage.setItem("user", JSON.stringify(result.user));
+        sessionStorage.setItem("company", JSON.stringify(result.company));
+        sessionStorage.setItem("sessionToken", result.sessionToken);
+        router.push("/dashboard");
+      } else {
+        setError(result.error || "Registration failed");
+      }
+    } catch (error) {
+      setError("Registration failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#0a0e1a] relative overflow-hidden flex items-center justify-center">
+      {/* Animated Background */}
+      <div className="absolute inset-0 bg-[radial-gradient(120%_140%_at_50%_0%,#1a1f3f_0%,#0c1224_80%)]">
+        <div className="absolute inset-0 opacity-30">
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-500/20 rounded-full blur-[120px] animate-pulse" />
+          <div
+            className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-violet-500/20 rounded-full blur-[120px] animate-pulse"
+            style={{ animationDelay: "1s" }}
+          />
+        </div>
+
+        {/* Grid Pattern */}
+        <div className="absolute inset-0 opacity-10">
+          <div
+            className="absolute inset-0"
+            style={{
+              backgroundImage:
+                "linear-gradient(rgba(6, 182, 212, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(6, 182, 212, 0.1) 1px, transparent 1px)",
+              backgroundSize: "50px 50px",
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Back to Home Link */}
+      <Link
+        href="/"
+        className="absolute top-8 left-8 z-10 flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
+      >
+        <ArrowRightIcon className="w-5 h-5 rotate-180" />
+        <span>Back to Home</span>
+      </Link>
+
+      {/* Login/Register Card */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
+        className="relative z-10 w-full max-w-md mx-4"
+      >
+        {/* Glass Card */}
+        <div className="bg-slate-900/50 backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-[0_0_80px_rgba(6,182,212,0.15)]">
+          {/* Logo & Title */}
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-cyan-500 to-violet-500 rounded-2xl mb-4">
+              <ShieldCheckIcon className="w-10 h-10 text-white" />
+            </div>
+            <h1 className="text-3xl font-bold text-white mb-2">GovernAPI</h1>
+            <p className="text-slate-400">
+              {mode === "login" ? "Sign in to your dashboard" : getPlanDescription()}
+            </p>
+          </div>
+
+          {/* Mode Toggle */}
+          <div className="flex gap-2 mb-6 bg-slate-800/50 p-1 rounded-xl">
+            <button
+              onClick={() => setMode("login")}
+              className={`flex-1 py-2 px-4 rounded-lg transition-all ${
+                mode === "login"
+                  ? "bg-gradient-to-r from-cyan-500 to-violet-500 text-white shadow-lg"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              onClick={() => setMode("register")}
+              className={`flex-1 py-2 px-4 rounded-lg transition-all ${
+                mode === "register"
+                  ? "bg-gradient-to-r from-cyan-500 to-violet-500 text-white shadow-lg"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              Sign Up
+            </button>
+          </div>
+
+          {/* Error Message */}
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-2"
+            >
+              <ExclamationCircleIcon className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+              <span className="text-red-400 text-sm">{error}</span>
+            </motion.div>
+          )}
+
+          {/* Login Form */}
+          {mode === "login" && (
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Email Address
+                </label>
+                <div className="relative">
+                  <EnvelopeIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className="w-full pl-10 pr-4 py-3 bg-slate-800/50 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all"
+                    placeholder="you@company.com"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Password
+                </label>
+                <div className="relative">
+                  <LockClosedIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className="w-full pl-10 pr-4 py-3 bg-slate-800/50 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all"
+                    placeholder="••••••••"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-sm">
+                <label className="flex items-center gap-2 text-slate-400 cursor-pointer">
+                  <input type="checkbox" className="rounded" />
+                  Remember me
+                </label>
+                <a href="/forgot-password" className="text-cyan-400 hover:text-cyan-300">
+                  Forgot password?
+                </a>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 bg-gradient-to-r from-cyan-500 to-violet-500 hover:from-cyan-600 hover:to-violet-600 text-white font-medium rounded-xl shadow-lg shadow-cyan-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? "Signing in..." : "Sign In"}
+              </button>
+            </form>
+          )}
+
+          {/* Register Form */}
+          {mode === "register" && (
+            <form onSubmit={handleRegister} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                    First Name
+                  </label>
+                  <div className="relative">
+                    <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                    <input
+                      type="text"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      required
+                      className="w-full pl-10 pr-4 py-3 bg-slate-800/50 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all"
+                      placeholder="John"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                    Last Name
+                  </label>
+                  <div className="relative">
+                    <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                    <input
+                      type="text"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      required
+                      className="w-full pl-10 pr-4 py-3 bg-slate-800/50 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all"
+                      placeholder="Doe"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Email Address
+                </label>
+                <div className="relative">
+                  <EnvelopeIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    type="email"
+                    value={regEmail}
+                    onChange={(e) => setRegEmail(e.target.value)}
+                    required
+                    className="w-full pl-10 pr-4 py-3 bg-slate-800/50 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all"
+                    placeholder="you@company.com"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Company Name
+                </label>
+                <div className="relative">
+                  <BuildingOfficeIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    type="text"
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    required
+                    className="w-full pl-10 pr-4 py-3 bg-slate-800/50 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all"
+                    placeholder="Acme Corp"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Password
+                </label>
+                <div className="relative">
+                  <LockClosedIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    type="password"
+                    value={regPassword}
+                    onChange={(e) => setRegPassword(e.target.value)}
+                    required
+                    minLength={8}
+                    className="w-full pl-10 pr-4 py-3 bg-slate-800/50 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all"
+                    placeholder="••••••••"
+                  />
+                </div>
+                <p className="text-xs text-slate-500 mt-1">Minimum 8 characters</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Confirm Password
+                </label>
+                <div className="relative">
+                  <LockClosedIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    className="w-full pl-10 pr-4 py-3 bg-slate-800/50 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all"
+                    placeholder="••••••••"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 bg-gradient-to-r from-cyan-500 to-violet-500 hover:from-cyan-600 hover:to-violet-600 text-white font-medium rounded-xl shadow-lg shadow-cyan-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? "Creating account..." : "Create Account"}
+              </button>
+
+              <p className="text-xs text-slate-500 text-center">
+                By creating an account, you agree to our Terms of Service and Privacy
+                Policy
+              </p>
+            </form>
+          )}
+        </div>
+      </motion.div>
+    </div>
+  );
+}

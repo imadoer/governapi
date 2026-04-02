@@ -1,0 +1,79 @@
+"use client";
+import React, { useState } from "react";
+import useSWR from "swr";
+import { motion, useReducedMotion } from "framer-motion";
+import {
+  Progress,
+  Badge,
+  Modal,
+  Form,
+  Input,
+  Select,
+  message,
+  Button,
+  Switch,
+  Space,
+  Skeleton,
+  Tag,
+} from "antd";
+import {
+  ReloadOutlined,
+  PlayCircleOutlined,
+  SecurityScanOutlined,
+  FireOutlined,
+  BugOutlined,
+  SafetyCertificateOutlined,
+  LineChartOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+} from "@ant-design/icons";
+import { 
+  fadeSlideDown, 
+  fadeLift, 
+  scaleInPulse,
+  cardLift,
+  hoverGlow, 
+  pulseLoop,
+  staggerContainer,
+  depthReveal,
+  springIn,
+  closingDepth
+} from "../../../../motion/variants";
+
+const { Option } = Select;
+
+interface SecurityMetrics {
+  securityScore: number;
+  securityScoreTrend: number;
+  activeThreats: number;
+  openVulnerabilities: number;
+  scansRunning: number;
+  complianceScore: number;
+  botDetectionRate: number;
+  criticalVulns: number;
+}
+
+const fetcher = (url: string, tenantId: string) =>
+  fetch(url, { headers: { "x-tenant-id": tenantId } }).then((res) => res.json());
+
+export function SecurityCenterPage({ company }) {
+  const [scanModalVisible, setScanModalVisible] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [form] = Form.useForm();
+  const [submitting, setSubmitting] = useState(false);
+  const shouldReduceMotion = useReducedMotion();
+
+  const tenantId = company?.id || "1";
+
+  const { data: metricsData, mutate: refreshMetrics, isLoading: metricsLoading } = useSWR(
+    [`/api/customer/security-metrics`, tenantId],
+    ([url, id]) => fetcher(url, id),
+    { refreshInterval: autoRefresh ? 30000 : 0 }
+  );
+
+
+  const { data: scansData, isLoading: scansLoading } = useSWR(
+    [`/api/customer/security-scans?limit=10`, tenantId],
+    ([url, id]) => fetcher(url, id),
+    { refreshInterval: autoRefresh ? 10000 : 0 }
+  );

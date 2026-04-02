@@ -1,0 +1,940 @@
+"use client";
+import React, { useState, useEffect } from "react";
+import {
+  Card,
+  Row,
+  Col,
+  Typography,
+  Button,
+  Tag,
+  Space,
+  Table,
+  Progress,
+  Tabs,
+  Statistic,
+  Modal,
+  Form,
+  Input,
+  Select,
+  message,
+  Drawer,
+  Timeline,
+  Badge,
+  Alert,
+  Tooltip,
+  Empty,
+  Spin,
+} from "antd";
+import {
+  ReloadOutlined,
+  SecurityScanOutlined,
+  SafetyCertificateOutlined,
+  BugOutlined,
+  AlertOutlined,
+  CheckCircleOutlined,
+  PlayCircleOutlined,
+  SearchOutlined,
+  FireOutlined,
+  ThunderboltOutlined,
+  EyeOutlined,
+  DownloadOutlined,
+  GlobalOutlined,
+  LockOutlined,
+  ApiOutlined,
+  BarChartOutlined,
+  ClockCircleOutlined,
+  InfoCircleOutlined,
+  WarningOutlined,
+  ExclamationCircleOutlined,
+  DashboardOutlined,
+  RobotOutlined,
+} from "@ant-design/icons";
+import type { ColumnsType } from "antd/es/table";
+
+// Import shared components
+import { ScoreCard } from "../../../../components/shared/ScoreCard";
+import { ForecastWidget } from "../../../../components/shared/ForecastWidget";
+import { IncidentBanner } from "../../../../components/shared/IncidentBanner";
+import { CopilotChat } from "../../../../components/shared/CopilotChat";
+
+const { Title, Paragraph, Text } = Typography;
+const { Option } = Select;
+const { TabPane } = Tabs;
+
+// ==================== TYPES ====================
+
+interface SecurityMetrics {
+  securityScore: number;
+  securityScoreTrend: number;
+  activeThreats: number;
+  openVulnerabilities: number;
+  scansRunning: number;
+  lastIncidentAt: string | null;
+  criticalVulns: number;
+  highVulns: number;
+  mediumVulns: number;
+  lowVulns: number;
+  threatsBlockedToday: number;
+  complianceScore: number;
+  botDetectionRate: number;
+  goodBots: number;
+  badBots: number;
+}
+
+interface SecurityScan {
+  id: number;
+  target: string;
+  scan_type: string;
+  status: "pending" | "running" | "completed" | "failed";
+  security_score?: number;
+  vulnerability_count: number;
+  scan_duration?: number;
+  created_at: string;
+  completed_at?: string;
+  error_message?: string;
+}
+
+interface Vulnerability {
+  id: number;
+  title: string;
+  severity: "critical" | "high" | "medium" | "low" | "info";
+  vulnerability_type: string;
+  cvss_score?: number;
+  cwe_id?: string;
+  affected_url?: string;
+  status: string;
+  created_at: string;
+}
+
+interface ThreatEvent {
+  id: string;
+  type: string;
+  source_ip: string;
+  target: string;
+  severity: "critical" | "high" | "medium" | "low";
+  timestamp: string;
+  status: string;
+  country?: string;
+}
+
+interface Incident {
+  id: string;
+  title: string;
+  severity: "critical" | "high" | "medium";
+  startedAt: string;
+  responders: string[];
+  status: "active" | "investigating" | "resolving";
+}
+
+interface ForecastData {
+  securityScore: {
+    current: number;
+    predicted: number;
+    confidence: number;
+    trend: "up" | "down" | "stable";
+  };
+  vulnerabilities: {
+    current: number;
+    predicted: number;
+    confidence: number;
+    trend: "up" | "down" | "stable";
+  };
+}
+
+// ==================== MAIN COMPONENT ====================
+
+export function SecurityCenterPage({ stats, refreshData, refreshing, blockedThreats = [], vulnerabilities = [], company }) {
+  // ========== STATE ==========
+  const [activeTab, setActiveTab] = useState("dashboard");
+  const [metrics, setMetrics] = useState<SecurityMetrics | null>(null);
+  const [securityScans, setSecurityScans] = useState<SecurityScan[]>([]);
+  const [recentVulns, setRecentVulns] = useState<Vulnerability[]>([]);
+  const [recentThreats, setRecentThreats] = useState<ThreatEvent[]>([]);
+  const [activeIncident, setActiveIncident] = useState<Incident | null>(null);
+  const [forecastData, setForecastData] = useState<ForecastData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [scansLoading, setScansLoading] = useState(false);
+  const [scanModalVisible, setScanModalVisible] = useState(false);
+  const [crossImpactDrawer, setCrossImpactDrawer] = useState(false);
+  const [selectedScan, setSelectedScan] = useState<SecurityScan | null>(null);
+  const [form] = Form.useForm();
+
+  // ========== FETCH DATA ==========
+  useEffect(() => {
+    fetchAllData();
+    
+    // Auto-refresh every 30 seconds
+    const interval = setInterval(fetchAllData, 30000);
+    return () => clearInterval(interval);
+  }, [company]);
+
+  const fetchAllData = async () => {
+    try {
+      setLoading(true);
+      const tenantId = company?.id || (() => { throw new Error("No tenant ID"); })();
+
+      // Fetch security metrics
+      const metricsRes = await fetch(`/api/customer/security-metrics`, {
+        headers: { "x-tenant-id": tenantId },
+      });
+      const metricsData = await metricsRes.json();
+      if (metricsData.success) {
+        setMetrics(metricsData.metrics);
+      }
+
+      // Fetch security scans
+      const scansRes = await fetch(`/api/customer/security-scans?limit=10`, {
+        headers: { "x-tenant-id": tenantId },
+      });
+      const scansData = await scansRes.json();
+      if (scansData.success) {
+        setSecurityScans(scansData.securityScans || []);
+      }
+
+      // Fetch recent vulnerabilities
+      const vulnsRes = await fetch(`/api/customer/vulnerabilities?limit=5&status=open`, {
+        headers: { "x-tenant-id": tenantId },
+      });
+      const vulnsData = await vulnsRes.json();
+      if (vulnsData.success) {
+        setRecentVulns(vulnsData.vulnerabilities || []);
+      }
+
+      // Fetch recent threats
+      const threatsRes = await fetch(`/api/customer/threat-blocking?limit=10`, {
+        headers: { "x-tenant-id": tenantId },
+      });
+      const threatsData = await threatsRes.json();
+      if (threatsData.success) {
+        setRecentThreats(threatsData.threats || []);
+      }
+
+      // Fetch active incidents
+      const incidentsRes = await fetch(`/api/incidents?active=true`, {
+        headers: { "x-tenant-id": tenantId },
+      });
+      const incidentsData = await incidentsRes.json();
+      if (incidentsData.success && incidentsData.incidents.length > 0) {
+        setActiveIncident(incidentsData.incidents[0]);
+      } else {
+        setActiveIncident(null);
+      }
+
+      // Fetch forecast data
+      const forecastRes = await fetch(`/api/forecast/security`, {
+        headers: { "x-tenant-id": tenantId },
+      });
+      const forecastData = await forecastRes.json();
+      if (forecastData.success) {
+        setForecastData(forecastData.forecast);
+      }
+    } catch (error) {
+      console.error("Error fetching security data:", error);
+      message.error("Failed to load security data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ========== SCAN MANAGEMENT ==========
+  const handleStartScan = async (values: any) => {
+    try {
+      const response = await fetch("/api/customer/security-scans", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-tenant-id": company?.id || (() => { throw new Error("No tenant ID"); })(),
+        },
+        body: JSON.stringify({
+          url: values.url,
+          scanType: values.scanType,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        message.success("Security scan started successfully!");
+        setScanModalVisible(false);
+        form.resetFields();
+        fetchAllData();
+      } else {
+        message.error(data.error || "Failed to start scan");
+      }
+    } catch (error) {
+      message.error("Failed to start security scan");
+      console.error("Scan start error:", error);
+    }
+  };
+
+  const handleResolveIncident = async () => {
+    if (!activeIncident) return;
+    
+    try {
+      const response = await fetch(`/api/incidents/${activeIncident.id}/resolve`, {
+        method: "POST",
+        headers: { "x-tenant-id": company?.id || (() => { throw new Error("No tenant ID"); })() },
+      });
+
+      if (response.ok) {
+        message.success("Incident marked as resolved");
+        setActiveIncident(null);
+      }
+    } catch (error) {
+      message.error("Failed to resolve incident");
+    }
+  };
+
+  // ========== UTILITY FUNCTIONS ==========
+  const getSeverityColor = (severity: string) => {
+    switch (severity) {
+      case "critical":
+        return "#ff4d4f";
+      case "high":
+        return "#fa8c16";
+      case "medium":
+        return "#faad14";
+      case "low":
+        return "#1890ff";
+      default:
+        return "#8c8c8c";
+    }
+  };
+
+  const getScoreColor = (score: number) => {
+    if (score >= 90) return "#52c41a";
+    if (score >= 80) return "#1890ff";
+    if (score >= 70) return "#faad14";
+    if (score >= 60) return "#fa8c16";
+    return "#ff4d4f";
+  };
+
+  // ========== TABLE COLUMNS ==========
+  const scanColumns: ColumnsType<SecurityScan> = [
+    {
+      title: "Target",
+      dataIndex: "target",
+      key: "target",
+      render: (target: string) => (
+        <Text code style={{ fontSize: "12px" }}>
+          {target}
+        </Text>
+      ),
+    },
+    {
+      title: "Type",
+      dataIndex: "scan_type",
+      key: "scan_type",
+      render: (type: string) => <Tag color="blue">{type.toUpperCase()}</Tag>,
+    },
+    {
+      title: "Status",
+      dataIndex: "status",
+      key: "status",
+      render: (status: string) => {
+        const colors = {
+          completed: "green",
+          running: "processing",
+          pending: "warning",
+          failed: "error",
+        };
+        return <Tag color={colors[status] || "default"}>{status.toUpperCase()}</Tag>;
+      },
+    },
+    {
+      title: "Score",
+      dataIndex: "security_score",
+      key: "security_score",
+      render: (score: number | undefined) =>
+        score ? (
+          <Text strong style={{ color: getScoreColor(score) }}>
+            {score}
+          </Text>
+        ) : (
+          <Text type="secondary">--</Text>
+        ),
+    },
+    {
+      title: "Vulns",
+      dataIndex: "vulnerability_count",
+      key: "vulnerability_count",
+      render: (count: number) => (
+        <Badge count={count} showZero style={{ backgroundColor: count > 0 ? "#ff4d4f" : "#52c41a" }} />
+      ),
+    },
+    {
+      title: "Duration",
+      dataIndex: "scan_duration",
+      key: "scan_duration",
+      render: (duration: number | undefined) => (duration ? `${duration}s` : "--"),
+    },
+    {
+      title: "Started",
+      dataIndex: "created_at",
+      key: "created_at",
+      render: (date: string) => new Date(date).toLocaleString(),
+    },
+  ];
+
+  const threatColumns: ColumnsType<ThreatEvent> = [
+    {
+      title: "Type",
+      dataIndex: "type",
+      key: "type",
+      render: (type: string, record: ThreatEvent) => (
+        <Tag color={getSeverityColor(record.severity)}>{type}</Tag>
+      ),
+    },
+    {
+      title: "Source",
+      dataIndex: "source_ip",
+      key: "source_ip",
+      render: (ip: string, record: ThreatEvent) => (
+        <Space>
+          <Text code>{ip}</Text>
+          {record.country && <Tag>{record.country}</Tag>}
+        </Space>
+      ),
+    },
+    {
+      title: "Target",
+      dataIndex: "target",
+      key: "target",
+      render: (target: string) => <Text style={{ fontSize: "12px" }}>{target}</Text>,
+    },
+    {
+      title: "Time",
+      dataIndex: "timestamp",
+      key: "timestamp",
+      render: (time: string) => new Date(time).toLocaleTimeString(),
+    },
+    {
+      title: "Status",
+      dataIndex: "status",
+      key: "status",
+      render: (status: string) => <Tag color="red">{status.toUpperCase()}</Tag>,
+    },
+  ];
+
+  // ========== LOADING STATE ==========
+  if (loading && !metrics) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "400px" }}>
+        <Space direction="vertical" align="center">
+          <Spin size="large" />
+          <Text type="secondary">Loading security data...</Text>
+        </Space>
+      </div>
+    );
+  }
+
+  // ========== RENDER ==========
+  return (
+    <div style={{ padding: "0" }}>
+      {/* HEADER */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <Title level={2} style={{ margin: 0, display: "flex", alignItems: "center", gap: "12px" }}>
+              <SafetyCertificateOutlined style={{ color: "#1890ff" }} />
+              Security Center
+            </Title>
+            <Paragraph style={{ margin: "8px 0 0 0", color: "#8c8c8c" }}>
+              Comprehensive security operations and threat intelligence hub
+            </Paragraph>
+          </div>
+          <Space>
+            <Button icon={<DownloadOutlined />}>Export Report</Button>
+            <Button icon={<ReloadOutlined />} loading={refreshing || loading} onClick={fetchAllData}>
+              Refresh
+            </Button>
+            <Button type="primary" icon={<PlayCircleOutlined />} onClick={() => setScanModalVisible(true)}>
+              Start Scan
+            </Button>
+          </Space>
+        </div>
+      </div>
+
+      {/* INCIDENT BANNER */}
+      {activeIncident && (
+        <IncidentBanner
+          incident={activeIncident}
+          onResolve={handleResolveIncident}
+          onViewDetails={() => setActiveTab("threats")}
+        />
+      )}
+
+      {/* TABS */}
+      <Tabs activeKey={activeTab} onChange={setActiveTab} size="large">
+        {/* ==================== DASHBOARD TAB ==================== */}
+        <TabPane
+          tab={
+            <span>
+              <DashboardOutlined />
+              Dashboard
+            </span>
+          }
+          key="dashboard"
+        >
+          {/* SECURITY SCORE HERO */}
+          <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+            <Col xs={24} lg={12}>
+              <Card>
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: "14px", color: "#8c8c8c", marginBottom: "16px" }}>
+                    Overall Security Score
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "72px",
+                      fontWeight: "bold",
+                      color: getScoreColor(metrics?.securityScore || 0),
+                      lineHeight: 1,
+                    }}
+                  >
+                    {metrics?.securityScore || 0}
+                  </div>
+                  <div style={{ fontSize: "24px", color: "#8c8c8c", marginTop: "-8px" }}>/100</div>
+                  {metrics?.securityScoreTrend !== undefined && (
+                    <div style={{ marginTop: "16px" }}>
+                      <Tag
+                        color={metrics.securityScoreTrend > 0 ? "success" : "error"}
+                        style={{ fontSize: "14px", padding: "4px 12px" }}
+                      >
+                        {metrics.securityScoreTrend > 0 ? "+" : ""}
+                        {metrics.securityScoreTrend}% vs last week
+                      </Tag>
+                    </div>
+                  )}
+                  <Progress
+                    percent={metrics?.securityScore || 0}
+                    strokeColor={getScoreColor(metrics?.securityScore || 0)}
+                    showInfo={false}
+                    style={{ marginTop: "24px" }}
+                  />
+                </div>
+              </Card>
+            </Col>
+
+            <Col xs={24} lg={12}>
+              {forecastData && (
+                <ForecastWidget
+                  title="Security Score Forecast"
+                  currentValue={forecastData.securityScore.current}
+                  predictedValue={forecastData.securityScore.predicted}
+                  confidence={forecastData.securityScore.confidence}
+                  trend={forecastData.securityScore.trend}
+                />
+              )}
+            </Col>
+          </Row>
+
+          {/* KEY METRICS */}
+          <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+            <Col xs={12} sm={6}>
+              <ScoreCard
+                title="Active Threats"
+                value={metrics?.activeThreats || 0}
+                icon={<FireOutlined />}
+                color="#ff4d4f"
+                tooltip="Real-time threats being blocked"
+              />
+            </Col>
+            <Col xs={12} sm={6}>
+              <ScoreCard
+                title="Open Vulnerabilities"
+                value={metrics?.openVulnerabilities || 0}
+                icon={<BugOutlined />}
+                color="#fa8c16"
+                tooltip="Vulnerabilities requiring attention"
+              />
+            </Col>
+            <Col xs={12} sm={6}>
+              <ScoreCard
+                title="Scans Running"
+                value={metrics?.scansRunning || 0}
+                icon={<SecurityScanOutlined />}
+                color="#1890ff"
+                tooltip="Active security scans in progress"
+              />
+            </Col>
+            <Col xs={12} sm={6}>
+              <ScoreCard
+                title="Compliance Score"
+                value={`${metrics?.complianceScore || 0}%`}
+                icon={<SafetyCertificateOutlined />}
+                color={getScoreColor(metrics?.complianceScore || 0)}
+                tooltip="Overall compliance across frameworks"
+              />
+            </Col>
+          </Row>
+
+          {/* VULNERABILITY BREAKDOWN */}
+          <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+            <Col xs={24}>
+              <Card title={<span><BugOutlined /> Vulnerability Distribution</span>}>
+                <Row gutter={[16, 16]}>
+                  <Col xs={12} sm={6}>
+                    <div style={{ textAlign: "center", padding: "16px", borderLeft: "4px solid #ff4d4f" }}>
+                      <div style={{ fontSize: "32px", fontWeight: "bold", color: "#ff4d4f" }}>
+                        {metrics?.criticalVulns || 0}
+                      </div>
+                      <div style={{ color: "#8c8c8c", marginTop: "8px" }}>Critical</div>
+                    </div>
+                  </Col>
+                  <Col xs={12} sm={6}>
+                    <div style={{ textAlign: "center", padding: "16px", borderLeft: "4px solid #fa8c16" }}>
+                      <div style={{ fontSize: "32px", fontWeight: "bold", color: "#fa8c16" }}>
+                        {metrics?.highVulns || 0}
+                      </div>
+                      <div style={{ color: "#8c8c8c", marginTop: "8px" }}>High</div>
+                    </div>
+                  </Col>
+                  <Col xs={12} sm={6}>
+                    <div style={{ textAlign: "center", padding: "16px", borderLeft: "4px solid #faad14" }}>
+                      <div style={{ fontSize: "32px", fontWeight: "bold", color: "#faad14" }}>
+                        {metrics?.mediumVulns || 0}
+                      </div>
+                      <div style={{ color: "#8c8c8c", marginTop: "8px" }}>Medium</div>
+                    </div>
+                  </Col>
+                  <Col xs={12} sm={6}>
+                    <div style={{ textAlign: "center", padding: "16px", borderLeft: "4px solid #1890ff" }}>
+                      <div style={{ fontSize: "32px", fontWeight: "bold", color: "#1890ff" }}>
+                        {metrics?.lowVulns || 0}
+                      </div>
+                      <div style={{ color: "#8c8c8c", marginTop: "8px" }}>Low</div>
+                    </div>
+                  </Col>
+                </Row>
+
+                {recentVulns.length > 0 && (
+                  <div style={{ marginTop: "24px" }}>
+                    <div style={{ fontSize: "14px", fontWeight: 500, marginBottom: "12px" }}>
+                      Top Critical Vulnerabilities
+                    </div>
+                    <Space direction="vertical" style={{ width: "100%" }}>
+                      {recentVulns.slice(0, 5).map((vuln) => (
+                        <Card key={vuln.id} size="small" hoverable>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <Space>
+                              <Tag color={getSeverityColor(vuln.severity)}>{vuln.severity.toUpperCase()}</Tag>
+                              <Text strong>{vuln.title}</Text>
+                              {vuln.cwe_id && <Tag>CWE-{vuln.cwe_id}</Tag>}
+                            </Space>
+                            {vuln.cvss_score && (
+                              <Text type="secondary">CVSS: {vuln.cvss_score}</Text>
+                            )}
+                          </div>
+                        </Card>
+                      ))}
+                    </Space>
+                    <Button type="link" block style={{ marginTop: "12px" }}>
+                      View All Vulnerabilities →
+                    </Button>
+                  </div>
+                )}
+              </Card>
+            </Col>
+          </Row>
+
+          {/* LIVE THREATS & BOT ACTIVITY */}
+          <Row gutter={[16, 16]}>
+            <Col xs={24} lg={16}>
+              <Card
+                title={
+                  <Space>
+                    <FireOutlined style={{ color: "#ff4d4f" }} />
+                    <span>Live Threat Monitor</span>
+                    <Badge status="processing" text="LIVE" />
+                  </Space>
+                }
+                extra={
+                  <Button size="small" type="link" onClick={() => setActiveTab("threats")}>
+                    View Full Details →
+                  </Button>
+                }
+              >
+                {recentThreats.length > 0 ? (
+                  <Table
+                    columns={threatColumns}
+                    dataSource={recentThreats}
+                    rowKey="id"
+                    size="small"
+                    pagination={false}
+                  />
+                ) : (
+                  <Empty description="No recent threats detected" />
+                )}
+              </Card>
+            </Col>
+
+            <Col xs={24} lg={8}>
+              <Card title={<span><RobotOutlined /> Bot Activity</span>}>
+                <Space direction="vertical" style={{ width: "100%" }} size="large">
+                  <div>
+                    <div style={{ marginBottom: "8px", fontSize: "12px", color: "#8c8c8c" }}>
+                      Bot Detection Rate
+                    </div>
+                    <Progress
+                      percent={metrics?.botDetectionRate || 0}
+                      strokeColor="#52c41a"
+                      format={(percent) => `${percent}%`}
+                    />
+                  </div>
+
+                  <div>
+                    <Row gutter={16}>
+                      <Col span={12}>
+                        <Statistic
+                          title="Good Bots"
+                          value={metrics?.goodBots || 0}
+                          valueStyle={{ color: "#52c41a" }}
+                          suffix="%"
+                        />
+                      </Col>
+                      <Col span={12}>
+                        <Statistic
+                          title="Bad Bots"
+                          value={metrics?.badBots || 0}
+                          valueStyle={{ color: "#ff4d4f" }}
+                          suffix="%"
+                        />
+                      </Col>
+                    </Row>
+                  </div>
+
+                  <Button type="link" block>
+                    View Bot Analytics →
+                  </Button>
+                </Space>
+              </Card>
+
+              <Card title={<span><GlobalOutlined /> Cross-Impact Analysis</span>} style={{ marginTop: 16 }}>
+                <Paragraph style={{ fontSize: "13px", marginBottom: "16px" }}>
+                  Analyze relationships between vulnerabilities, threats, APIs, and compliance controls.
+                </Paragraph>
+                <Button type="primary" ghost block onClick={() => setCrossImpactDrawer(true)}>
+                  Analyze Security Relationships
+                </Button>
+              </Card>
+            </Col>
+          </Row>
+        </TabPane>
+
+        {/* ==================== SECURITY SCANNING TAB ==================== */}
+        <TabPane
+          tab={
+            <span>
+              <SecurityScanOutlined />
+              Security Scanning
+            </span>
+          }
+          key="scanning"
+        >
+          <Space direction="vertical" style={{ width: "100%", marginBottom: 16 }}>
+            <Alert
+              message="Automated Security Scanning"
+              description="Run comprehensive OWASP, PCI-DSS, and custom security scans on your APIs and endpoints."
+              type="info"
+              showIcon
+              action={
+                <Button size="small" type="primary" onClick={() => setScanModalVisible(true)}>
+                  Start New Scan
+                </Button>
+              }
+            />
+          </Space>
+
+          <Card title="Recent Scans">
+            <Table
+              columns={scanColumns}
+              dataSource={securityScans}
+              rowKey="id"
+              loading={scansLoading}
+              pagination={{ pageSize: 10 }}
+              onRow={(record) => ({
+                onClick: () => setSelectedScan(record),
+                style: { cursor: "pointer" },
+              })}
+            />
+          </Card>
+        </TabPane>
+
+        {/* ==================== THREAT FEED TAB ==================== */}
+        <TabPane
+          tab={
+            <span>
+              <FireOutlined />
+              Live Threats
+            </span>
+          }
+          key="threats"
+        >
+          <Card>
+            <Table columns={threatColumns} dataSource={recentThreats} rowKey="id" pagination={{ pageSize: 20 }} />
+          </Card>
+        </TabPane>
+
+        {/* ==================== REPORTS TAB ==================== */}
+        <TabPane
+          tab={
+            <span>
+              <BarChartOutlined />
+              Reports
+            </span>
+          }
+          key="reports"
+        >
+          <Row gutter={[16, 16]}>
+            <Col xs={24} sm={12} lg={8}>
+              <Card hoverable>
+                <Space direction="vertical" align="center" style={{ width: "100%" }}>
+                  <DownloadOutlined style={{ fontSize: "48px", color: "#1890ff" }} />
+                  <Title level={4}>Executive Summary</Title>
+                  <Paragraph style={{ textAlign: "center" }}>
+                    High-level security overview for management
+                  </Paragraph>
+                  <Button type="primary" block>
+                    Generate PDF
+                  </Button>
+                </Space>
+              </Card>
+            </Col>
+            <Col xs={24} sm={12} lg={8}>
+              <Card hoverable>
+                <Space direction="vertical" align="center" style={{ width: "100%" }}>
+                  <DownloadOutlined style={{ fontSize: "48px", color: "#52c41a" }} />
+                  <Title level={4}>Technical Report</Title>
+                  <Paragraph style={{ textAlign: "center" }}>Detailed technical security analysis</Paragraph>
+                  <Button type="primary" block>
+                    Generate PDF
+                  </Button>
+                </Space>
+              </Card>
+            </Col>
+            <Col xs={24} sm={12} lg={8}>
+              <Card hoverable>
+                <Space direction="vertical" align="center" style={{ width: "100%" }}>
+                  <DownloadOutlined style={{ fontSize: "48px", color: "#fa8c16" }} />
+                  <Title level={4}>Export Data</Title>
+                  <Paragraph style={{ textAlign: "center" }}>Export all security data as JSON/CSV</Paragraph>
+                  <Button type="primary" block>
+                    Export JSON
+                  </Button>
+                </Space>
+              </Card>
+            </Col>
+          </Row>
+        </TabPane>
+      </Tabs>
+
+      {/* START SCAN MODAL */}
+      <Modal
+        title="Start New Security Scan"
+        open={scanModalVisible}
+        onCancel={() => setScanModalVisible(false)}
+        footer={null}
+        width={600}
+      >
+        <Form form={form} layout="vertical" onFinish={handleStartScan}>
+          <Form.Item
+            label="Target URL"
+            name="url"
+            rules={[
+              { required: true, message: "Please enter target URL" },
+              { type: "url", message: "Please enter a valid URL" },
+            ]}
+          >
+            <Input placeholder="https://api.example.com" />
+          </Form.Item>
+
+          <Form.Item label="Scan Type" name="scanType" initialValue="comprehensive">
+            <Select>
+              <Option value="quick">Quick Scan (5 min)</Option>
+              <Option value="comprehensive">Comprehensive Scan (20 min)</Option>
+              <Option value="deep">Deep Scan (45 min)</Option>
+              <Option value="owasp_top10">OWASP Top 10 (15 min)</Option>
+              <Option value="pci_dss">PCI-DSS Compliance (30 min)</Option>
+            </Select>
+          </Form.Item>
+
+          <Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit">
+                Start Scan
+              </Button>
+              <Button onClick={() => setScanModalVisible(false)}>Cancel</Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* CROSS-IMPACT DRAWER */}
+      <Drawer
+        title={<span><GlobalOutlined /> Cross-Impact Analysis</span>}
+        placement="right"
+        width={600}
+        onClose={() => setCrossImpactDrawer(false)}
+        open={crossImpactDrawer}
+      >
+        <Alert
+          message="GovernGraph Intelligence"
+          description="Understanding relationships between your security posture components"
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+
+        <Space direction="vertical" style={{ width: "100%" }} size="large">
+          <Card size="small">
+            <Statistic
+              title="Vulnerabilities Affecting APIs"
+              value={3}
+              prefix={<ApiOutlined />}
+              suffix="APIs"
+            />
+            <Paragraph style={{ fontSize: "12px", marginTop: "8px" }}>
+              SQL Injection vulnerability affects /api/payments, /api/users, /api/orders
+            </Paragraph>
+          </Card>
+
+          <Card size="small">
+            <Statistic
+              title="Threats Targeting Endpoints"
+              value={12}
+              prefix={<FireOutlined />}
+              suffix="attacks"
+            />
+            <Paragraph style={{ fontSize: "12px", marginTop: "8px" }}>
+              DDoS attacks primarily targeting /api/auth endpoint
+            </Paragraph>
+          </Card>
+
+          <Card size="small">
+            <Statistic
+              title="Compliance Controls Affected"
+              value={5}
+              prefix={<SafetyCertificateOutlined />}
+              suffix="controls"
+            />
+            <Paragraph style={{ fontSize: "12px", marginTop: "8px" }}>
+              Failing SOC 2 control AC-01 impacts 5 API endpoints
+            </Paragraph>
+          </Card>
+        </Space>
+      </Drawer>
+
+      {/* COPILOT CHAT */}
+      <CopilotChat
+        context="security-center"
+        suggestions={[
+          "Why did my security score drop?",
+          "Explain today's threat patterns",
+          "What are my most critical vulnerabilities?",
+          "How can I improve my security score?",
+        ]}
+      />
+    </div>
+  );
+}

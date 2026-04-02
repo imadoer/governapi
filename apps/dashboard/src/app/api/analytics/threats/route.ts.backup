@@ -1,0 +1,86 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { validateApiRequest } from '../../../../utils/auth-middleware'
+import { database } from '../../../../infrastructure/database'
+
+export async function GET(request: NextRequest) {
+  // Validate authentication first
+  const authCheck = await validateApiRequest(request)
+  if (!authCheck.valid) {
+    return authCheck.response
+  }
+
+  // This should be accessible to both admin and customer users
+  // Customer users should only see their own tenant data
+  const tenantId = authCheck.tenantId
+
+  try {
+    // Get scans data using PostgreSQL
+    const scans = await database.queryMany(
+      'SELECT results FROM scans WHERE tenant_id = $1 OR $2 = \'admin\'',
+      [tenantId, authCheck.user?.role]
+    )
+
+    let totalThreats = 0
+    let botsBlocked = 0
+    const attackPatternsSet = new Set<string>()
+
+    for (const scan of scans || []) {
+      if (scan.results?.vulnerabilities) {
+        totalThreats += scan.results.vulnerabilities.total || 0
+        // Extract attack patterns from scan results
+        if (scan.results.vulnerabilities.types) {
+          scan.results.vulnerabilities.types.forEach((type: string) => {
+            attackPatternsSet.add(type)
+          })
+        }
+      }
+      if (scan.results?.bots_detected) {
+        botsBlocked += scan.results.bots_detected
+      }
+    }
+
+    // Get real bot detection data from threat_events table if it exists
+    try {
+      const botEvents = await database.queryMany(
+        'SELECT COUNT(*) as bot_count FROM threat_events WHERE tenant_id = $1 AND threat_type = $2',
+        [tenantId, 'bot_traffic']
+      )
+      if (botEvents[0]?.bot_count) {
+        botsBlocked = parseInt(botEvents[0].bot_count)
+      }
+    } catch (error) {
+      console.log('threat_events table not found, using scan data')
+    }
+
+    // Get real attack patterns from threat_events table
+    try {
+      const threatTypes = await database.queryMany(
+        'SELECT DISTINCT threat_type FROM threat_events WHERE tenant_id = $1',
+        [tenantId]
+      )
+      threatTypes.forEach(row => {
+        if (row.threat_type) {
+          attackPatternsSet.add(row.threat_type)
+        }
+      })
+    } catch (error) {
+      console.log('threat_events table not found for attack patterns')
+    }
+
+    // Convert Set to Array and ensure we have some default patterns if database is empty
+    const attackPatterns = Array.from(attackPatternsSet)
+    if (attackPatterns.length === 0) {
+      attackPatterns.push('No threats detected')
+    }
+
+    return NextResponse.json({
+      total_threats: totalThreats,
+      bots_blocked: botsBlocked,
+      attack_patterns: attackPatterns,
+      last_updated: new Date().toISOString()
+    })
+  } catch (error) {
+    console.error('Analytics threats error:', error)
+    return NextResponse.json({ error: 'Failed to fetch threat analytics' }, { status: 500 })
+  }
+}

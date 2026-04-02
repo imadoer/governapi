@@ -1,0 +1,188 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { database } from '../../../../infrastructure/database'
+
+const ALLOWED_FREQUENCIES = ['hourly', 'daily', 'weekly', 'monthly'] as const
+const ALLOWED_SCAN_TYPES = ['security', 'performance', 'availability', 'compliance'] as const
+
+type Frequency = typeof ALLOWED_FREQUENCIES[number]
+type ScanType = typeof ALLOWED_SCAN_TYPES[number]
+
+export async function GET(request: NextRequest) {
+  const tenantId = request.headers.get('x-tenant-id')
+  if (!tenantId) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+  }
+
+  try {
+    // Get real scheduled scans from database
+    const scheduledScans = await database.queryMany(
+      `SELECT ss.id, ss.name, ss.target_url, ss.scan_type, ss.frequency, ss.is_active,
+              ss.next_run, ss.created_at, ss.updated_at, ss.last_run,
+              COUNT(sr.id) as total_runs,
+              AVG(CASE WHEN sr.status = 'completed' THEN sr.security_score END) as avg_security_score
+       FROM scheduled_scans ss
+       LEFT JOIN scan_results sr ON ss.id = sr.scheduled_scan_id
+       WHERE ss.tenant_id = $1
+       GROUP BY ss.id
+       ORDER BY ss.created_at DESC`,
+      [tenantId]
+    )
+
+    // Get scan execution statistics
+    const scanStats = await database.queryOne(
+      `SELECT 
+         COUNT(*) as total_scheduled,
+         COUNT(CASE WHEN is_active = true THEN 1 END) as active_scans,
+         COUNT(CASE WHEN last_run IS NOT NULL THEN 1 END) as executed_scans
+       FROM scheduled_scans 
+       WHERE tenant_id = $1`,
+      [tenantId]
+    )
+
+    // Get recent scan results for context
+    const recentResults = await database.queryMany(
+      `SELECT sr.id, sr.target, sr.scan_type, sr.status, sr.security_score, sr.created_at,
+              ss.name as schedule_name
+       FROM scan_results sr
+       JOIN scheduled_scans ss ON sr.scheduled_scan_id = ss.id
+       WHERE sr.tenant_id = $1
+       ORDER BY sr.created_at DESC
+       LIMIT 10`,
+      [tenantId]
+    )
+
+    const formattedScans = scheduledScans.map(scan => ({
+      id: scan.id,
+      name: scan.name,
+      targetUrl: scan.target_url,
+      scanType: scan.scan_type,
+      frequency: scan.frequency,
+      isActive: scan.is_active,
+      nextRun: scan.next_run,
+      lastRun: scan.last_run,
+      createdAt: scan.created_at,
+      updatedAt: scan.updated_at,
+      statistics: {
+        totalRuns: parseInt(scan.total_runs || '0'),
+        averageSecurityScore: scan.avg_security_score ? Math.round(parseFloat(scan.avg_security_score)) : null
+      }
+    }))
+
+    return NextResponse.json({
+      success: true,
+      scheduledScans: formattedScans,
+      statistics: {
+        total: parseInt(scanStats?.total_scheduled || '0'),
+        active: parseInt(scanStats?.active_scans || '0'),
+        executed: parseInt(scanStats?.executed_scans || '0')
+      },
+      recentResults: recentResults.map(result => ({
+        id: result.id,
+        scheduleName: result.schedule_name,
+        target: result.target,
+        scanType: result.scan_type,
+        status: result.status,
+        securityScore: result.security_score,
+        completedAt: result.created_at
+      }))
+    })
+
+  } catch (error) {
+    console.error('Scheduled scans API error:', error)
+    return NextResponse.json({ error: 'Failed to fetch scheduled scans' }, { status: 500 })
+  }
+}
+
+export async function POST(request: NextRequest) {
+  const tenantId = request.headers.get('x-tenant-id')
+  const userId = request.headers.get('x-user-id')
+  
+  if (!tenantId) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+  }
+
+  try {
+    const { name, targetUrl, scanType, frequency, isActive = true } = await request.json()
+
+    if (!name || !targetUrl || !scanType || !frequency) {
+      return NextResponse.json({ error: 'Name, target URL, scan type, and frequency are required' }, { status: 400 })
+    }
+
+    // Validate target URL
+    try {
+      const parsedUrl = new URL(targetUrl)
+      if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+        return NextResponse.json({ error: 'Invalid URL protocol. Only HTTP and HTTPS are allowed' }, { status: 400 })
+      }
+    } catch {
+      return NextResponse.json({ error: 'Invalid target URL format' }, { status: 400 })
+    }
+
+    // Validate scan type and frequency
+    if (!ALLOWED_SCAN_TYPES.includes(scanType)) {
+      return NextResponse.json({ error: 'Invalid scan type. Allowed: ' + ALLOWED_SCAN_TYPES.join(', ') }, { status: 400 })
+    }
+
+    if (!ALLOWED_FREQUENCIES.includes(frequency)) {
+      return NextResponse.json({ error: 'Invalid frequency. Allowed: ' + ALLOWED_FREQUENCIES.join(', ') }, { status: 400 })
+    }
+
+    // Calculate next run time based on frequency
+    const now = new Date()
+    let nextRun = new Date(now)
+    
+    switch (frequency) {
+      case 'hourly':
+        nextRun.setHours(nextRun.getHours() + 1)
+        break
+      case 'daily':
+        nextRun.setDate(nextRun.getDate() + 1)
+        break
+      case 'weekly':
+        nextRun.setDate(nextRun.getDate() + 7)
+        break
+      case 'monthly':
+        nextRun.setMonth(nextRun.getMonth() + 1)
+        break
+    }
+
+    // Create scheduled scan
+    const scheduledScan = await database.queryOne(
+      `INSERT INTO scheduled_scans (tenant_id, name, target_url, scan_type, frequency, is_active, next_run, created_by, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW()) RETURNING *`,
+      [
+        tenantId,
+        name,
+        targetUrl,
+        scanType,
+        frequency,
+        isActive,
+        nextRun.toISOString(),
+        userId || 'system'
+      ]
+    )
+
+    if (!scheduledScan) {
+      return NextResponse.json({ error: 'Failed to create scheduled scan' }, { status: 500 })
+    }
+
+    return NextResponse.json({
+      success: true,
+      scheduledScan: {
+        id: scheduledScan.id,
+        name: scheduledScan.name,
+        targetUrl: scheduledScan.target_url,
+        scanType: scheduledScan.scan_type,
+        frequency: scheduledScan.frequency,
+        isActive: scheduledScan.is_active,
+        nextRun: scheduledScan.next_run,
+        createdAt: scheduledScan.created_at
+      },
+      message: 'Scheduled scan created successfully'
+    })
+
+  } catch (error) {
+    console.error('Scheduled scan creation error:', error)
+    return NextResponse.json({ error: 'Failed to create scheduled scan' }, { status: 500 })
+  }
+}

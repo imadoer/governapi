@@ -1,0 +1,40 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { validateApiRequest } from '../../../../utils/auth-middleware';
+
+export async function GET(request: NextRequest) {
+  // Validate authentication and get real user data
+  const authCheck = await validateApiRequest(request);
+  if (!authCheck.valid) {
+    return authCheck.response;
+  }
+
+  try {
+    // Return real authenticated user data instead of hardcoded demo data
+    const userData = {
+      id: authCheck.user?.id,
+      email: authCheck.user?.email,
+      firstName: authCheck.user?.firstName,
+      lastName: authCheck.user?.lastName,
+      role: authCheck.user?.role,
+      company: {
+        id: authCheck.company?.id,
+        company_name: authCheck.company?.companyName,
+        subscription_plan: authCheck.company?.subscriptionPlan || "starter",
+        subscription_status: authCheck.company?.subscriptionStatus || "active",
+        domain: authCheck.company?.domain
+      }
+    };
+
+    return NextResponse.json({
+      success: true,
+      user: userData
+    });
+
+  } catch (error) {
+    console.error('Customer verification error:', error);
+    return NextResponse.json({ 
+      success: false, 
+      error: 'Session verification failed' 
+    }, { status: 401 });
+  }
+}

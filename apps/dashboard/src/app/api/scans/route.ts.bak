@@ -1,0 +1,61 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+import { prisma } from '@governapi/database'
+import { scanQueue } from '@/lib/queue'
+import { z } from 'zod'
+
+const createScanSchema = z.object({
+  type: z.enum(['aws', 'gcp', 'azure', 'kubernetes']),
+  config: z.object({}).passthrough()
+})
+
+export async function POST(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  
+  if (!session?.user?.orgId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  
+  try {
+    const body = await req.json()
+    const { type, config } = createScanSchema.parse(body)
+    
+    // Create scan record
+    const scan = await prisma.scan.create({
+      data: {
+        orgId: session.user.orgId,
+        type,
+        status: 'PENDING'
+      }
+    })
+    
+    // Queue the scan job
+    await scanQueue.add('scan', {
+      scanId: scan.id,
+      orgId: session.user.orgId,
+      type,
+      config
+    })
+    
+    return NextResponse.json({ scan })
+  } catch (error) {
+    return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
+  }
+}
+
+export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  
+  if (!session?.user?.orgId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  
+  const scans = await prisma.scan.findMany({
+    where: { orgId: session.user.orgId },
+    orderBy: { createdAt: 'desc' },
+    take: 20
+  })
+  
+  return NextResponse.json({ scans })
+}

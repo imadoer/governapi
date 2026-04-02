@@ -1,0 +1,195 @@
+import * as crypto from "crypto";
+import { database } from "../infrastructure/database";
+
+interface APIKeyConfig {
+  name: string;
+  permissions: string[];
+  rateLimit?: number;
+  ipWhitelist?: string[];
+  expiresInDays?: number;
+}
+
+interface APIKeyInfo {
+  id: string;
+  keyPrefix: string;
+  fullKey?: string;
+  name: string;
+  permissions: string[];
+  rateLimit?: number;
+  ipWhitelist?: string[];
+  expiresAt?: Date;
+  isActive: boolean;
+  lastUsed?: Date;
+  usageCount: number;
+  createdAt: Date;
+}
+
+export class APIKeyService {
+  static async generateAPIKey(
+    tenantId: number,
+    config: APIKeyConfig,
+    createdBy?: string,
+  ): Promise<APIKeyInfo> {
+    // Generate secure API key
+    const keyBytes = crypto.randomBytes(32);
+    const fullKey = `gapi_${keyBytes.toString("hex")}`;
+    const keyPrefix = `gapi_${fullKey.substring(5, 13)}...`;
+    const keyHash = crypto.createHash("sha256").update(fullKey).digest("hex");
+
+    const expiresAt = config.expiresInDays
+      ? new Date(Date.now() + config.expiresInDays * 24 * 60 * 60 * 1000)
+      : null;
+
+    const apiKey = await database.queryOne(
+      `INSERT INTO api_keys (tenant_id, key, key_name, key_hash, key_prefix, permissions, 
+                             rate_limit_override, ip_whitelist, expires_at, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      [
+        tenantId,
+        fullKey,
+        config.name,
+        keyHash,
+        keyPrefix,
+        config.permissions,
+        config.rateLimit || null,
+        config.ipWhitelist || null,
+        expiresAt,
+        createdBy || null,
+      ],
+    );
+
+    return {
+      id: apiKey.id,
+      keyPrefix: apiKey.key_prefix,
+      fullKey, // Only returned on creation
+      name: apiKey.key_name,
+      permissions: apiKey.permissions,
+      rateLimit: apiKey.rate_limit_override,
+      ipWhitelist: apiKey.ip_whitelist,
+      expiresAt: apiKey.expires_at,
+      isActive: apiKey.is_active,
+      usageCount: parseInt(apiKey.usage_count),
+      createdAt: apiKey.created_at,
+    };
+  }
+
+  static async rotateAPIKey(
+    keyId: string,
+    tenantId: number,
+    reason: string,
+    rotatedBy?: string,
+  ): Promise<APIKeyInfo> {
+    const existingKey = await database.queryOne(
+      "SELECT * FROM api_keys WHERE id = $1 AND tenant_id = $2",
+      [keyId, tenantId],
+    );
+
+    if (!existingKey) {
+      throw new Error("API key not found");
+    }
+
+    // Generate new key
+    const keyBytes = crypto.randomBytes(32);
+    const newFullKey = `gapi_${keyBytes.toString("hex")}`;
+    const newKeyPrefix = `gapi_${newFullKey.substring(5, 13)}...`;
+    const newKeyHash = crypto
+      .createHash("sha256")
+      .update(newFullKey)
+      .digest("hex");
+
+    // Update existing key with new hash
+    const updatedKey = await database.queryOne(
+      `UPDATE api_keys 
+       SET key_hash = $1, key_prefix = $2, updated_at = NOW()
+       WHERE id = $3 RETURNING *`,
+      [newKeyHash, newKeyPrefix, keyId],
+    );
+
+    // Log rotation
+    await database.query(
+      `INSERT INTO api_key_rotations (api_key_id, old_key_hash, new_key_hash, rotation_reason, rotated_by)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [keyId, existingKey.key_hash, newKeyHash, reason, rotatedBy],
+    );
+
+    return {
+      id: updatedKey.id,
+      keyPrefix: updatedKey.key_prefix,
+      fullKey: newFullKey, // Only returned on rotation
+      name: updatedKey.key_name,
+      permissions: updatedKey.permissions,
+      rateLimit: updatedKey.rate_limit_override,
+      ipWhitelist: updatedKey.ip_whitelist,
+      expiresAt: updatedKey.expires_at,
+      isActive: updatedKey.is_active,
+      lastUsed: updatedKey.last_used,
+      usageCount: parseInt(updatedKey.usage_count),
+      createdAt: updatedKey.created_at,
+    };
+  }
+
+  static async validateAPIKey(
+    apiKey: string,
+  ): Promise<{ valid: boolean; keyInfo?: any; tenantId?: number }> {
+    const keyHash = crypto.createHash("sha256").update(apiKey).digest("hex");
+
+    const keyInfo = await database.queryOne(
+      `SELECT ak.*, c.id as company_id 
+       FROM api_keys ak
+       JOIN companies c ON ak.tenant_id = c.id
+       WHERE ak.key_hash = $1 AND ak.is_active = true 
+       AND (ak.expires_at IS NULL OR ak.expires_at > NOW())`,
+      [keyHash],
+    );
+
+    if (!keyInfo) {
+      return { valid: false };
+    }
+
+    // Update usage tracking
+    await database.query(
+      "UPDATE api_keys SET last_used = NOW(), usage_count = usage_count + 1 WHERE id = $1",
+      [keyInfo.id],
+    );
+
+    return {
+      valid: true,
+      keyInfo: {
+        id: keyInfo.id,
+        name: keyInfo.key_name,
+        permissions: keyInfo.permissions,
+        rateLimit: keyInfo.rate_limit_override,
+        ipWhitelist: keyInfo.ip_whitelist,
+      },
+      tenantId: keyInfo.tenant_id,
+    };
+  }
+
+  static async revokeAPIKey(keyId: string, tenantId: number): Promise<void> {
+    await database.query(
+      "UPDATE api_keys SET is_active = false, updated_at = NOW() WHERE id = $1 AND tenant_id = $2",
+      [keyId, tenantId],
+    );
+  }
+
+  static async listAPIKeys(tenantId: number): Promise<APIKeyInfo[]> {
+    const keys = await database.queryMany(
+      "SELECT * FROM api_keys WHERE tenant_id = $1 ORDER BY created_at DESC",
+      [tenantId],
+    );
+
+    return keys.map((key) => ({
+      id: key.id,
+      keyPrefix: key.key_prefix,
+      name: key.key_name,
+      permissions: key.permissions,
+      rateLimit: key.rate_limit_override,
+      ipWhitelist: key.ip_whitelist,
+      expiresAt: key.expires_at,
+      isActive: key.is_active,
+      lastUsed: key.last_used,
+      usageCount: parseInt(key.usage_count),
+      createdAt: key.created_at,
+    }));
+  }
+}

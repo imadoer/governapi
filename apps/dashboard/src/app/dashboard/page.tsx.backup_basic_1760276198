@@ -1,0 +1,650 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { Layout, Menu, Card, Row, Col, Statistic, Typography, Dropdown, Avatar, message, Spin, Alert, Badge, Button, Space, Progress, List, Tag, Table } from 'antd'
+import {
+  DashboardOutlined,
+  SecurityScanOutlined,
+  ApiOutlined,
+  FileTextOutlined,
+  LogoutOutlined,
+  ReloadOutlined,
+  WarningOutlined,
+  SafetyCertificateOutlined,
+  ThunderboltOutlined,
+  ClockCircleOutlined,
+  CheckCircleOutlined,
+  ExclamationCircleOutlined,
+  SearchOutlined,
+  SettingOutlined,
+  BugOutlined,
+  LockOutlined,
+  BarChartOutlined,
+  RiseOutlined
+} from '@ant-design/icons'
+import { useRouter } from 'next/navigation'
+import { LineChart, Line, AreaChart, Area, BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts'
+
+// Import feature components
+import { SecurityScanResults } from './components/SecurityScanResults'
+import { RealComplianceDashboard } from './components/RealComplianceDashboard'
+import { LiveAPIMonitoring } from './components/LiveAPIMonitoring'
+import { WebhookIntegration } from './components/WebhookIntegration'
+import { AlertConfiguration } from './components/AlertConfiguration'
+import { APIDiscovery } from './components/APIDiscovery'
+
+const { Sider, Header, Content } = Layout
+const { Title, Text } = Typography
+
+export default function DashboardPage() {
+  const router = useRouter()
+  const [mounted, setMounted] = useState(false)
+  const [user, setUser] = useState<any>(null)
+  const [company, setCompany] = useState<any>(null)
+  const [stats, setStats] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [collapsed, setCollapsed] = useState(false)
+  const [activeTab, setActiveTab] = useState('overview')
+
+  // Mock trend data for sparklines
+  const generateTrendData = (value: number) => {
+    return Array.from({ length: 7 }, (_, i) => ({
+      day: i,
+      value: Math.max(0, value + Math.random() * 20 - 10)
+    }))
+  }
+
+  // Auth check on mount
+  useEffect(() => {
+    setMounted(true)
+    
+    if (typeof window !== 'undefined') {
+      const storedUser = sessionStorage.getItem('user')
+      const storedCompany = sessionStorage.getItem('company')
+      
+      if (storedUser && storedCompany) {
+        setUser(JSON.parse(storedUser))
+        setCompany(JSON.parse(storedCompany))
+      } else {
+        router.push('/login')
+      }
+    }
+  }, [router])
+
+  // Fetch dashboard data
+  useEffect(() => {
+    if (!company?.id) return
+
+    const fetchDashboard = async () => {
+      setLoading(true)
+      try {
+        const response = await fetch('/api/customer/dashboard', {
+          headers: {
+            'x-tenant-id': company.id.toString()
+          }
+        })
+        const result = await response.json()
+
+        if (result.success) {
+          setStats(result.dashboard)
+          setError(null)
+        } else {
+          setError(result.error || 'Failed to load dashboard')
+        }
+      } catch (err) {
+        setError('Failed to fetch dashboard data')
+        console.error(err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchDashboard()
+  }, [company])
+
+  const handleLogout = () => {
+    sessionStorage.clear()
+    router.push('/login')
+  }
+
+  const handleRefresh = async () => {
+    if (!company?.id) return
+    
+    setLoading(true)
+    try {
+      const response = await fetch('/api/customer/dashboard', {
+        headers: { 'x-tenant-id': company.id.toString() }
+      })
+      const result = await response.json()
+      if (result.success) {
+        setStats(result.dashboard)
+        message.success('Dashboard refreshed')
+      }
+    } catch {
+      message.error('Refresh failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (!mounted) return null
+
+  if (loading && !stats) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#f5f7fa' }}>
+        <Spin size="large" tip="Loading your dashboard..." />
+      </div>
+    )
+  }
+
+  if (error && !stats) {
+    return (
+      <div style={{ padding: '50px', maxWidth: '600px', margin: '0 auto', background: '#f5f7fa', minHeight: '100vh' }}>
+        <Alert
+          message="Dashboard Error"
+          description={error}
+          type="error"
+          showIcon
+          action={<Button onClick={() => router.push('/login')}>Back to Login</Button>}
+        />
+      </div>
+    )
+  }
+
+  const getRiskColor = (level: string) => {
+    switch(level) {
+      case 'Low': return '#52c41a'
+      case 'Medium': return '#faad14'
+      case 'High': return '#ff7875'
+      case 'Critical': return '#ff4d4f'
+      default: return '#8c8c8c'
+    }
+  }
+
+  return (
+    <Layout style={{ minHeight: '100vh' }}>
+      {/* Sidebar */}
+      <Sider 
+        collapsible 
+        collapsed={collapsed} 
+        onCollapse={setCollapsed}
+        width={260}
+        style={{ background: '#fff', boxShadow: '2px 0 8px rgba(0,0,0,0.05)' }}
+      >
+        <div style={{ 
+          padding: '24px 20px',
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          margin: 16,
+          borderRadius: 12
+        }}>
+          <Title level={collapsed ? 5 : 4} style={{ color: '#fff', margin: 0, fontWeight: 700 }}>
+            {collapsed ? 'GA' : 'GoverAPI'}
+          </Title>
+          {!collapsed && (
+            <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: '12px' }}>
+              Enterprise Security Platform
+            </Text>
+          )}
+        </div>
+        
+        <Menu 
+          selectedKeys={[activeTab]} 
+          mode="inline"
+          style={{ border: 'none', background: 'transparent' }}
+        >
+          <Menu.Item 
+            key="overview" 
+            icon={<DashboardOutlined style={{ fontSize: 18 }} />} 
+            onClick={() => setActiveTab('overview')}
+            style={{ margin: '4px 8px', borderRadius: 8, height: 44 }}
+          >
+            Overview
+          </Menu.Item>
+          <Menu.Item 
+            key="integrations" 
+            icon={<ApiOutlined style={{ fontSize: 18 }} />} 
+            onClick={() => setActiveTab('integrations')}
+            style={{ margin: '4px 8px', borderRadius: 8, height: 44 }}
+          >
+            External Integrations
+          </Menu.Item>
+          <Menu.Item 
+            key="security" 
+            icon={<SecurityScanOutlined style={{ fontSize: 18 }} />} 
+            onClick={() => setActiveTab('security')}
+            style={{ margin: '4px 8px', borderRadius: 8, height: 44 }}
+          >
+            Security Center
+          </Menu.Item>
+          <Menu.Item 
+            key="threats" 
+            icon={<WarningOutlined style={{ fontSize: 18 }} />} 
+            onClick={() => setActiveTab('threats')}
+            style={{ margin: '4px 8px', borderRadius: 8, height: 44 }}
+          >
+            Threat Intelligence
+          </Menu.Item>
+          <Menu.Item 
+            key="bot" 
+            icon={<BugOutlined style={{ fontSize: 18 }} />} 
+            onClick={() => setActiveTab('bot')}
+            style={{ margin: '4px 8px', borderRadius: 8, height: 44 }}
+          >
+            Bot Protection
+          </Menu.Item>
+          <Menu.Item 
+            key="compliance" 
+            icon={<FileTextOutlined style={{ fontSize: 18 }} />} 
+            onClick={() => setActiveTab('compliance')}
+            style={{ margin: '4px 8px', borderRadius: 8, height: 44 }}
+          >
+            Compliance Hub
+          </Menu.Item>
+          <Menu.Item 
+            key="performance" 
+            icon={<BarChartOutlined style={{ fontSize: 18 }} />} 
+            onClick={() => setActiveTab('performance')}
+            style={{ margin: '4px 8px', borderRadius: 8, height: 44 }}
+          >
+            Performance Monitor
+          </Menu.Item>
+          <Menu.Item 
+            key="scanner" 
+            icon={<SearchOutlined style={{ fontSize: 18 }} />} 
+            onClick={() => setActiveTab('scanner')}
+            style={{ margin: '4px 8px', borderRadius: 8, height: 44 }}
+          >
+            Vulnerability Scanner
+          </Menu.Item>
+          <Menu.Item 
+            key="discovery" 
+            icon={<ApiOutlined style={{ fontSize: 18 }} />} 
+            onClick={() => setActiveTab('discovery')}
+            style={{ margin: '4px 8px', borderRadius: 8, height: 44 }}
+          >
+            API Discovery
+          </Menu.Item>
+          <Menu.Item 
+            key="rules" 
+            icon={<SettingOutlined style={{ fontSize: 18 }} />} 
+            onClick={() => setActiveTab('rules')}
+            style={{ margin: '4px 8px', borderRadius: 8, height: 44 }}
+          >
+            Custom Rules
+          </Menu.Item>
+          <Menu.Item 
+            key="webhooks" 
+            icon={<ThunderboltOutlined style={{ fontSize: 18 }} />} 
+            onClick={() => setActiveTab('webhooks')}
+            style={{ margin: '4px 8px', borderRadius: 8, height: 44 }}
+          >
+            Webhook Center
+          </Menu.Item>
+        </Menu>
+      </Sider>
+
+      <Layout>
+        {/* Header */}
+        <Header style={{ 
+          background: '#fff', 
+          padding: '0 32px', 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          boxShadow: '0 1px 4px rgba(0,21,41,.08)',
+          zIndex: 1
+        }}>
+          <div>
+            <Title level={3} style={{ margin: 0, color: '#000', fontWeight: 700 }}>
+              API Security Dashboard
+            </Title>
+            <Text style={{ color: '#8c8c8c', fontSize: '14px' }}>
+              {company?.companyName} • PROFESSIONAL Plan
+            </Text>
+          </div>
+          
+          <Space size="middle">
+            <Badge dot color="#52c41a">
+              <Button 
+                style={{ 
+                  background: '#52c41a', 
+                  color: '#fff', 
+                  border: 'none',
+                  borderRadius: 20,
+                  fontWeight: 600,
+                  padding: '0 20px'
+                }}
+              >
+                PROFESSIONAL PLAN
+              </Button>
+            </Badge>
+            
+            <Button 
+              icon={<ReloadOutlined spin={loading} />} 
+              onClick={handleRefresh}
+              style={{ borderRadius: 8 }}
+            >
+              Refresh Data
+            </Button>
+            
+            <Dropdown
+              menu={{
+                items: [
+                  {
+                    key: 'user',
+                    label: <div><strong>{user?.firstName} {user?.lastName}</strong><br/><Text type="secondary" style={{ fontSize: '12px' }}>{user?.email}</Text></div>,
+                    disabled: true
+                  },
+                  { type: 'divider' },
+                  {
+                    key: 'logout',
+                    icon: <LogoutOutlined />,
+                    label: 'Logout',
+                    onClick: handleLogout,
+                    danger: true
+                  }
+                ]
+              }}
+            >
+              <Avatar 
+                style={{ 
+                  cursor: 'pointer', 
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  fontWeight: 600
+                }}
+                size="large"
+              >
+                Demo
+              </Avatar>
+            </Dropdown>
+          </Space>
+        </Header>
+
+        {/* Main Content */}
+        <Content style={{ margin: '24px', background: '#f5f7fa' }}>
+          {activeTab === 'overview' && stats && (
+            <div>
+              {/* Hero Banner */}
+              <div style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                borderRadius: 16,
+                padding: '32px 40px',
+                marginBottom: 24,
+                color: '#fff'
+              }}>
+                <Title level={3} style={{ color: '#fff', margin: 0, marginBottom: 8 }}>
+                  Enterprise Security Overview
+                </Title>
+                <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: '16px' }}>
+                  Protecting {stats.overview.totalApis} endpoints, blocked {stats.overview.blockedThreats} threats • {stats.security.overallScore}% security score
+                </Text>
+                <div style={{ position: 'absolute', right: 40, top: '50%', transform: 'translateY(-50%)' }}>
+                  <Title level={1} style={{ color: '#fff', margin: 0, fontSize: 72, fontWeight: 800 }}>
+                    {stats.security.overallScore}%
+                  </Title>
+                  <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: '16px' }}>
+                    Security Score
+                  </Text>
+                </div>
+              </div>
+
+              {/* Metric Cards with Charts */}
+              <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+                <Col xs={24} sm={12} lg={6}>
+                  <Card 
+                    bordered={false}
+                    style={{ borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+                      <div style={{ 
+                        width: 48, 
+                        height: 48, 
+                        borderRadius: 12, 
+                        background: 'rgba(24, 144, 255, 0.1)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginRight: 12
+                      }}>
+                        <ApiOutlined style={{ fontSize: 24, color: '#1890ff' }} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <Text style={{ color: '#8c8c8c', fontSize: '14px', display: 'block' }}>Protected Endpoints</Text>
+                        <Title level={2} style={{ margin: 0, color: '#1890ff', fontWeight: 700 }}>
+                          {stats.overview.totalApis}
+                        </Title>
+                      </div>
+                    </div>
+                    <Progress 
+                      percent={75} 
+                      strokeColor="#1890ff" 
+                      showInfo={false}
+                      strokeWidth={6}
+                      style={{ marginBottom: 8 }}
+                    />
+                    <ResponsiveContainer width="100%" height={40}>
+                      <AreaChart data={generateTrendData(stats.overview.totalApis)}>
+                        <Area type="monotone" dataKey="value" stroke="#1890ff" fill="rgba(24, 144, 255, 0.2)" strokeWidth={2} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </Card>
+                </Col>
+
+                <Col xs={24} sm={12} lg={6}>
+                  <Card 
+                    bordered={false}
+                    style={{ borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+                      <div style={{ 
+                        width: 48, 
+                        height: 48, 
+                        borderRadius: 12, 
+                        background: 'rgba(255, 77, 79, 0.1)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginRight: 12
+                      }}>
+                        <LockOutlined style={{ fontSize: 24, color: '#ff4d4f' }} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <Text style={{ color: '#8c8c8c', fontSize: '14px', display: 'block' }}>Threats Blocked</Text>
+                        <Title level={2} style={{ margin: 0, color: '#ff4d4f', fontWeight: 700 }}>
+                          {stats.overview.blockedThreats}
+                        </Title>
+                      </div>
+                    </div>
+                    <Progress 
+                      percent={45} 
+                      strokeColor="#ff4d4f" 
+                      showInfo={false}
+                      strokeWidth={6}
+                      style={{ marginBottom: 8 }}
+                    />
+                    <ResponsiveContainer width="100%" height={40}>
+                      <BarChart data={generateTrendData(stats.overview.blockedThreats)}>
+                        <Bar dataKey="value" fill="#ff4d4f" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </Card>
+                </Col>
+
+                <Col xs={24} sm={12} lg={6}>
+                  <Card 
+                    bordered={false}
+                    style={{ borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+                      <div style={{ 
+                        width: 48, 
+                        height: 48, 
+                        borderRadius: 12, 
+                        background: 'rgba(82, 196, 26, 0.1)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginRight: 12
+                      }}>
+                        <BugOutlined style={{ fontSize: 24, color: '#52c41a' }} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <Text style={{ color: '#8c8c8c', fontSize: '14px', display: 'block' }}>Security Scans</Text>
+                        <Title level={2} style={{ margin: 0, color: '#52c41a', fontWeight: 700 }}>
+                          {stats.overview.scansLast7Days}
+                        </Title>
+                      </div>
+                    </div>
+                    <Progress 
+                      percent={100} 
+                      strokeColor="#52c41a" 
+                      showInfo={false}
+                      strokeWidth={6}
+                      style={{ marginBottom: 8 }}
+                    />
+                    <ResponsiveContainer width="100%" height={40}>
+                      <AreaChart data={generateTrendData(stats.overview.scansLast7Days)}>
+                        <Area type="monotone" dataKey="value" stroke="#52c41a" fill="rgba(82, 196, 26, 0.2)" strokeWidth={2} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </Card>
+                </Col>
+
+                <Col xs={24} sm={12} lg={6}>
+                  <Card 
+                    bordered={false}
+                    style={{ borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+                      <div style={{ 
+                        width: 48, 
+                        height: 48, 
+                        borderRadius: 12, 
+                        background: 'rgba(114, 46, 209, 0.1)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginRight: 12
+                      }}>
+                        <BarChartOutlined style={{ fontSize: 24, color: '#722ed1' }} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <Text style={{ color: '#8c8c8c', fontSize: '14px', display: 'block' }}>API Requests</Text>
+                        <Title level={2} style={{ margin: 0, color: '#722ed1', fontWeight: 700 }}>
+                          {stats.overview.totalApis * 1000}
+                        </Title>
+                      </div>
+                    </div>
+                    <Progress 
+                      percent={90} 
+                      strokeColor="#722ed1" 
+                      showInfo={false}
+                      strokeWidth={6}
+                      style={{ marginBottom: 8 }}
+                    />
+                    <ResponsiveContainer width="100%" height={40}>
+                      <BarChart data={generateTrendData(stats.overview.totalApis * 1000)}>
+                        <Bar dataKey="value" fill="#722ed1" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </Card>
+                </Col>
+              </Row>
+
+              {/* API Health Status & Security Health */}
+              <Row gutter={[16, 16]}>
+                <Col xs={24} lg={16}>
+                  <Card 
+                    title={
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '18px', fontWeight: 600, color: '#000' }}>API Health Status</span>
+                        <Badge status="success" text={<span style={{ color: '#52c41a', fontWeight: 600 }}>All Systems Operational</span>} />
+                      </div>
+                    }
+                    bordered={false}
+                    style={{ borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}
+                  >
+                    <Table
+                      columns={[
+                        { title: 'Endpoint', dataIndex: 'endpoint', key: 'endpoint' },
+                        { 
+                          title: 'Status', 
+                          dataIndex: 'status', 
+                          key: 'status',
+                          render: (status: string) => (
+                            <Badge status={status === 'active' ? 'success' : 'error'} text={status === 'active' ? 'Active' : 'Inactive'} />
+                          )
+                        },
+                        { title: 'Response Time', dataIndex: 'responseTime', key: 'responseTime' },
+                        { title: 'Requests/Day', dataIndex: 'requests', key: 'requests' },
+                      ]}
+                      dataSource={[
+                        { key: '1', endpoint: '/api/security-scan', status: 'active', responseTime: '45ms', requests: '1,234' },
+                        { key: '2', endpoint: '/api/compliance', status: 'active', responseTime: '38ms', requests: '892' },
+                        { key: '3', endpoint: '/api/threat-detection', status: 'active', responseTime: '52ms', requests: '2,145' },
+                      ]}
+                      pagination={false}
+                    />
+                  </Card>
+                </Col>
+
+                <Col xs={24} lg={8}>
+                  <Card 
+                    title={<span style={{ fontSize: '18px', fontWeight: 600, color: '#000' }}>Security Health</span>}
+                    bordered={false}
+                    style={{ borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}
+                  >
+                    <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                      <Progress
+                        type="circle"
+                        percent={stats.security.overallScore}
+                        strokeColor={getRiskColor(stats.security.riskLevel)}
+                        width={160}
+                        strokeWidth={10}
+                        format={percent => (
+                          <div>
+                            <div style={{ fontSize: 40, fontWeight: 700, color: getRiskColor(stats.security.riskLevel) }}>
+                              {percent}%
+                            </div>
+                            <div style={{ fontSize: 14, color: '#8c8c8c' }}>
+                              {stats.security.riskLevel} Risk
+                            </div>
+                          </div>
+                        )}
+                      />
+                    </div>
+                    <div style={{ marginTop: 20 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                        <Text>Critical Vulnerabilities</Text>
+                        <Text strong>{stats.security.criticalVulnerabilities}</Text>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                        <Text>Total Vulnerabilities</Text>
+                        <Text strong>{stats.security.totalVulnerabilities}</Text>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <Text>Scan Score</Text>
+                        <Text strong>{stats.security.averageScanScore || 'N/A'}</Text>
+                      </div>
+                    </div>
+                  </Card>
+                </Col>
+              </Row>
+            </div>
+          )}
+
+          {activeTab === "security" && <SecurityScanResults results={null} />}
+          {activeTab === "compliance" && <RealComplianceDashboard />}
+          {activeTab === 'webhooks' && <WebhookIntegration />}
+          {activeTab === 'discovery' && <APIDiscovery />}
+          {activeTab === 'integrations' && (
+            <Card title="External Integrations" style={{ borderRadius: 12 }}>
+              <Text>Manage your external API integrations here.</Text>
+            </Card>
+          )}
+        </Content>
+      </Layout>
+    </Layout>
+  )
+}

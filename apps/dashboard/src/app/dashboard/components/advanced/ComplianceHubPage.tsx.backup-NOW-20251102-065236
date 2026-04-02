@@ -1,0 +1,741 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  ShieldCheckIcon,
+  ExclamationTriangleIcon,
+  CheckCircleIcon,
+  ClockIcon,
+  DocumentTextIcon,
+  ArrowPathIcon,
+  ChartBarIcon,
+} from "@heroicons/react/24/outline";
+import { Spin, Progress, Tag, Tabs, Modal, Input, Select, Radio, message } from "antd";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  RadialBarChart,
+  RadialBar,
+  Legend,
+} from "recharts";
+
+interface ComplianceFramework {
+  frameworkName: string;
+  version: string;
+  status: string;
+  compliancePercentage: number | null;
+  lastAssessment: string | null;
+  nextAssessment: string | null;
+  findingsCount: number;
+}
+
+interface ComplianceFinding {
+  id: string;
+  frameworkName: string;
+  controlId: string;
+  controlName: string;
+  findingType: string;
+  severity: string;
+  status: string;
+  description: string;
+  remediationSteps: string;
+  discoveredAt: string;
+  dueDate: string | null;
+}
+
+interface ComplianceStats {
+  compliantControls: number;
+  nonCompliantControls: number;
+  pendingControls: number;
+  totalControls: number;
+}
+
+const FRAMEWORK_COLORS = {
+  SOC2: {
+    primary: "#8b5cf6",
+    bg: "from-purple-500/10 to-purple-600/5",
+    border: "border-purple-500/30",
+  },
+  GDPR: {
+    primary: "#3b82f6",
+    bg: "from-blue-500/10 to-blue-600/5",
+    border: "border-blue-500/30",
+  },
+  "PCI-DSS": {
+    primary: "#06b6d4",
+    bg: "from-cyan-500/10 to-cyan-600/5",
+    border: "border-cyan-500/30",
+  },
+  HIPAA: {
+    primary: "#10b981",
+    bg: "from-green-500/10 to-green-600/5",
+    border: "border-green-500/30",
+  },
+  ISO27001: {
+    primary: "#f59e0b",
+    bg: "from-amber-500/10 to-amber-600/5",
+    border: "border-amber-500/30",
+  },
+};
+
+export function ComplianceHubPage({ companyId }: { companyId: string }) {
+  const [overallScore, setOverallScore] = useState(0);
+  const [frameworks, setFrameworks] = useState<ComplianceFramework[]>([]);
+  const [stats, setStats] = useState<ComplianceStats | null>(null);
+  const [findings, setFindings] = useState<ComplianceFinding[]>([]);
+  const [auditHistory, setAuditHistory] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [requestModalOpen, setRequestModalOpen] = useState(false);
+  const [selectedFramework, setSelectedFramework] = useState<string>("");
+  const [requestForm, setRequestForm] = useState({
+    reason: "",
+    urgency: "normal",
+    companySize: "",
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [assessmentModalOpen, setAssessmentModalOpen] = useState(false);
+  const [selectedFrameworksForAssessment, setSelectedFrameworksForAssessment] = useState<string[]>([]);
+  const [runningAssessment, setRunningAssessment] = useState(false);
+
+  const fetchComplianceData = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/customer/compliance", {
+        headers: { "x-tenant-id": companyId },
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        setOverallScore(data.compliance.overallScore);
+        setFrameworks(data.compliance.frameworks || []);
+        setStats(data.compliance.statistics);
+        setFindings(data.compliance.findings || []);
+        setAuditHistory(data.compliance.auditHistory || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch compliance data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (companyId) fetchComplianceData();
+  }, [companyId]);
+
+  const openRequestModal = (frameworkName: string) => {
+    setSelectedFramework(frameworkName);
+    setRequestModalOpen(true);
+  };
+
+  const handleRequestSubmit = async () => {
+    if (!requestForm.reason.trim()) {
+      alert("Please provide a reason for requesting this framework");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const response = await fetch("/api/customer/framework-interest", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-tenant-id": companyId,
+        },
+        body: JSON.stringify({
+          framework: selectedFramework,
+          reason: requestForm.reason,
+          urgency: requestForm.urgency,
+          companySize: requestForm.companySize,
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        alert(data.message);
+        setRequestModalOpen(false);
+        setRequestForm({ reason: "", urgency: "normal", companySize: "" });
+      } else {
+        alert("Failed to submit request");
+      }
+    } catch (error) {
+      console.error("Request submission error:", error);
+      alert("Failed to submit request");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRunAssessment = async () => {
+    if (selectedFrameworksForAssessment.length === 0) {
+      message.error("Please select at least one framework to assess");
+      return;
+    }
+
+    setRunningAssessment(true);
+    try {
+      const response = await fetch("/api/customer/compliance/run-assessment", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-tenant-id": companyId,
+        },
+        body: JSON.stringify({
+          frameworks: selectedFrameworksForAssessment,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        message.success(`Assessment completed! ${data.results.length} frameworks assessed.`);
+        setAssessmentModalOpen(false);
+        setSelectedFrameworksForAssessment([]);
+        // Refresh compliance data
+        fetchComplianceData();
+      } else {
+        message.error(data.error || "Failed to run assessment");
+      }
+    } catch (error) {
+      console.error("Assessment error:", error);
+      message.error("Failed to run assessment");
+    } finally {
+      setRunningAssessment(false);
+    }
+  };
+
+  const getSeverityColor = (severity: string) => {
+    switch (severity.toUpperCase()) {
+      case "CRITICAL":
+        return "red";
+      case "HIGH":
+        return "orange";
+      case "MEDIUM":
+        return "gold";
+      case "LOW":
+        return "green";
+      default:
+        return "default";
+    }
+  };
+
+  const getFrameworkStyle = (name: string) => {
+    return (
+      FRAMEWORK_COLORS[name as keyof typeof FRAMEWORK_COLORS] ||
+      FRAMEWORK_COLORS["ISO27001"]
+    );
+  };
+
+  const complianceDistribution = [
+    {
+      name: "Compliant",
+      value: stats?.compliantControls || 0,
+      color: "#10b981",
+    },
+    {
+      name: "Non-Compliant",
+      value: stats?.nonCompliantControls || 0,
+      color: "#ef4444",
+    },
+    { name: "Pending", value: stats?.pendingControls || 0, color: "#f59e0b" },
+  ].filter((item) => item.value > 0);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Spin size="large" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-white mb-2">Compliance Hub</h1>
+          <p className="text-slate-400">
+            Monitor compliance across SOC2, GDPR, PCI-DSS, HIPAA, and more
+          </p>
+        </div>
+        <div className="flex items-center gap-4">
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="px-6 py-3 bg-cyan-500 hover:bg-cyan-600 text-white rounded-xl font-semibold"
+            onClick={() => setAssessmentModalOpen(true)}
+          >
+            Run Assessment
+          </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={fetchComplianceData}
+            className="p-3 bg-slate-700 hover:bg-slate-600 rounded-xl transition-colors"
+          >
+            <ArrowPathIcon className="w-5 h-5 text-white" />
+          </motion.button>
+        </div>
+      </div>
+
+      {/* Overall Score */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-gradient-to-br from-cyan-500/10 to-blue-600/5 border border-cyan-500/30 rounded-2xl p-8"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <p className="text-slate-400 text-lg mb-2">
+              Overall Compliance Score
+            </p>
+            <div className="flex items-baseline gap-4">
+              <p className="text-6xl font-bold text-white">{overallScore}%</p>
+              {overallScore >= 90 ? (
+                <Tag color="green" className="text-lg px-4 py-1">
+                  Excellent
+                </Tag>
+              ) : overallScore >= 70 ? (
+                <Tag color="blue" className="text-lg px-4 py-1">
+                  Good
+                </Tag>
+              ) : overallScore >= 50 ? (
+                <Tag color="orange" className="text-lg px-4 py-1">
+                  Needs Improvement
+                </Tag>
+              ) : (
+                <Tag color="red" className="text-lg px-4 py-1">
+                  Critical
+                </Tag>
+              )}
+            </div>
+          </div>
+          <div className="w-48">
+            <ResponsiveContainer width="100%" height={180}>
+              <RadialBarChart
+                cx="50%"
+                cy="50%"
+                innerRadius="60%"
+                outerRadius="100%"
+                data={[{ value: overallScore, fill: "#06b6d4" }]}
+                startAngle={180}
+                endAngle={0}
+              >
+                <RadialBar background dataKey="value" cornerRadius={10} />
+              </RadialBarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Framework Cards */}
+      <div>
+        <h2 className="text-xl font-bold text-white mb-4">
+          Compliance Frameworks
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {frameworks.map((framework, index) => {
+            const style = getFrameworkStyle(framework.frameworkName);
+            const percentage = framework.compliancePercentage || 0;
+
+            return (
+              <motion.div
+                key={framework.frameworkName}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: index * 0.1 }}
+                whileHover={{ scale: 1.02, y: -4 }}
+                className={`bg-gradient-to-br ${style.bg} border ${style.border} rounded-2xl p-6 cursor-pointer`}
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-bold text-white">
+                    {framework.frameworkName}
+                  </h3>
+                  {framework.findingsCount > 0 && (
+                    <Tag color="red">{framework.findingsCount} issues</Tag>
+                  )}
+                </div>
+
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-slate-400 text-sm">Compliance</span>
+                    <span className="text-white font-bold text-lg">
+                      {percentage}%
+                    </span>
+                  </div>
+                  <Progress
+                    percent={percentage}
+                    strokeColor={style.primary}
+                    showInfo={false}
+                    strokeWidth={8}
+                  />
+                </div>
+
+                <div className="text-xs text-slate-400">
+                  {framework.lastAssessment ? (
+                    <span>
+                      Last assessed:{" "}
+                      {new Date(framework.lastAssessment).toLocaleDateString()}
+                    </span>
+                  ) : (
+                    <span>Not yet assessed</span>
+                  )}
+                </div>
+                
+                {/* Request Assessment Button for inactive frameworks */}
+                {percentage === 0 && (
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openRequestModal(framework.frameworkName);
+                    }}
+                    className="mt-4 w-full px-4 py-2 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-500/30 font-semibold text-sm transition-all"
+                  >
+                    Request Assessment
+                  </motion.button>
+                )}
+              </motion.div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Statistics */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Compliance Distribution */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6"
+        >
+          <h3 className="text-xl font-bold text-white mb-4">
+            Compliance Distribution
+          </h3>
+          {complianceDistribution.length > 0 ? (
+            <ResponsiveContainer width="100%" height={250}>
+              <PieChart>
+                <Pie
+                  data={complianceDistribution}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, value }) => `${name}: ${value}`}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {complianceDistribution.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-64 flex items-center justify-center text-slate-400">
+              No compliance data available
+            </div>
+          )}
+        </motion.div>
+
+        {/* Stats Cards */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="grid grid-cols-2 gap-4"
+        >
+          <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4">
+            <CheckCircleIcon className="w-8 h-8 text-green-500 mb-2" />
+            <p className="text-sm text-slate-400">Compliant</p>
+            <p className="text-3xl font-bold text-green-500">
+              {stats?.compliantControls || 0}
+            </p>
+          </div>
+
+          <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
+            <ExclamationTriangleIcon className="w-8 h-8 text-red-500 mb-2" />
+            <p className="text-sm text-slate-400">Non-Compliant</p>
+            <p className="text-3xl font-bold text-red-500">
+              {stats?.nonCompliantControls || 0}
+            </p>
+          </div>
+
+          <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-4">
+            <ClockIcon className="w-8 h-8 text-orange-500 mb-2" />
+            <p className="text-sm text-slate-400">Pending</p>
+            <p className="text-3xl font-bold text-orange-500">
+              {stats?.pendingControls || 0}
+            </p>
+          </div>
+
+          <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-xl p-4">
+            <ShieldCheckIcon className="w-8 h-8 text-cyan-500 mb-2" />
+            <p className="text-sm text-slate-400">Total Controls</p>
+            <p className="text-3xl font-bold text-cyan-500">
+              {stats?.totalControls || 0}
+            </p>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Tabs */}
+      <Tabs
+        defaultActiveKey="findings"
+        items={[
+          {
+            key: "findings",
+            label: "⚠️ Active Findings",
+            children: (
+              <div className="space-y-3">
+                {findings.map((finding, index) => (
+                  <motion.div
+                    key={finding.id}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    className="bg-slate-800/50 border border-slate-700 rounded-xl p-5"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <Tag color={getSeverityColor(finding.severity)}>
+                            {finding.severity}
+                          </Tag>
+                          <span className="text-white font-semibold">
+                            {finding.controlName}
+                          </span>
+                          <Tag>{finding.frameworkName}</Tag>
+                        </div>
+                        <p className="text-slate-400 text-sm mb-3">
+                          {finding.description}
+                        </p>
+                        <div className="flex items-center gap-4 text-xs text-slate-500">
+                          <span>Control ID: {finding.controlId}</span>
+                          <span>•</span>
+                          <span>
+                            Discovered:{" "}
+                            {new Date(
+                              finding.discoveredAt,
+                            ).toLocaleDateString()}
+                          </span>
+                          {finding.dueDate && (
+                            <>
+                              <span>•</span>
+                              <span>
+                                Due:{" "}
+                                {new Date(finding.dueDate).toLocaleDateString()}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+
+                {findings.length === 0 && (
+                  <div className="text-center py-16 bg-slate-800/30 rounded-2xl">
+                    <CheckCircleIcon className="w-16 h-16 text-green-500 mx-auto mb-4" />
+                    <p className="text-xl text-white font-semibold mb-2">
+                      All Clear!
+                    </p>
+                    <p className="text-slate-400">
+                      No compliance findings to address
+                    </p>
+                  </div>
+                )}
+              </div>
+            ),
+          },
+          {
+            key: "audits",
+            label: "📋 Audit History",
+            children: (
+              <div className="space-y-3">
+                {auditHistory.map((audit, index) => (
+                  <motion.div
+                    key={audit.id}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    className="bg-slate-800/50 border border-slate-700 rounded-xl p-5"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <DocumentTextIcon className="w-5 h-5 text-cyan-500" />
+                          <span className="text-white font-semibold">
+                            {audit.frameworkName} Audit
+                          </span>
+                          <Tag color="blue">{audit.auditType}</Tag>
+                        </div>
+                        <div className="flex items-center gap-4 text-sm text-slate-400">
+                          <span>Conducted by: {audit.conductedBy}</span>
+                          <span>•</span>
+                          <span>Findings: {audit.findingsCount}</span>
+                          <span>•</span>
+                          <span>
+                            {new Date(
+                              audit.completionDate,
+                            ).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+                      {audit.reportUrl && (
+                        <motion.button
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          className="px-4 py-2 bg-cyan-500/20 text-cyan-400 rounded-lg hover:bg-cyan-500/30"
+                        >
+                          View Report
+                        </motion.button>
+                      )}
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            ),
+          },
+        ]}
+      />
+
+      {/* Framework Request Modal */}
+      <Modal
+        title={`Request ${selectedFramework} Assessment`}
+        open={requestModalOpen}
+        onCancel={() => setRequestModalOpen(false)}
+        onOk={handleRequestSubmit}
+        confirmLoading={submitting}
+        okText="Submit Request"
+        cancelText="Cancel"
+        width={600}
+      >
+        <div className="space-y-4 py-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Why do you need {selectedFramework}? *
+            </label>
+            <Input.TextArea
+              rows={4}
+              placeholder="E.g., We have customers in California and need CCPA compliance..."
+              value={requestForm.reason}
+              onChange={(e) =>
+                setRequestForm({ ...requestForm, reason: e.target.value })
+              }
+              className="bg-slate-800 border-slate-600 text-white"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Urgency
+            </label>
+            <Radio.Group
+              value={requestForm.urgency}
+              onChange={(e) =>
+                setRequestForm({ ...requestForm, urgency: e.target.value })
+              }
+            >
+              <Radio value="urgent">Urgent (within 1 week)</Radio>
+              <Radio value="normal">Normal (2-4 weeks)</Radio>
+              <Radio value="planning">Planning ahead</Radio>
+            </Radio.Group>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Company Size
+            </label>
+            <Select
+              style={{ width: "100%" }}
+              placeholder="Select company size"
+              value={requestForm.companySize || undefined}
+              onChange={(value) =>
+                setRequestForm({ ...requestForm, companySize: value })
+              }
+            >
+              <Select.Option value="1-10 employees">1-10 employees</Select.Option>
+              <Select.Option value="11-50 employees">11-50 employees</Select.Option>
+              <Select.Option value="51-200 employees">51-200 employees</Select.Option>
+              <Select.Option value="201-1000 employees">201-1000 employees</Select.Option>
+              <Select.Option value="1000+ employees">1000+ employees</Select.Option>
+            </Select>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Run Assessment Modal */}
+      <Modal
+        title="Run Compliance Assessment"
+        open={assessmentModalOpen}
+        onCancel={() => {
+          setAssessmentModalOpen(false);
+          setSelectedFrameworksForAssessment([]);
+        }}
+        onOk={handleRunAssessment}
+        confirmLoading={runningAssessment}
+        okText="Run Assessment"
+        cancelText="Cancel"
+        width={600}
+      >
+        <div className="space-y-4 py-4">
+          <p className="text-slate-400 text-sm mb-4">
+            Select one or more compliance frameworks to assess. The system will scan your APIs
+            for security vulnerabilities and map them to framework-specific controls.
+          </p>
+          
+          <div className="space-y-2">
+            {frameworks.map((framework) => (
+              <div
+                key={framework.frameworkName}
+                className="flex items-center p-3 bg-slate-800 rounded-lg hover:bg-slate-700 cursor-pointer"
+                onClick={() => {
+                  setSelectedFrameworksForAssessment(prev => 
+                    prev.includes(framework.frameworkName)
+                      ? prev.filter(f => f !== framework.frameworkName)
+                      : [...prev, framework.frameworkName]
+                  );
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedFrameworksForAssessment.includes(framework.frameworkName)}
+                  onChange={() => {}}
+                  className="mr-3 h-4 w-4"
+                />
+                <div className="flex-1">
+                  <p className="text-white font-semibold">{framework.frameworkName}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-slate-300">
+                    Current: {framework.compliancePercentage || 0}%
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {selectedFrameworksForAssessment.length > 0 && (
+            <div className="mt-4 p-3 bg-cyan-500/10 border border-cyan-500/30 rounded-lg">
+              <p className="text-cyan-400 text-sm">
+                ✓ {selectedFrameworksForAssessment.length} framework(s) selected for assessment
+              </p>
+            </div>
+          )}
+        </div>
+      </Modal>
+    </div>
+  );
+}

@@ -1,0 +1,223 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { database } from '../../../../infrastructure/database'
+
+export async function GET(request: NextRequest) {
+  const tenantId = request.headers.get('x-tenant-id')
+  const userId = request.headers.get('x-user-id')
+  
+  if (!tenantId) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+  }
+
+  try {
+    // Get real authenticated user and company data
+    const userCompanyData = await database.queryOne(
+      `SELECT u.id, u.email, u.first_name, u.last_name, u.role, u.email_verified,
+              u.last_login, u.created_at as user_created,
+              c.id as company_id, c.company_name, c.subscription_plan, 
+              c.subscription_status, c.api_key, c.domain
+       FROM users u
+       JOIN companies c ON u.company_id = c.id
+       WHERE u.company_id = $1 AND ($2::text IS NULL OR u.id = $2)
+       LIMIT 1`,
+      [tenantId, userId]
+    )
+
+    if (!userCompanyData) {
+      return NextResponse.json({ error: 'User verification failed' }, { status: 404 })
+    }
+
+    // Get user permissions
+    const permissions = await database.queryMany(
+      `SELECT permission_name, resource_type, actions
+       FROM user_permissions 
+       WHERE user_id = $1 AND is_active = true`,
+      [userCompanyData.id]
+    )
+
+    // Get account status and limits
+    const accountLimits = await database.queryOne(
+      `SELECT 
+         (SELECT COUNT(*) FROM apis WHERE tenant_id = $1) as current_apis,
+         (SELECT COUNT(*) FROM scan_results WHERE tenant_id = $1 AND created_at >= NOW() - INTERVAL '30 days') as scans_this_month,
+         (SELECT COUNT(*) FROM api_usage WHERE tenant_id = $1 AND timestamp >= NOW() - INTERVAL '30 days') as requests_this_month`,
+      [tenantId]
+    )
+
+    // Get subscription limits based on plan
+    const planLimits = getPlanLimits(userCompanyData.subscription_plan)
+
+    // Check if account is in good standing
+    const accountStatus = await database.queryOne(
+      `SELECT is_blocked, blocked_reason, subscription_status
+       FROM companies 
+       WHERE id = $1`,
+      [tenantId]
+    )
+
+    // Update last verification timestamp
+    await database.query(
+      'UPDATE users SET last_verification = NOW() WHERE id = $1',
+      [userCompanyData.id]
+    )
+
+    return NextResponse.json({
+      success: true,
+      verification: {
+        user: {
+          id: userCompanyData.id,
+          email: userCompanyData.email,
+          firstName: userCompanyData.first_name,
+          lastName: userCompanyData.last_name,
+          role: userCompanyData.role,
+          emailVerified: userCompanyData.email_verified,
+          lastLogin: userCompanyData.last_login,
+          memberSince: userCompanyData.user_created
+        },
+        company: {
+          id: userCompanyData.company_id,
+          name: userCompanyData.company_name,
+          domain: userCompanyData.domain,
+          subscriptionPlan: userCompanyData.subscription_plan,
+          subscriptionStatus: userCompanyData.subscription_status,
+          apiKey: userCompanyData.api_key
+        },
+        permissions: permissions.map(p => ({
+          name: p.permission_name,
+          resourceType: p.resource_type,
+          actions: typeof p.actions === 'string' ? JSON.parse(p.actions) : p.actions
+        })),
+        accountStatus: {
+          isBlocked: accountStatus?.is_blocked || false,
+          blockedReason: accountStatus?.blocked_reason,
+          subscriptionActive: accountStatus?.subscription_status === 'active',
+          inGoodStanding: !accountStatus?.is_blocked && accountStatus?.subscription_status === 'active'
+        },
+        usage: {
+          currentApis: parseInt(accountLimits?.current_apis || '0'),
+          scansThisMonth: parseInt(accountLimits?.scans_this_month || '0'),
+          requestsThisMonth: parseInt(accountLimits?.requests_this_month || '0')
+        },
+        limits: planLimits,
+        verifiedAt: new Date().toISOString()
+      }
+    })
+
+  } catch (error) {
+    console.error('User verification error:', error)
+    return NextResponse.json({ error: 'Verification failed' }, { status: 500 })
+  }
+}
+
+export async function POST(request: NextRequest) {
+  const tenantId = request.headers.get('x-tenant-id')
+  const userId = request.headers.get('x-user-id')
+  
+  if (!tenantId) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+  }
+
+  try {
+    const { verificationType } = await request.json()
+
+    if (!verificationType) {
+      return NextResponse.json({ error: 'Verification type is required' }, { status: 400 })
+    }
+
+    const validTypes = ['email', 'phone', 'identity', 'domain']
+    if (!validTypes.includes(verificationType)) {
+      return NextResponse.json({ error: 'Invalid verification type. Allowed: ' + validTypes.join(', ') }, { status: 400 })
+    }
+
+    // Create verification request
+    const verification = await database.queryOne(
+      `INSERT INTO verification_requests (tenant_id, user_id, verification_type, status, created_at, expires_at)
+       VALUES ($1, $2, $3, $4, NOW(), NOW() + INTERVAL '24 hours') RETURNING *`,
+      [tenantId, userId, verificationType, 'pending']
+    )
+
+    if (!verification) {
+      return NextResponse.json({ error: 'Failed to create verification request' }, { status: 500 })
+    }
+
+    // Generate verification token/code based on type
+    const verificationData = await generateVerificationData(verificationType, verification.id)
+
+    return NextResponse.json({
+      success: true,
+      verification: {
+        id: verification.id,
+        type: verification.verification_type,
+        status: verification.status,
+        expiresAt: verification.expires_at,
+        ...verificationData
+      },
+      message: `${verificationType} verification initiated`
+    })
+
+  } catch (error) {
+    console.error('Verification initiation error:', error)
+    return NextResponse.json({ error: 'Failed to initiate verification' }, { status: 500 })
+  }
+}
+
+function getPlanLimits(plan: string) {
+  const limits = {
+    starter: {
+      maxApis: 10,
+      maxScansPerMonth: 100,
+      maxRequestsPerMonth: 10000,
+      features: ['basic_monitoring', 'email_alerts']
+    },
+    professional: {
+      maxApis: 50,
+      maxScansPerMonth: 500,
+      maxRequestsPerMonth: 100000,
+      features: ['advanced_monitoring', 'custom_rules', 'webhook_alerts', 'compliance_reports']
+    },
+    enterprise: {
+      maxApis: -1, // unlimited
+      maxScansPerMonth: -1, // unlimited
+      maxRequestsPerMonth: -1, // unlimited
+      features: ['enterprise_monitoring', 'sso', 'custom_integration', 'dedicated_support']
+    }
+  }
+
+  return limits[plan as keyof typeof limits] || limits.starter
+}
+
+async function generateVerificationData(type: string, verificationId: string) {
+  switch (type) {
+    case 'email':
+      return {
+        verificationCode: generateSecureCode(6),
+        instruction: 'Check your email for the verification code'
+      }
+    case 'phone':
+      return {
+        verificationCode: generateSecureCode(6),
+        instruction: 'Check your phone for the verification SMS'
+      }
+    case 'domain':
+      return {
+        verificationToken: `domain-verify-${verificationId}`,
+        instruction: 'Add the verification token to your domain DNS records'
+      }
+    case 'identity':
+      return {
+        verificationUrl: `${process.env.NEXT_PUBLIC_APP_URL}/verify/identity/${verificationId}`,
+        instruction: 'Complete identity verification through the provided URL'
+      }
+    default:
+      return {}
+  }
+}
+
+function generateSecureCode(length: number): string {
+  const chars = '0123456789'
+  let result = ''
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(crypto.getRandomValues(new Uint32Array(1))[0] % chars.length)
+  }
+  return result
+}

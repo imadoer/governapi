@@ -1,0 +1,11 @@
+
+> dashboard@0.1.0 dev
+> next dev -p 4000
+
+   ▲ Next.js 15.5.5
+   - Local:        http://localhost:4000
+   - Network:      http://209.97.174.248:4000
+   - Environments: .env.local, .env
+
+ ✓ Starting...
+ ✓ Ready in 1975ms

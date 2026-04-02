@@ -1,0 +1,31 @@
+import { NextResponse } from 'next/server'
+
+export async function GET() {
+  try {
+    // Return mock data until your Supabase tables are properly set up
+    const stats = {
+      total_requests: 1250,
+      threats_blocked: 25,
+      avg_response_time: 89,
+      error_rate: 0.03,
+      uptime: 99.7
+    }
+    
+    const recent_activity = [
+      {
+        created_at: new Date().toISOString(),
+        url: 'https://api.example.com/users',
+        response_time: 120,
+        blocked: false
+      }
+    ]
+    
+    return NextResponse.json({
+      stats,
+      recent_activity
+    })
+    
+  } catch (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+}

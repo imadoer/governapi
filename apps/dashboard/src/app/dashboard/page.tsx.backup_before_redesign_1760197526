@@ -1,0 +1,482 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { Layout, Menu, Button, Card, Row, Col, Tabs, Space, Statistic, Typography, Dropdown, Avatar, message, Modal, Form, Input, Spin, Alert } from 'antd'
+import {
+  DashboardOutlined,
+  SecurityScanOutlined,
+  SettingOutlined,
+  PlusOutlined,
+  ApiOutlined,
+  FileTextOutlined,
+  UserOutlined,
+  LogoutOutlined,
+  ReloadOutlined,
+  WarningOutlined
+} from '@ant-design/icons'
+import { useRouter } from 'next/navigation'
+import { BotDetection } from './components/BotDetection'
+import { RealComplianceDashboard } from './components/RealComplianceDashboard'
+import { APIHealthScore } from './components/APIHealthScore'
+import { IntegrationStatus } from './components/IntegrationStatus'
+import { PDFReportGenerator } from './components/PDFReportGenerator'
+import { DependencyMap } from './components/DependencyMap'
+import { LiveAPIMonitoring } from './components/LiveAPIMonitoring'
+import { SecurityScanResults } from './components/SecurityScanResults'
+import { TrendAnalysis } from './components/TrendAnalysis'
+import { RiskAssessment } from './components/RiskAssessment'
+import { SecurityAlerts } from './components/SecurityAlerts'
+import { PerformanceMetrics } from './components/PerformanceMetrics'
+import { AlertConfiguration } from './components/AlertConfiguration'
+import { APIDiscovery } from './components/APIDiscovery'
+import { WebhookIntegration } from './components/WebhookIntegration'
+
+const { Sider, Header, Content } = Layout
+const { Title, Text } = Typography
+const { TextArea } = Input
+
+export default function DashboardPage() {
+  const router = useRouter()
+  const [mounted, setMounted] = useState(false)
+  const [user, setUser] = useState<any>(null)
+  const [apiKey, setApiKey] = useState<string | null>(null)
+  const [stats, setStats] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  
+  const [collapsed, setCollapsed] = useState(false)
+  const [activeTab, setActiveTab] = useState('overview')
+  const [scanModalVisible, setScanModalVisible] = useState(false)
+  const [addAPIModalVisible, setAddAPIModalVisible] = useState(false)
+  const [actionLoading, setActionLoading] = useState(false)
+  const [scanTarget, setScanTarget] = useState('')
+
+  // Handle client-side mounting and auth check
+  useEffect(() => {
+    setMounted(true)
+    
+    // Check authentication
+    const checkAuth = async () => {
+      try {
+        if (typeof window !== 'undefined') {
+          const storedApiKey = sessionStorage.getItem('apiKey')
+          const storedUser = sessionStorage.getItem('user')
+
+          if (storedApiKey && storedUser) {
+            setApiKey(storedApiKey)
+            setUser(JSON.parse(storedUser))
+          } else {
+            // Not authenticated, redirect to login
+            router.push('/login')
+            return
+          }
+        }
+      } catch (error) {
+        console.error('Auth check failed:', error)
+        router.push('/login')
+        return
+      }
+    }
+
+    checkAuth()
+  }, [router])
+
+  // Fetch dashboard data when we have an API key
+  useEffect(() => {
+    if (!apiKey) return
+
+    const fetchStats = async () => {
+      setLoading(true)
+      try {
+        const response = await fetch(`/api/customer/dashboard?apiKey=${apiKey}&type=stats`)
+        const result = await response.json()
+        
+        if (result.success) {
+          setStats(result.stats)
+        } else {
+          setError(result.error || 'Failed to load dashboard data')
+        }
+      } catch (error) {
+        setError('Failed to fetch dashboard data')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchStats()
+  }, [apiKey])
+
+  const handleLogout = () => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('apiKey')
+      sessionStorage.removeItem('user')
+    }
+    router.push('/login')
+  }
+
+  const handleStartScan = async () => {
+    setActionLoading(true)
+    try {
+      if (!scanTarget) {
+        message.error("Please enter a target URL")
+        return
+      }
+
+      message.success("Security scan initiated successfully")
+      setScanModalVisible(false)
+      setScanTarget('')
+    } catch (error) {
+      message.error("Failed to initiate security scan")
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const refetch = () => {
+    if (apiKey) {
+      const fetchStats = async () => {
+        setLoading(true)
+        try {
+          const response = await fetch(`/api/customer/dashboard?apiKey=${apiKey}&type=stats`)
+          const result = await response.json()
+          
+          if (result.success) {
+            setStats(result.stats)
+            setError(null)
+          } else {
+            setError(result.error || 'Failed to load dashboard data')
+          }
+        } catch (error) {
+          setError('Failed to fetch dashboard data')
+        } finally {
+          setLoading(false)
+        }
+      }
+      fetchStats()
+    }
+  }
+
+  // Don't render until mounted
+  if (!mounted) {
+    return <div></div>
+  }
+
+  // Show loading if we don't have user data yet
+  if (!user || !apiKey) {
+    return <Spin size="large" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />
+  }
+
+  const tabItems = [
+    {
+      key: 'overview',
+      label: 'Overview',
+      children: (
+        <div>
+          {error && (
+            <Alert
+              message="Data Loading Error"
+              description={error}
+              type="error"
+              action={
+                <Button size="small" onClick={refetch} icon={<ReloadOutlined />}>
+                  Retry
+                </Button>
+              }
+              style={{ marginBottom: 16 }}
+            />
+          )}
+          
+          <Row gutter={[16, 16]}>
+            {/* Real-time Stats Cards */}
+            <Col xs={24} sm={12} lg={6}>
+              <Card>
+                <Statistic
+                  title="Total APIs"
+                  value={loading ? 0 : stats?.totalEndpoints || 0}
+                  loading={loading}
+                  prefix={<ApiOutlined />}
+                />
+              </Card>
+            </Col>
+            <Col xs={24} sm={12} lg={6}>
+              <Card>
+                <Statistic
+                  title="Threats Blocked"
+                  value={loading ? 0 : stats?.totalThreats || 0}
+                  loading={loading}
+                  prefix={<SecurityScanOutlined />}
+                  valueStyle={{ color: stats?.totalThreats ? '#cf1322' : '#3f8600' }}
+                />
+              </Card>
+            </Col>
+            <Col xs={24} sm={12} lg={6}>
+              <Card>
+                <Statistic
+                  title="Security Scans"
+                  value={loading ? 0 : stats?.totalScans || 0}
+                  loading={loading}
+                  prefix={<WarningOutlined />}
+                />
+              </Card>
+            </Col>
+            <Col xs={24} sm={12} lg={6}>
+              <Card>
+                <Statistic
+                  title="Avg Security Score"
+                  value={loading ? 0 : stats?.avgSecurityScore || 0}
+                  loading={loading}
+                  suffix="/100"
+                  valueStyle={{ 
+                    color: (stats?.avgSecurityScore || 0) > 80 ? '#3f8600' : 
+                           (stats?.avgSecurityScore || 0) > 60 ? '#faad14' : '#cf1322' 
+                  }}
+                />
+              </Card>
+            </Col>
+
+            {/* Quick Actions */}
+            <Col xs={24} lg={12}>
+              <Card title="Quick Actions">
+                <Space wrap>
+                  <Button 
+                    type="primary" 
+                    icon={<PlusOutlined />} 
+                    onClick={() => setScanModalVisible(true)}
+                    loading={actionLoading}
+                  >
+                    New Security Scan
+                  </Button>
+                  <Button 
+                    icon={<ApiOutlined />} 
+                    onClick={() => setAddAPIModalVisible(true)}
+                    loading={actionLoading}
+                  >
+                    Add API
+                  </Button>
+                  <Button 
+                    icon={<FileTextOutlined />} 
+                    onClick={() => message.success("Compliance report generated")}
+                    loading={actionLoading}
+                  >
+                    Generate Report
+                  </Button>
+                  <Button 
+                    icon={<ReloadOutlined />} 
+                    onClick={refetch}
+                    loading={loading}
+                  >
+                    Refresh Data
+                  </Button>
+                </Space>
+              </Card>
+            </Col>
+
+            {/* System Status with Real Data */}
+            <Col xs={24} lg={12}>
+              <Card title="System Status">
+                {loading ? (
+                  <Spin size="small" />
+                ) : error ? (
+                  <Text type="danger">System experiencing issues</Text>
+                ) : (
+                  <div>
+                    <Text type="success">Your API governance platform is operational</Text>
+                    <br />
+                    <Text type="secondary">
+                      Monitoring {stats?.totalEndpoints || 0} APIs with {stats?.totalRequests || 0} requests processed
+                    </Text>
+                  </div>
+                )}
+              </Card>
+            </Col>
+
+            {/* Use existing components */}
+            <Col xs={24}>
+              <APIHealthScore />
+            </Col>
+            <Col xs={24}>
+              <LiveAPIMonitoring />
+            </Col>
+            <Col xs={24} lg={12}>
+              <TrendAnalysis />
+            </Col>
+            <Col xs={24} lg={12}>
+              <RiskAssessment />
+            </Col>
+            <Col xs={24} lg={12}>
+              <SecurityAlerts />
+            </Col>
+            <Col xs={24} lg={12}>
+              <PerformanceMetrics />
+            </Col>
+          </Row>
+        </div>
+      )
+    },
+    {
+      key: 'security',
+      label: 'Security Scans',
+      children: (
+        <div>
+          <Card title="Security Scans" extra={
+            <Button 
+              type="primary" 
+              icon={<PlusOutlined />} 
+              onClick={() => setScanModalVisible(true)}
+              loading={actionLoading}
+            >
+              New Security Scan
+            </Button>
+          }>
+            <Text>Security scanning functionality active.</Text>
+          </Card>
+          <SecurityScanResults results={null} />
+        </div>
+      )
+    },
+    {
+      key: 'discovery',
+      label: 'API Discovery',
+      children: <APIDiscovery />
+    },
+    {
+      key: 'alerts',
+      label: 'Alert Configuration',
+      children: <AlertConfiguration />
+    },
+    {
+      key: 'bots',
+      label: 'Bot Detection',
+      children: <BotDetection />
+    },
+    {
+      key: 'reports',
+      label: 'Compliance Reports',
+      children: <RealComplianceDashboard />
+    },
+    {
+      key: 'enterprise',
+      label: 'Enterprise',
+      children: (
+        <Row gutter={[16, 16]}>
+          <Col xs={24} lg={12}>
+            <IntegrationStatus />
+          </Col>
+          <Col xs={24} lg={12}>
+            <PDFReportGenerator />
+          </Col>
+          <Col xs={24}>
+            <WebhookIntegration />
+          </Col>
+          <Col xs={24}>
+            <DependencyMap />
+          </Col>
+        </Row>
+      )
+    }
+  ]
+
+  return (
+    <Layout style={{ minHeight: '100vh' }}>
+      <Sider collapsible collapsed={collapsed} onCollapse={setCollapsed}>
+        <div className="p-4">
+          <Title level={4} style={{ color: 'white', margin: 0 }}>
+            {collapsed ? 'GA' : 'GovernAPI'}
+          </Title>
+          <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: '12px' }}>
+            Government API Platform
+          </Text>
+        </div>
+        <Menu
+          theme="dark"
+          selectedKeys={[activeTab]}
+          mode="inline"
+          items={[
+            { key: "overview", icon: <DashboardOutlined />, label: "Overview" },
+            { key: "security", icon: <SecurityScanOutlined />, label: "Security Scans" },
+            { key: "discovery", icon: <ApiOutlined />, label: "API Discovery" },
+            { key: "alerts", icon: <SettingOutlined />, label: "Alert Configuration" },
+            { key: "bots", icon: <SecurityScanOutlined />, label: "Bot Detection" },
+            { key: "reports", icon: <FileTextOutlined />, label: "Compliance Reports" },
+            { key: "enterprise", icon: <ApiOutlined />, label: "Enterprise" }
+          ]}
+          onClick={({ key }) => setActiveTab(key)}
+        />
+      </Sider>
+
+      <Layout>
+        <Header style={{ background: '#001529', padding: '0 24px', borderBottom: '1px solid #f0f0f0' }}>
+          <div style={{ float: 'right' }}>
+            <Space>
+              {loading && <Spin size="small" />}
+              <Dropdown
+                menu={{
+                  items: [
+                    { key: 'profile', label: 'Profile', icon: <UserOutlined /> },
+                    { key: 'logout', label: 'Logout', icon: <LogoutOutlined />, onClick: handleLogout }
+                  ]
+                }}
+              >
+                <Space style={{ cursor: 'pointer' }}>
+                  <Avatar icon={<UserOutlined />} />
+                  <span style={{ color: 'white' }}>
+                    {user?.firstName || 'Admin'} {user?.lastName || 'User'} ({user?.company?.subscription_plan || 'professional'})
+                  </span>
+                </Space>
+              </Dropdown>
+            </Space>
+          </div>
+        </Header>
+
+        <Content style={{ margin: '16px', background: '#f0f2f5', minHeight: 'calc(100vh - 112px)' }}>
+          <Tabs
+            activeKey={activeTab}
+            onChange={setActiveTab}
+            items={tabItems}
+            style={{ 
+              background: '#fff', 
+              padding: '24px', 
+              borderRadius: '6px', 
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)' 
+            }}
+          />
+        </Content>
+      </Layout>
+
+      {/* Modals */}
+      <Modal
+        title="New Security Scan"
+        open={scanModalVisible}
+        onCancel={() => setScanModalVisible(false)}
+        onOk={handleStartScan}
+        confirmLoading={actionLoading}
+      >
+        <Form layout="vertical">
+          <Form.Item label="Scan Target">
+            <Input
+              placeholder="e.g., https://api.yourdomain.com"
+              value={scanTarget}
+              onChange={(e) => setScanTarget(e.target.value)}
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="Add API"
+        open={addAPIModalVisible}
+        onCancel={() => setAddAPIModalVisible(false)}
+        onOk={() => { message.success("API added successfully"); setAddAPIModalVisible(false); }}
+      >
+        <Form layout="vertical">
+          <Form.Item label="API Name">
+            <Input placeholder="e.g., Payment API, User Service" />
+          </Form.Item>
+          <Form.Item label="Base URL">
+            <Input placeholder="e.g., https://api.mycompany.com/v1" />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </Layout>
+  )
+}

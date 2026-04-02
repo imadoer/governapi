@@ -1,0 +1,846 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
+import {
+  FireIcon,
+  ExclamationTriangleIcon,
+  BoltIcon,
+  InformationCircleIcon,
+  PlayIcon,
+} from "@heroicons/react/24/outline";
+import { Spin, Tag, Table, Button, Modal, Input, Select, message } from "antd";
+
+interface Vulnerability {
+  id: string;
+  severity: string;
+  title: string;
+  description: string;
+  status: string;
+  discovered_at: string;
+}
+
+interface SecurityScan {
+  id: string;
+  target: string;
+  scanType: string;
+  status: "pending" | "running" | "completed" | "failed";
+  securityScore: number | null;
+  vulnerabilityCount: number;
+  createdAt: string;
+  completedAt: string | null;
+  duration: number | null;
+}
+
+export function VulnerabilitiesPage({ companyId }: { companyId: string }) {
+  const [vulnerabilities, setVulnerabilities] = useState<Vulnerability[]>([]);
+  const [scans, setScans] = useState<SecurityScan[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [scansLoading, setScansLoading] = useState(true);
+  const [riskScore, setRiskScore] = useState(0);
+  const [severityFilter, setSeverityFilter] = useState("all");
+  const [isNewScanModalOpen, setIsNewScanModalOpen] = useState(false);
+  const [newScanTarget, setNewScanTarget] = useState("");
+  const [newScanType, setNewScanType] = useState("comprehensive");
+  const [submitting, setSubmitting] = useState(false);
+
+  const fetchVulnerabilities = async () => {
+    try {
+      const response = await fetch("/api/customer/vulnerabilities", {
+        headers: { "x-tenant-id": companyId },
+      });
+      const data = await response.json();
+      if (data.success) {
+        setVulnerabilities(data.vulnerabilities || []);
+        setRiskScore(data.riskScore || 0);
+      }
+    } catch (error) {
+      console.error("Failed to fetch vulnerabilities:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchScans = async () => {
+    try {
+      const response = await fetch("/api/customer/security-scans", {
+        headers: { "x-tenant-id": companyId },
+      });
+      const data = await response.json();
+      if (data.success) {
+        setScans(data.securityScans || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch scans:", error);
+    } finally {
+      setScansLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (companyId) {
+      fetchVulnerabilities();
+      fetchScans();
+    }
+  }, [companyId]);
+
+  const handleNewScan = async () => {
+    if (!newScanTarget.trim()) {
+      message.error("Please enter a target URL");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const response = await fetch("/api/customer/security-scans", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-tenant-id": companyId,
+        },
+        body: JSON.stringify({
+          url: newScanTarget,
+          scanType: newScanType,
+        }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        message.success("Security scan started!");
+        setIsNewScanModalOpen(false);
+        setNewScanTarget("");
+        fetchScans();
+      } else {
+        message.error(data.error || "Failed to start scan");
+      }
+    } catch (error) {
+      message.error("Failed to start scan");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDownloadReport = async (scanId: string) => {
+    try {
+      message.loading("Generating report...", 0);
+      const response = await fetch(`/api/customer/security-scans/${scanId}/report`, {
+        headers: { "x-tenant-id": companyId },
+      });
+
+      message.destroy();
+
+      if (!response.ok) {
+        throw new Error("Failed to generate report");
+      }
+
+      const contentType = response.headers.get("content-type");
+      if (contentType?.includes("application/pdf")) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `security-report-${scanId}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        message.success("Report downloaded!");
+      } else {
+        const data = await response.json();
+        message.info(data.message || "Report generated");
+      }
+    } catch (error) {
+      message.error("Failed to download report");
+    }
+  };
+
+  const getSeverityColor = (severity: string) => {
+    switch (severity?.toUpperCase()) {
+      case "CRITICAL": return "#dc2626";
+      case "HIGH": return "#ea580c";
+      case "MEDIUM": return "#ca8a04";
+      case "LOW": return "#16a34a";
+      default: return "#6b7280";
+    }
+  };
+
+  const getSeverityIcon = (severity: string) => {
+    switch (severity?.toUpperCase()) {
+      case "CRITICAL": return <FireIcon className="w-5 h-5" />;
+      case "HIGH": return <ExclamationTriangleIcon className="w-5 h-5" />;
+      case "MEDIUM": return <BoltIcon className="w-5 h-5" />;
+      case "LOW": return <InformationCircleIcon className="w-5 h-5" />;
+      default: return null;
+    }
+  };
+
+  const severityCounts = {
+    CRITICAL: vulnerabilities.filter((v) => v.severity === "CRITICAL").length,
+    HIGH: vulnerabilities.filter((v) => v.severity === "HIGH").length,
+    MEDIUM: vulnerabilities.filter((v) => v.severity === "MEDIUM").length,
+    LOW: vulnerabilities.filter((v) => v.severity === "LOW").length,
+  };
+
+  const filteredVulnerabilities = severityFilter === "all"
+    ? vulnerabilities
+    : vulnerabilities.filter((v) => v.severity === severityFilter);
+
+  const getRiskLevel = (score: number) => {
+    if (score >= 75) return { level: "CRITICAL", color: "#dc2626", text: "Critical Risk", glow: "rgba(220, 38, 38, 0.4)" };
+    if (score >= 50) return { level: "HIGH", color: "#ea580c", text: "High Risk", glow: "rgba(234, 88, 12, 0.4)" };
+    if (score >= 25) return { level: "MEDIUM", color: "#ca8a04", text: "Moderate Risk", glow: "rgba(202, 138, 4, 0.4)" };
+    return { level: "LOW", color: "#16a34a", text: "Low Risk", glow: "rgba(22, 163, 74, 0.4)" };
+  };
+
+  const riskLevel = getRiskLevel(riskScore);
+
+  const scanColumns = [
+    {
+      title: "Target",
+      dataIndex: "target",
+      key: "target",
+      width: 280,
+      render: (text: string) => (
+        <span className="font-mono text-sm text-cyan-400 hover:text-cyan-300 transition-colors truncate block max-w-[250px]" title={text}>
+          {text || "N/A"}
+        </span>
+      ),
+    },
+    {
+      title: "Scan Type",
+      dataIndex: "scanType",
+      key: "scanType",
+      width: 140,
+      render: (type: string) => (
+        <Tag 
+          className="px-3 py-1 rounded-lg font-semibold transition-all hover:scale-105 shadow-lg"
+          style={{
+            background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(37, 99, 235, 0.15))',
+            border: '1px solid rgba(59, 130, 246, 0.3)',
+            color: '#60a5fa'
+          }}
+        >
+          {type?.replace("_", " ").toUpperCase() || "N/A"}
+        </Tag>
+      ),
+    },
+    {
+      title: "Status",
+      dataIndex: "status",
+      key: "status",
+      width: 130,
+      render: (status: string) => {
+        const config: Record<string, { bg: string; border: string; text: string; glow: string }> = {
+          completed: { 
+            bg: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(5, 150, 105, 0.15))', 
+            border: 'rgba(16, 185, 129, 0.4)',
+            text: '#10b981',
+            glow: '0 0 15px rgba(16, 185, 129, 0.3)'
+          },
+          running: { 
+            bg: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(37, 99, 235, 0.15))', 
+            border: 'rgba(59, 130, 246, 0.4)',
+            text: '#3b82f6',
+            glow: '0 0 15px rgba(59, 130, 246, 0.3)'
+          },
+          pending: { 
+            bg: 'linear-gradient(135deg, rgba(251, 146, 60, 0.15), rgba(249, 115, 22, 0.15))', 
+            border: 'rgba(251, 146, 60, 0.4)',
+            text: '#fb923c',
+            glow: '0 0 15px rgba(251, 146, 60, 0.3)'
+          },
+          failed: { 
+            bg: 'linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(220, 38, 38, 0.15))', 
+            border: 'rgba(239, 68, 68, 0.4)',
+            text: '#ef4444',
+            glow: '0 0 15px rgba(239, 68, 68, 0.3)'
+          },
+        };
+        const s = config[status?.toLowerCase()] || config.pending;
+        return (
+          <div
+            className="px-3 py-1 rounded-lg font-bold text-center text-xs transition-all hover:scale-105"
+            style={{
+              background: s.bg,
+              border: `1px solid ${s.border}`,
+              color: s.text,
+              boxShadow: s.glow
+            }}
+          >
+            {status?.toUpperCase() || "UNKNOWN"}
+          </div>
+        );
+      },
+    },
+    {
+      title: "Security Score",
+      dataIndex: "securityScore",
+      key: "securityScore",
+      width: 150,
+      render: (score: number | null) => {
+        if (score === null) return <span className="text-slate-500 text-sm">--</span>;
+        const getGradient = (s: number) => {
+          if (s >= 90) return { from: '#10b981', to: '#059669', glow: 'rgba(16, 185, 129, 0.3)' };
+          if (s >= 75) return { from: '#06b6d4', to: '#0891b2', glow: 'rgba(6, 182, 212, 0.3)' };
+          if (s >= 60) return { from: '#f59e0b', to: '#d97706', glow: 'rgba(245, 158, 11, 0.3)' };
+          return { from: '#ef4444', to: '#dc2626', glow: 'rgba(239, 68, 68, 0.3)' };
+        };
+        const colors = getGradient(score);
+        return (
+          <div
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl transition-all hover:scale-105"
+            style={{
+              background: `linear-gradient(135deg, ${colors.from}15, ${colors.to}15)`,
+              border: `1px solid ${colors.from}40`,
+              boxShadow: `0 0 15px ${colors.glow}`
+            }}
+          >
+            <span className="font-bold text-2xl" style={{ 
+              background: `linear-gradient(135deg, ${colors.from}, ${colors.to})`,
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent'
+            }}>
+              {score}
+            </span>
+            <span className="text-slate-400 text-xs font-medium">/100</span>
+          </div>
+        );
+      },
+    },
+    {
+      title: "Vulnerabilities",
+      dataIndex: "vulnerabilityCount",
+      key: "vulnerabilityCount",
+      width: 140,
+      render: (count: number) => {
+        const color = count === 0 ? '#10b981' : count < 5 ? '#f59e0b' : '#ef4444';
+        const glow = count === 0 ? 'rgba(16, 185, 129, 0.3)' : count < 5 ? 'rgba(245, 158, 11, 0.3)' : 'rgba(239, 68, 68, 0.3)';
+        return (
+          <div
+            className="inline-flex items-center justify-center w-14 h-14 rounded-xl font-bold text-xl transition-all hover:scale-110"
+            style={{
+              background: `${color}15`,
+              border: `2px solid ${color}40`,
+              color: color,
+              boxShadow: `0 0 20px ${glow}`
+            }}
+          >
+            {count}
+          </div>
+        );
+      },
+    },
+    {
+      title: "Duration",
+      dataIndex: "duration",
+      key: "duration",
+      width: 100,
+      render: (duration: number | null) =>
+        duration ? (
+          <span className="text-slate-300 font-mono text-sm">{duration}s</span>
+        ) : (
+          <span className="text-slate-500">--</span>
+        ),
+    },
+    {
+      title: "Started",
+      dataIndex: "createdAt",
+      key: "createdAt",
+      width: 180,
+      render: (date: string) => (
+        <span className="text-slate-400 text-sm">{new Date(date).toLocaleString()}</span>
+      ),
+    },
+    {
+      title: "Actions",
+      key: "actions",
+      width: 160,
+      fixed: 'right' as const,
+      render: (_: any, record: SecurityScan) => (
+        record.status === "completed" ? (
+          <Button
+            type="primary"
+            size="middle"
+            onClick={() => handleDownloadReport(record.id)}
+            className="group relative overflow-hidden border-none font-semibold transition-all hover:scale-105"
+            style={{
+              background: 'linear-gradient(135deg, #3b82f6, #06b6d4)',
+              boxShadow: '0 0 20px rgba(6, 182, 212, 0.3)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.boxShadow = '0 0 30px rgba(6, 182, 212, 0.5)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.boxShadow = '0 0 20px rgba(6, 182, 212, 0.3)';
+            }}
+          >
+            <span className="flex items-center gap-2">
+              📄 Download
+            </span>
+          </Button>
+        ) : (
+          <span className="text-slate-500 text-sm italic">Pending...</span>
+        )
+      ),
+    },
+  ];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Spin size="large" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-10 py-6 px-8">
+      {/* Security Risk Assessment Header */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="relative bg-gradient-to-br from-slate-900/90 via-slate-800/80 to-slate-900/90 backdrop-blur-xl border border-slate-700/50 rounded-3xl p-8 shadow-lg overflow-hidden"
+        style={{
+          boxShadow: `0 0 60px ${riskLevel.glow}, 0 20px 40px rgba(0,0,0,0.3)`
+        }}
+      >
+        {/* Ambient Background Glow */}
+        <div 
+          className="absolute top-0 right-0 w-96 h-96 rounded-full blur-3xl opacity-20 pointer-events-none"
+          style={{ background: `radial-gradient(circle, ${riskLevel.color}, transparent)` }}
+        />
+        
+        <div className="relative flex items-center justify-between">
+          <div>
+            <h1 className="text-4xl font-extrabold text-white mb-3 tracking-tight">
+              Security Risk Assessment
+            </h1>
+            <p className="text-slate-400 text-lg">
+              {vulnerabilities.length} total vulnerabilities detected across your infrastructure
+            </p>
+            <div className="mt-6 flex items-center gap-4">
+              <div
+                className="px-5 py-3 rounded-xl font-bold text-white shadow-lg transition-all hover:scale-105"
+                style={{ 
+                  backgroundColor: riskLevel.color,
+                  boxShadow: `0 0 20px ${riskLevel.glow}`
+                }}
+              >
+                {riskLevel.text}
+              </div>
+              <div className="text-slate-300 font-semibold text-lg">
+                Risk Score: <span className="text-white">{riskScore}/100</span>
+              </div>
+            </div>
+          </div>
+          
+          {/* Glowing Score Ring */}
+          <div className="relative">
+            <div 
+              className="absolute inset-0 rounded-full blur-2xl opacity-40"
+              style={{ background: `radial-gradient(circle, ${riskLevel.color}, transparent)` }}
+            />
+            <svg className="w-48 h-48 transform -rotate-90 relative">
+              <defs>
+                <linearGradient id="scoreGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" style={{ stopColor: riskLevel.color, stopOpacity: 0.8 }} />
+                  <stop offset="100%" style={{ stopColor: riskLevel.color, stopOpacity: 1 }} />
+                </linearGradient>
+                <filter id="glow">
+                  <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                  <feMerge>
+                    <feMergeNode in="coloredBlur"/>
+                    <feMergeNode in="SourceGraphic"/>
+                  </feMerge>
+                </filter>
+              </defs>
+              <circle
+                cx="96"
+                cy="96"
+                r="85"
+                stroke="#1e293b"
+                strokeWidth="14"
+                fill="none"
+              />
+              <circle
+                cx="96"
+                cy="96"
+                r="85"
+                stroke="url(#scoreGradient)"
+                strokeWidth="14"
+                fill="none"
+                strokeDasharray={`${(riskScore / 100) * 534} 534`}
+                strokeLinecap="round"
+                filter="url(#glow)"
+                style={{
+                  filter: `drop-shadow(0 0 10px ${riskLevel.glow})`
+                }}
+              />
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-center">
+                <div 
+                  className="text-5xl font-bold mb-1"
+                  style={{ 
+                    color: riskLevel.color,
+                    textShadow: `0 0 20px ${riskLevel.glow}`
+                  }}
+                >
+                  {riskScore}
+                </div>
+                <div className="text-sm text-slate-400 font-medium uppercase tracking-wider">Risk</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Glass Reflection Effect */}
+        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+      </motion.div>
+
+      {/* Severity Cards */}
+      <div className="grid grid-cols-4 gap-6">
+        {[
+          { severity: "CRITICAL", count: severityCounts.CRITICAL, color: "#dc2626", gradient: "from-red-600/20 to-rose-600/20", glow: "rgba(220, 38, 38, 0.3)" },
+          { severity: "HIGH", count: severityCounts.HIGH, color: "#ea580c", gradient: "from-orange-600/20 to-amber-600/20", glow: "rgba(234, 88, 12, 0.3)" },
+          { severity: "MEDIUM", count: severityCounts.MEDIUM, color: "#ca8a04", gradient: "from-yellow-600/20 to-orange-500/20", glow: "rgba(202, 138, 4, 0.3)" },
+          { severity: "LOW", count: severityCounts.LOW, color: "#16a34a", gradient: "from-emerald-600/20 to-green-600/20", glow: "rgba(22, 163, 74, 0.3)" },
+        ].map(({ severity, count, color, gradient, glow }) => {
+          const Icon = getSeverityIcon(severity);
+          return (
+            <motion.div
+              key={severity}
+              whileHover={{ y: -6, scale: 1.02 }}
+              transition={{ type: "spring", stiffness: 300 }}
+              className={`relative bg-gradient-to-br ${gradient} backdrop-blur-sm border-2 rounded-2xl p-6 cursor-pointer group overflow-hidden`}
+              style={{ 
+                borderColor: `${color}40`,
+                boxShadow: `0 0 20px ${glow}, 0 10px 30px rgba(0,0,0,0.2)`
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.boxShadow = `0 0 30px ${glow}, 0 15px 40px rgba(0,0,0,0.3)`;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.boxShadow = `0 0 20px ${glow}, 0 10px 30px rgba(0,0,0,0.2)`;
+              }}
+            >
+              {/* Inner Glow */}
+              <div 
+                className="absolute inset-0 opacity-20 group-hover:opacity-30 transition-opacity"
+                style={{ background: `radial-gradient(circle at top right, ${color}, transparent)` }}
+              />
+              
+              {/* Accent Border */}
+              <div 
+                className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl"
+                style={{ backgroundColor: color }}
+              />
+              
+              <div className="relative flex items-center justify-between mb-4">
+                <motion.div 
+                  className="p-3 rounded-xl"
+                  style={{ 
+                    color: color,
+                    backgroundColor: `${color}20`,
+                    boxShadow: `0 0 15px ${glow}`
+                  }}
+                  whileHover={{ scale: 1.1, rotate: 5 }}
+                  transition={{ type: "spring", stiffness: 400 }}
+                >
+                  {Icon}
+                </motion.div>
+                <div 
+                  className="text-5xl font-extrabold"
+                  style={{ 
+                    color: color,
+                    textShadow: `0 0 20px ${glow}`
+                  }}
+                >
+                  {count}
+                </div>
+              </div>
+              <div className="relative text-slate-300 text-sm font-bold uppercase tracking-wider">
+                {severity}
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+
+      {/* Scan History & Reports */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        className="relative bg-gradient-to-br from-slate-900/70 via-slate-800/60 to-slate-900/70 backdrop-blur-xl border border-slate-700/50 rounded-3xl p-8 shadow-lg overflow-hidden"
+        style={{
+          boxShadow: '0 0 40px rgba(6, 182, 212, 0.1), 0 20px 40px rgba(0,0,0,0.3)'
+        }}
+      >
+        {/* Ambient Glow */}
+        <div className="absolute top-0 left-0 w-96 h-96 rounded-full blur-3xl opacity-10 pointer-events-none bg-gradient-to-br from-cyan-500 to-blue-600" />
+        
+        <div className="relative flex items-center justify-between mb-8">
+          <h2 className="text-3xl font-bold bg-gradient-to-r from-white via-slate-200 to-slate-300 bg-clip-text text-transparent">
+            Scan History & Reports
+          </h2>
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Button
+              type="primary"
+              size="large"
+              icon={<PlayIcon className="w-5 h-5" />}
+              onClick={() => setIsNewScanModalOpen(true)}
+              className="group relative overflow-hidden border-none font-bold shadow-lg"
+              style={{
+                background: 'linear-gradient(135deg, #3b82f6, #06b6d4)',
+                boxShadow: '0 0 30px rgba(6, 182, 212, 0.4)',
+                animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.boxShadow = '0 0 40px rgba(6, 182, 212, 0.6)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.boxShadow = '0 0 30px rgba(6, 182, 212, 0.4)';
+              }}
+            >
+              Start New Scan
+            </Button>
+          </motion.div>
+        </div>
+
+        <div className="relative">
+          {scansLoading ? (
+            <div className="flex items-center justify-center h-48">
+              <Spin size="large" />
+            </div>
+          ) : (
+            <div 
+              className="rounded-2xl overflow-hidden border border-slate-700/30 backdrop-blur-sm"
+              style={{
+                background: 'rgba(15, 23, 42, 0.6)',
+                boxShadow: 'inset 0 0 30px rgba(0,0,0,0.3)'
+              }}
+            >
+              <Table
+                columns={scanColumns}
+                dataSource={scans}
+                rowKey="id"
+                pagination={{ 
+                  pageSize: 10,
+                  showSizeChanger: false,
+                  className: "premium-pagination"
+                }}
+                className="premium-scan-table"
+                rowClassName="premium-table-row"
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Bottom Glass Reflection */}
+        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+      </motion.div>
+
+      {/* Vulnerability Timeline */}
+      <div className="bg-gradient-to-br from-slate-900/70 via-slate-800/60 to-slate-900/70 backdrop-blur-xl border border-slate-700/50 rounded-3xl p-8 shadow-lg">
+        <div className="flex items-center justify-between mb-8">
+          <h2 className="text-3xl font-bold bg-gradient-to-r from-white via-slate-200 to-slate-300 bg-clip-text text-transparent">
+            Vulnerability Timeline
+          </h2>
+          <Select
+            value={severityFilter}
+            onChange={setSeverityFilter}
+            className="w-56"
+            size="large"
+            options={[
+              { value: "all", label: "All Severities" },
+              { value: "CRITICAL", label: "Critical" },
+              { value: "HIGH", label: "High" },
+              { value: "MEDIUM", label: "Medium" },
+              { value: "LOW", label: "Low" },
+            ]}
+          />
+        </div>
+
+        <div className="space-y-4">
+          {filteredVulnerabilities.map((vuln, index) => (
+            <motion.div
+              key={vuln.id}
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: index * 0.05 }}
+              className="group flex items-start gap-4 p-5 bg-slate-900/40 backdrop-blur-sm border border-slate-700/50 rounded-2xl hover:border-cyan-500/50 transition-all hover:shadow-lg hover:shadow-cyan-500/10"
+            >
+              <div
+                className="w-1 h-full rounded-full"
+                style={{ 
+                  backgroundColor: getSeverityColor(vuln.severity),
+                  boxShadow: `0 0 10px ${getSeverityColor(vuln.severity)}50`
+                }}
+              />
+              <div
+                className="p-3 rounded-xl transition-all group-hover:scale-110"
+                style={{ 
+                  backgroundColor: `${getSeverityColor(vuln.severity)}20`,
+                  color: getSeverityColor(vuln.severity)
+                }}
+              >
+                {getSeverityIcon(vuln.severity)}
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-2">
+                  <Tag 
+                    className="font-bold"
+                    style={{
+                      background: `${getSeverityColor(vuln.severity)}20`,
+                      border: `1px solid ${getSeverityColor(vuln.severity)}40`,
+                      color: getSeverityColor(vuln.severity)
+                    }}
+                  >
+                    {vuln.severity}
+                  </Tag>
+                  <span className="text-slate-500 text-sm">ID: {vuln.id}</span>
+                </div>
+                <h3 className="text-white font-bold text-lg mb-2">{vuln.title}</h3>
+                <p className="text-slate-400 text-sm leading-relaxed mb-3">{vuln.description}</p>
+                <div className="text-xs text-slate-500 font-mono">
+                  Discovered: {new Date(vuln.discovered_at).toLocaleString()}
+                </div>
+              </div>
+              <div>
+                <Tag 
+                  className="font-bold"
+                  color={vuln.status === "open" ? "red" : "green"}
+                  style={{
+                    boxShadow: vuln.status === "open" 
+                      ? '0 0 15px rgba(239, 68, 68, 0.3)' 
+                      : '0 0 15px rgba(16, 185, 129, 0.3)'
+                  }}
+                >
+                  {vuln.status?.toUpperCase()}
+                </Tag>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+
+      {/* New Scan Modal */}
+      <Modal
+        title={<span className="text-xl font-bold">Start New Security Scan</span>}
+        open={isNewScanModalOpen}
+        onOk={handleNewScan}
+        onCancel={() => setIsNewScanModalOpen(false)}
+        confirmLoading={submitting}
+        okText="Start Scan"
+        okButtonProps={{
+          style: {
+            background: 'linear-gradient(135deg, #3b82f6, #06b6d4)',
+            border: 'none',
+            boxShadow: '0 0 20px rgba(6, 182, 212, 0.4)'
+          }
+        }}
+      >
+        <div className="space-y-6 mt-6">
+          <div>
+            <label className="block text-sm font-semibold mb-3 text-slate-300">Target URL</label>
+            <Input
+              size="large"
+              placeholder="https://api.example.com"
+              value={newScanTarget}
+              onChange={(e) => setNewScanTarget(e.target.value)}
+              className="rounded-xl"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold mb-3 text-slate-300">Scan Type</label>
+            <Select
+              size="large"
+              value={newScanType}
+              onChange={setNewScanType}
+              className="w-full"
+              options={[
+                { value: "quick", label: "Quick Scan (5-10 min)" },
+                { value: "comprehensive", label: "Comprehensive (15-30 min)" },
+                { value: "deep", label: "Deep Scan (30-60 min)" },
+                { value: "owasp_top10", label: "OWASP Top 10" },
+              ]}
+            />
+          </div>
+        </div>
+      </Modal>
+
+      <style jsx global>{`
+        @keyframes pulse {
+          0%, 100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.8;
+          }
+        }
+
+        .premium-scan-table .ant-table {
+          background: transparent !important;
+        }
+
+        .premium-scan-table .ant-table-thead > tr > th {
+          background: rgba(15, 23, 42, 0.8) !important;
+          color: #94a3b8 !important;
+          border-bottom: 2px solid rgba(71, 85, 105, 0.3) !important;
+          font-weight: 700 !important;
+          text-transform: uppercase !important;
+          font-size: 11px !important;
+          letter-spacing: 0.8px !important;
+          padding: 18px 16px !important;
+        }
+
+        .premium-table-row {
+          background: rgba(15, 23, 42, 0.3) !important;
+          border-bottom: 1px solid rgba(51, 65, 85, 0.2) !important;
+          transition: all 0.2s ease-in-out !important;
+        }
+
+        .premium-table-row:hover {
+          background: rgba(30, 41, 59, 0.5) !important;
+          border-left: 3px solid #06b6d4 !important;
+          box-shadow: 0 0 30px rgba(6, 182, 212, 0.15) !important;
+          transform: translateX(2px) !important;
+        }
+
+        .premium-table-row > td {
+          background: transparent !important;
+          color: #e2e8f0 !important;
+          border-bottom: none !important;
+          padding: 20px 16px !important;
+        }
+
+        .premium-pagination .ant-pagination-item {
+          background: rgba(30, 41, 59, 0.6) !important;
+          border-color: rgba(71, 85, 105, 0.5) !important;
+          transition: all 0.2s ease-in-out !important;
+        }
+
+        .premium-pagination .ant-pagination-item:hover {
+          background: rgba(51, 65, 85, 0.8) !important;
+          border-color: #06b6d4 !important;
+          transform: translateY(-2px) !important;
+          box-shadow: 0 0 15px rgba(6, 182, 212, 0.3) !important;
+        }
+
+        .premium-pagination .ant-pagination-item-active {
+          background: linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(37, 99, 235, 0.2)) !important;
+          border-color: #06b6d4 !important;
+          box-shadow: 0 0 20px rgba(6, 182, 212, 0.4) !important;
+        }
+
+        .premium-pagination .ant-pagination-item a {
+          color: #94a3b8 !important;
+        }
+
+        .premium-pagination .ant-pagination-item-active a {
+          color: #06b6d4 !important;
+          font-weight: bold !important;
+        }
+      `}</style>
+    </div>
+  );
+}

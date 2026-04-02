@@ -1,0 +1,48 @@
+import { NextRequest, NextResponse } from "next/server";
+
+const customAuthRoutes = [
+  "/api/admin/auth/login",
+  "/api/admin/auth/logout",
+  "/api/admin/auth/verify",
+];
+
+export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  console.log("Middleware pathname:", pathname);
+
+  // Allow auth routes
+  if (customAuthRoutes.some(route => pathname.startsWith(route))) {
+    return NextResponse.next();
+  }
+
+  // Protect admin pages (except login)
+  if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
+    const token = request.cookies.get("admin_session")?.value;
+    
+    if (!token) {
+      return NextResponse.redirect(new URL("/admin/login", request.url));
+    }
+  }
+
+  // Protect admin API routes
+  if (pathname.startsWith("/api/admin/") && !pathname.startsWith("/api/admin/auth/")) {
+    const token = request.cookies.get("admin_session")?.value;
+    
+    if (!token) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+  }
+
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: [
+    "/admin/:path*",
+    "/api/admin/:path*",
+  ],
+};

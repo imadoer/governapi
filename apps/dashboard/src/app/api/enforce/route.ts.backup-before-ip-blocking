@@ -1,0 +1,76 @@
+import { logger } from "../../../utils/logging/logger";
+import { NextRequest, NextResponse } from "next/server";
+import { database } from "../../../infrastructure/database";
+
+export async function POST(req: NextRequest) {
+  try {
+    const { apiId, request } = await req.json();
+
+    // Get active policies
+    const policies = await database.queryMany(
+      "SELECT * FROM policies WHERE enabled = true",
+    );
+
+    const violations = [];
+
+    for (const policy of policies || []) {
+      const rules = policy.rules || {};
+
+      // Check authentication requirement
+      if (
+        rules.require === "authentication" &&
+        !request.headers?.authorization
+      ) {
+        violations.push({
+          policy_id: policy.id,
+          policy_name: policy.name,
+          severity: policy.severity,
+          message: "Authentication required",
+        });
+      }
+
+      // Check rate limits
+      if (rules.rateLimit && request.requestCount > rules.rateLimit) {
+        violations.push({
+          policy_id: policy.id,
+          policy_name: policy.name,
+          severity: policy.severity,
+          message: `Rate limit exceeded: ${request.requestCount}/${rules.rateLimit}`,
+        });
+      }
+
+      // Check IP restrictions
+      if (rules.blockedIPs && rules.blockedIPs.includes(request.ip)) {
+        violations.push({
+          policy_id: policy.id,
+          policy_name: policy.name,
+          severity: policy.severity,
+          message: "IP address blocked",
+        });
+      }
+    }
+
+    // Record violations if any
+    if (violations.length > 0) {
+      for (const violation of violations) {
+        await database.query(
+          "INSERT INTO violations (policy_id, api_id, severity, message, created_at) VALUES ($1, $2, $3, $4, NOW())",
+          [violation.policy_id, apiId, violation.severity, violation.message],
+        );
+      }
+    }
+
+    return NextResponse.json({
+      allowed: violations.length === 0,
+      violations,
+      blocked: violations.some(
+        (v) => v.severity === "HIGH" || v.severity === "CRITICAL",
+      ),
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { error: "Policy enforcement failed" },
+      { status: 500 },
+    );
+  }
+}

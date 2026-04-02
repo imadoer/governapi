@@ -1,0 +1,84 @@
+import { NextRequest, NextResponse } from 'next/server'
+
+export async function POST(req: NextRequest) {
+  try {
+    const { target_url } = await req.json()
+    if (!target_url) {
+      return NextResponse.json({ error: 'Target URL required' }, { status: 400 })
+    }
+    const userAgent = req.headers.get('user-agent') || ''
+    const clientIP = req.headers.get('x-forwarded-for') || 'unknown'
+    let botScore = 0
+    if (userAgent.includes('python-requests')) botScore += 60
+    if (userAgent.includes('curl')) botScore += 40
+    if (!req.headers.get('accept-language')) botScore += 20
+    const isBot = botScore > 50
+    const blocked = botScore > 80
+    if (typeof global !== 'undefined') {
+      if (!global.trafficLogs) global.trafficLogs = []
+      global.trafficLogs.push({
+        timestamp: new Date().toISOString(),
+        ip: clientIP,
+        user_agent: userAgent,
+        target_url,
+        is_bot: isBot,
+        bot_confidence: botScore,
+        blocked
+      })
+    }
+    if (blocked) {
+      return NextResponse.json({ error: 'Bot blocked' }, { status: 403 })
+    }
+    const response = await fetch(target_url)
+    const data = await response.text()
+    return new NextResponse(data, { status: response.status })
+  } catch (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+}
+
+export async function GET(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url)
+    const target_url = searchParams.get('url')
+    
+    if (!target_url) {
+      return NextResponse.json({ error: 'URL parameter required' }, { status: 400 })
+    }
+
+    const userAgent = req.headers.get('user-agent') || ''
+    const clientIP = req.headers.get('x-forwarded-for') || 'unknown'
+    
+    let botScore = 0
+    if (userAgent.includes('python-requests')) botScore += 60
+    if (userAgent.includes('curl')) botScore += 40
+    if (!req.headers.get('accept-language')) botScore += 20
+    
+    const isBot = botScore > 50
+    const blocked = botScore > 80
+
+    if (typeof global !== 'undefined') {
+      if (!global.trafficLogs) global.trafficLogs = []
+      global.trafficLogs.push({
+        timestamp: new Date().toISOString(),
+        ip: clientIP,
+        user_agent: userAgent,
+        target_url,
+        is_bot: isBot,
+        bot_confidence: botScore,
+        blocked
+      })
+    }
+
+    if (blocked) {
+      return NextResponse.json({ error: 'Bot blocked' }, { status: 403 })
+    }
+
+    const response = await fetch(target_url)
+    const data = await response.text()
+    
+    return new NextResponse(data, { status: response.status })
+  } catch (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+}

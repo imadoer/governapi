@@ -1,0 +1,71 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { validateApiRequest } from '../../../../utils/auth-middleware'
+import { database } from '../../../../infrastructure/database'
+import Stripe from 'stripe'
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+  apiVersion: '2025-08-27.basil'
+})
+
+export async function POST(request: NextRequest) {
+  // Validate authentication first
+  const authCheck = await validateApiRequest(request)
+  if (!authCheck.valid) {
+    return authCheck.response
+  }
+
+  try {
+    const { action, subscriptionId } = await request.json()
+    
+    // Verify the subscription belongs to the authenticated user's company
+    const subscription = await database.queryOne(
+      'SELECT stripe_subscription_id, company_id FROM companies WHERE id = $1',
+      [authCheck.tenantId]
+    )
+
+    if (!subscription || subscription.stripe_subscription_id !== subscriptionId) {
+      return NextResponse.json({ error: 'Subscription not found or unauthorized' }, { status: 403 })
+    }
+
+    console.log(`Subscription ${action} requested for authenticated user ${authCheck.user?.email}`)
+    
+    let result
+    switch (action) {
+      case 'pause':
+        result = await stripe.subscriptions.update(subscriptionId, {
+          pause_collection: { behavior: 'mark_uncollectible' }
+        })
+        break
+      case 'resume':
+        result = await stripe.subscriptions.update(subscriptionId, {
+          pause_collection: null
+        })
+        break
+      case 'cancel':
+        result = await stripe.subscriptions.cancel(subscriptionId)
+        break
+      default:
+        return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
+    }
+
+    // Update subscription status in database
+    await database.query(
+      'UPDATE companies SET subscription_status = $1 WHERE id = $2',
+      [result.status, authCheck.tenantId]
+    )
+
+    console.log(`Subscription ${action} completed for user ${authCheck.user?.email}:`, result.id)
+    
+    return NextResponse.json({
+      success: true,
+      subscriptionId: result.id,
+      status: result.status
+    })
+
+  } catch (error) {
+    console.error('Subscription management error:', error)
+    return NextResponse.json({
+      error: `Failed to manage subscription: ` + (error as Error)?.message
+    }, { status: 500 })
+  }
+}

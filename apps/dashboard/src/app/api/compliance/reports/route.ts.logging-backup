@@ -1,0 +1,139 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { database } from '../../../../infrastructure/database'
+
+export async function POST(req: NextRequest) {
+  const tenantId = req.headers.get('x-tenant-id')
+  if (!tenantId) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+  }
+
+  try {
+    const { framework, format } = await req.json()
+    
+    // Gather compliance data with proper tenant isolation
+    const apis = await database.queryMany('SELECT * FROM apis WHERE tenant_id = $1', [tenantId])
+    const scans = await database.queryMany('SELECT * FROM scan_results WHERE tenant_id = $1', [tenantId])
+    const violations = await database.queryMany('SELECT * FROM vulnerabilities WHERE tenant_id = $1', [tenantId])
+    const policies = await database.queryMany('SELECT * FROM security_policies WHERE tenant_id = $1', [tenantId])
+    
+    // Calculate real compliance metrics
+    const criticalViolations = violations?.filter(v => v.severity === 'CRITICAL').length || 0
+    const resolvedViolations = violations?.filter(v => v.status === 'resolved').length || 0
+    const totalViolations = violations?.length || 0
+    const classifiedApis = apis?.filter(a => a.classification !== 'unclassified').length || 0
+    const criticalApis = apis?.filter(a => a.classification === 'critical').length || 0
+    const enabledPolicies = policies?.filter(p => p.is_active).length || 0
+    
+    // Calculate compliance score based on real data
+    let complianceScore = 100
+    if (criticalViolations > 0) complianceScore -= criticalViolations * 15
+    if (totalViolations > 0) complianceScore -= Math.min(20, totalViolations * 2)
+    if (enabledPolicies === 0) complianceScore -= 25
+    complianceScore = Math.max(0, Math.min(100, complianceScore))
+    
+    // Build compliance report based on framework
+    const report = {
+      framework,
+      format,
+      generated_at: new Date().toISOString(),
+      executive_summary: {
+        compliance_score: Math.round(complianceScore),
+        total_apis: apis?.length || 0,
+        critical_issues: criticalViolations,
+        last_audit: new Date().toISOString(),
+        status: complianceScore >= 80 ? 'compliant' : complianceScore >= 60 ? 'partially_compliant' : 'non_compliant'
+      },
+      sections: {
+        api_inventory: {
+          total: apis?.length || 0,
+          classified: classifiedApis,
+          critical: criticalApis,
+          unclassified: (apis?.length || 0) - classifiedApis
+        },
+        security_posture: {
+          scans_performed: scans?.length || 0,
+          vulnerabilities_found: totalViolations,
+          critical_vulnerabilities: criticalViolations,
+          remediated: resolvedViolations,
+          remediation_rate: totalViolations > 0 ? Math.round((resolvedViolations / totalViolations) * 100) : 100
+        },
+        policy_compliance: {
+          total_policies: policies?.length || 0,
+          enforced: enabledPolicies,
+          violations: totalViolations,
+          coverage: policies?.length > 0 ? Math.round((enabledPolicies / policies.length) * 100) : 0
+        },
+        recommendations: generateRecommendations(apis, violations, policies, scans)
+      },
+      detailed_findings: {
+        critical_vulnerabilities: violations?.filter(v => v.severity === 'CRITICAL').map(v => ({
+          id: v.id,
+          title: v.title,
+          severity: v.severity,
+          api_endpoint: v.api_endpoint,
+          discovered_at: v.discovered_at
+        })) || [],
+        unclassified_apis: apis?.filter(a => a.classification === 'unclassified').map(a => ({
+          id: a.id,
+          name: a.name,
+          url: a.url,
+          method: a.method
+        })) || [],
+        inactive_policies: policies?.filter(p => !p.is_active).map(p => ({
+          id: p.id,
+          name: p.name,
+          category: p.category
+        })) || []
+      }
+    }
+    
+    // In production, generate PDF/Word doc based on format parameter
+    // For now, return comprehensive JSON that can be formatted client-side
+    return NextResponse.json({ 
+      success: true, 
+      report,
+      metadata: {
+        generated_by: req.headers.get('x-user-id') || 'system',
+        tenant_id: tenantId,
+        report_type: 'compliance_assessment',
+        framework: framework || 'general'
+      }
+    })
+    
+  } catch (error) {
+    console.error('Compliance report generation error:', error)
+    return NextResponse.json({ 
+      error: 'Failed to generate compliance report',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 })
+  }
+}
+
+function generateRecommendations(apis: any[], violations: any[], policies: any[], scans: any[]) {
+  const recommendations = []
+  
+  if (violations?.some(v => v.severity === 'CRITICAL')) {
+    recommendations.push('URGENT: Address critical security vulnerabilities immediately')
+  }
+  
+  if (apis?.some(a => a.classification === 'unclassified')) {
+    recommendations.push('Complete security classification of all API endpoints')
+  }
+  
+  if (!policies?.some(p => p.is_active)) {
+    recommendations.push('Implement and activate security policies')
+  }
+  
+  if (scans?.length === 0) {
+    recommendations.push('Schedule regular automated security scans')
+  }
+  
+  if (violations?.filter(v => v.status !== 'resolved').length > 0) {
+    recommendations.push('Establish vulnerability remediation timeline and process')
+  }
+  
+  return recommendations.length > 0 ? recommendations : [
+    'Maintain current security posture',
+    'Continue regular monitoring and assessment'
+  ]
+}

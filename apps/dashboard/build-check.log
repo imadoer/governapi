@@ -1,0 +1,547 @@
+
+> dashboard@0.1.0 build
+> next build
+
+   ▲ Next.js 15.5.5
+   - Environments: .env.local, .env.production, .env
+
+   Creating an optimized production build ...
+ ⚠ Compiled with warnings in 31.8s
+
+./src/utils/webhook-validation.ts
+A Node.js module is loaded ('crypto' at line 1) which is not supported in the Edge Runtime.
+Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+
+Import trace for requested module:
+./src/utils/webhook-validation.ts
+
+../../node_modules/pg-pool/index.js
+A Node.js API is used (process.nextTick at line: 195) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../node_modules/pg-pool/index.js
+../../node_modules/pg/lib/index.js
+../../node_modules/pg/esm/index.mjs
+./src/infrastructure/database.ts
+./src/utils/ip-blocking.ts
+
+../../node_modules/pg-pool/index.js
+A Node.js API is used (setImmediate at line: 397) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../node_modules/pg-pool/index.js
+../../node_modules/pg/lib/index.js
+../../node_modules/pg/esm/index.mjs
+./src/infrastructure/database.ts
+./src/utils/ip-blocking.ts
+
+../../node_modules/pgpass/lib/helper.js
+A Node.js API is used (process.platform at line: 8) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../node_modules/pgpass/lib/helper.js
+../../node_modules/pgpass/lib/index.js
+../../node_modules/pg/lib/client.js
+../../node_modules/pg/lib/index.js
+../../node_modules/pg/esm/index.mjs
+./src/infrastructure/database.ts
+./src/utils/ip-blocking.ts
+
+../../node_modules/pgpass/lib/helper.js
+A Node.js API is used (process.stderr at line: 9) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../node_modules/pgpass/lib/helper.js
+../../node_modules/pgpass/lib/index.js
+../../node_modules/pg/lib/client.js
+../../node_modules/pg/lib/index.js
+../../node_modules/pg/esm/index.mjs
+./src/infrastructure/database.ts
+./src/utils/ip-blocking.ts
+
+../../node_modules/pg/lib/client.js
+A Node.js API is used (process.nextTick at line: 75) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../node_modules/pg/lib/client.js
+../../node_modules/pg/lib/index.js
+../../node_modules/pg/esm/index.mjs
+./src/infrastructure/database.ts
+./src/utils/ip-blocking.ts
+
+../../node_modules/pg/lib/client.js
+A Node.js API is used (process.nextTick at line: 96) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../node_modules/pg/lib/client.js
+../../node_modules/pg/lib/index.js
+../../node_modules/pg/esm/index.mjs
+./src/infrastructure/database.ts
+./src/utils/ip-blocking.ts
+
+../../node_modules/pg/lib/client.js
+A Node.js API is used (process.nextTick at line: 158) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../node_modules/pg/lib/client.js
+../../node_modules/pg/lib/index.js
+../../node_modules/pg/esm/index.mjs
+./src/infrastructure/database.ts
+./src/utils/ip-blocking.ts
+
+../../node_modules/pg/lib/client.js
+A Node.js API is used (process.nextTick at line: 507) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../node_modules/pg/lib/client.js
+../../node_modules/pg/lib/index.js
+../../node_modules/pg/esm/index.mjs
+./src/infrastructure/database.ts
+./src/utils/ip-blocking.ts
+
+../../node_modules/pg/lib/client.js
+A Node.js API is used (process.nextTick at line: 557) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../node_modules/pg/lib/client.js
+../../node_modules/pg/lib/index.js
+../../node_modules/pg/esm/index.mjs
+./src/infrastructure/database.ts
+./src/utils/ip-blocking.ts
+
+../../node_modules/pg/lib/client.js
+A Node.js API is used (process.nextTick at line: 591) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../node_modules/pg/lib/client.js
+../../node_modules/pg/lib/index.js
+../../node_modules/pg/esm/index.mjs
+./src/infrastructure/database.ts
+./src/utils/ip-blocking.ts
+
+../../node_modules/pg/lib/client.js
+A Node.js API is used (process.nextTick at line: 598) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../node_modules/pg/lib/client.js
+../../node_modules/pg/lib/index.js
+../../node_modules/pg/esm/index.mjs
+./src/infrastructure/database.ts
+./src/utils/ip-blocking.ts
+
+../../node_modules/pg/lib/crypto/utils.js
+A Node.js API is used (process.versions at line: 3) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../node_modules/pg/lib/crypto/utils.js
+../../node_modules/pg/lib/client.js
+../../node_modules/pg/lib/index.js
+../../node_modules/pg/esm/index.mjs
+./src/infrastructure/database.ts
+./src/utils/ip-blocking.ts
+
+../../node_modules/pg/lib/crypto/utils.js
+A Node.js API is used (process.versions at line: 3) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../node_modules/pg/lib/crypto/utils.js
+../../node_modules/pg/lib/client.js
+../../node_modules/pg/lib/index.js
+../../node_modules/pg/esm/index.mjs
+./src/infrastructure/database.ts
+./src/utils/ip-blocking.ts
+
+../../node_modules/pg/lib/crypto/utils.js
+A Node.js API is used (process.versions at line: 3) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../node_modules/pg/lib/crypto/utils.js
+../../node_modules/pg/lib/client.js
+../../node_modules/pg/lib/index.js
+../../node_modules/pg/esm/index.mjs
+./src/infrastructure/database.ts
+./src/utils/ip-blocking.ts
+
+../../node_modules/pg/lib/defaults.js
+A Node.js API is used (process.platform at line: 8) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../node_modules/pg/lib/defaults.js
+../../node_modules/pg/lib/index.js
+../../node_modules/pg/esm/index.mjs
+./src/infrastructure/database.ts
+./src/utils/ip-blocking.ts
+
+../../node_modules/pg/lib/native/client.js
+Module not found: Can't resolve 'pg-native' in '/home/aigov/governapi-restored/node_modules/pg/lib/native'
+
+Import trace for requested module:
+../../node_modules/pg/lib/native/client.js
+../../node_modules/pg/lib/native/index.js
+../../node_modules/pg/lib/index.js
+../../node_modules/pg/esm/index.mjs
+./src/infrastructure/database.ts
+./src/utils/ip-blocking.ts
+
+../../node_modules/pg/lib/native/client.js
+A Node.js API is used (process.nextTick at line: 64) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../node_modules/pg/lib/native/client.js
+../../node_modules/pg/lib/native/index.js
+../../node_modules/pg/lib/index.js
+../../node_modules/pg/esm/index.mjs
+./src/infrastructure/database.ts
+./src/utils/ip-blocking.ts
+
+../../node_modules/pg/lib/native/client.js
+A Node.js API is used (process.nextTick at line: 86) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../node_modules/pg/lib/native/client.js
+../../node_modules/pg/lib/native/index.js
+../../node_modules/pg/lib/index.js
+../../node_modules/pg/esm/index.mjs
+./src/infrastructure/database.ts
+./src/utils/ip-blocking.ts
+
+../../node_modules/pg/lib/native/client.js
+A Node.js API is used (process.nextTick at line: 192) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../node_modules/pg/lib/native/client.js
+../../node_modules/pg/lib/native/index.js
+../../node_modules/pg/lib/index.js
+../../node_modules/pg/esm/index.mjs
+./src/infrastructure/database.ts
+./src/utils/ip-blocking.ts
+
+../../node_modules/pg/lib/native/client.js
+A Node.js API is used (process.nextTick at line: 219) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../node_modules/pg/lib/native/client.js
+../../node_modules/pg/lib/native/index.js
+../../node_modules/pg/lib/index.js
+../../node_modules/pg/esm/index.mjs
+./src/infrastructure/database.ts
+./src/utils/ip-blocking.ts
+
+../../node_modules/pg/lib/native/client.js
+A Node.js API is used (process.nextTick at line: 227) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../node_modules/pg/lib/native/client.js
+../../node_modules/pg/lib/native/index.js
+../../node_modules/pg/lib/index.js
+../../node_modules/pg/esm/index.mjs
+./src/infrastructure/database.ts
+./src/utils/ip-blocking.ts
+
+../../node_modules/pg/lib/native/client.js
+A Node.js API is used (process.nextTick at line: 256) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../node_modules/pg/lib/native/client.js
+../../node_modules/pg/lib/native/index.js
+../../node_modules/pg/lib/index.js
+../../node_modules/pg/esm/index.mjs
+./src/infrastructure/database.ts
+./src/utils/ip-blocking.ts
+
+../../node_modules/pg/lib/native/query.js
+A Node.js API is used (setImmediate at line: 93) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../node_modules/pg/lib/native/query.js
+../../node_modules/pg/lib/native/client.js
+../../node_modules/pg/lib/native/index.js
+../../node_modules/pg/lib/index.js
+../../node_modules/pg/esm/index.mjs
+./src/infrastructure/database.ts
+./src/utils/ip-blocking.ts
+
+../../node_modules/pg/lib/native/query.js
+A Node.js API is used (process.domain at line: 125) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../node_modules/pg/lib/native/query.js
+../../node_modules/pg/lib/native/client.js
+../../node_modules/pg/lib/native/index.js
+../../node_modules/pg/lib/index.js
+../../node_modules/pg/esm/index.mjs
+./src/infrastructure/database.ts
+./src/utils/ip-blocking.ts
+
+../../node_modules/pg/lib/native/query.js
+A Node.js API is used (process.domain at line: 126) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../node_modules/pg/lib/native/query.js
+../../node_modules/pg/lib/native/client.js
+../../node_modules/pg/lib/native/index.js
+../../node_modules/pg/lib/index.js
+../../node_modules/pg/esm/index.mjs
+./src/infrastructure/database.ts
+./src/utils/ip-blocking.ts
+
+../../node_modules/pg/lib/query.js
+A Node.js API is used (process.domain at line: 25) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../node_modules/pg/lib/query.js
+../../node_modules/pg/lib/client.js
+../../node_modules/pg/lib/index.js
+../../node_modules/pg/esm/index.mjs
+./src/infrastructure/database.ts
+./src/utils/ip-blocking.ts
+
+../../node_modules/pg/lib/query.js
+A Node.js API is used (process.domain at line: 26) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../node_modules/pg/lib/query.js
+../../node_modules/pg/lib/client.js
+../../node_modules/pg/lib/index.js
+../../node_modules/pg/esm/index.mjs
+./src/infrastructure/database.ts
+./src/utils/ip-blocking.ts
+
+../../node_modules/pg/lib/query.js
+A Node.js API is used (process.nextTick at line: 144) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../node_modules/pg/lib/query.js
+../../node_modules/pg/lib/client.js
+../../node_modules/pg/lib/index.js
+../../node_modules/pg/esm/index.mjs
+./src/infrastructure/database.ts
+./src/utils/ip-blocking.ts
+
+../../node_modules/bcryptjs/index.js
+A Node.js module is loaded ('crypto' at line 32) which is not supported in the Edge Runtime.
+Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+
+Import trace for requested module:
+../../node_modules/bcryptjs/index.js
+./src/services/auth/UserAuthService.ts
+./src/utils/auth-middleware.ts
+
+../../node_modules/bcryptjs/index.js
+A Node.js API is used (process.nextTick at line: 337) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../node_modules/bcryptjs/index.js
+./src/services/auth/UserAuthService.ts
+./src/utils/auth-middleware.ts
+
+../../node_modules/bcryptjs/index.js
+A Node.js API is used (setImmediate at line: 338) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../node_modules/bcryptjs/index.js
+./src/services/auth/UserAuthService.ts
+./src/utils/auth-middleware.ts
+
+../../node_modules/bcryptjs/index.js
+A Node.js API is used (setImmediate at line: 339) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../node_modules/bcryptjs/index.js
+./src/services/auth/UserAuthService.ts
+./src/utils/auth-middleware.ts
+
+../../node_modules/bcryptjs/index.js
+A Node.js API is used (process.nextTick at line: 340) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+../../node_modules/bcryptjs/index.js
+./src/services/auth/UserAuthService.ts
+./src/utils/auth-middleware.ts
+
+   Skipping linting
+   Checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/125) ...
+   Generating static pages (31/125) 
+   Generating static pages (62/125) 
+   Generating static pages (93/125) 
+ ✓ Generating static pages (125/125)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                            Size  First Load JS
+┌ ○ /                                               8.53 kB         153 kB
+├ ○ /_not-found                                       995 B         104 kB
+├ ○ /admin                                            518 B         104 kB
+├ ○ /admin/analytics                                1.69 kB         143 kB
+├ ○ /admin/api-keys                                 1.36 kB         142 kB
+├ ○ /admin/billing                                  2.46 kB         143 kB
+├ ○ /admin/blocked-users                              913 B         142 kB
+├ ○ /admin/customers                                2.92 kB         147 kB
+├ ƒ /admin/customers/[id]                           2.46 kB         147 kB
+├ ○ /admin/dashboard                                2.51 kB         143 kB
+├ ○ /admin/login                                    1.83 kB         143 kB
+├ ○ /admin/revenue                                  1.51 kB         142 kB
+├ ○ /admin/settings                                   892 B         142 kB
+├ ƒ /api/admin/analytics                              360 B         104 kB
+├ ƒ /api/admin/api-keys                               360 B         104 kB
+├ ƒ /api/admin/auth/login                             360 B         104 kB
+├ ƒ /api/admin/auth/logout                            360 B         104 kB
+├ ƒ /api/admin/auth/verify                            360 B         104 kB
+├ ƒ /api/admin/billing                                360 B         104 kB
+├ ƒ /api/admin/block-customer                         360 B         104 kB
+├ ƒ /api/admin/customers                              360 B         104 kB
+├ ƒ /api/admin/customers/[id]                         360 B         104 kB
+├ ƒ /api/admin/customers/[id]/activate                360 B         104 kB
+├ ƒ /api/admin/customers/[id]/reset-key               360 B         104 kB
+├ ƒ /api/admin/customers/[id]/suspend                 360 B         104 kB
+├ ƒ /api/admin/overview                               360 B         104 kB
+├ ƒ /api/admin/revenue                                360 B         104 kB
+├ ƒ /api/admin/revenue-analytics                      360 B         104 kB
+├ ƒ /api/admin/security-status                        360 B         104 kB
+├ ƒ /api/admin/settings                               360 B         104 kB
+├ ƒ /api/admin/stats                                  360 B         104 kB
+├ ƒ /api/ai/query                                     360 B         104 kB
+├ ƒ /api/analytics/compliance                         360 B         104 kB
+├ ƒ /api/analytics/costs                              360 B         104 kB
+├ ƒ /api/analytics/live                               360 B         104 kB
+├ ƒ /api/analytics/threats                            360 B         104 kB
+├ ƒ /api/analyze-request                              360 B         104 kB
+├ ƒ /api/apis                                         360 B         104 kB
+├ ƒ /api/auth/[...nextauth]                           360 B         104 kB
+├ ƒ /api/auth/customer/login                          360 B         104 kB
+├ ƒ /api/auth/customer/logout                         360 B         104 kB
+├ ƒ /api/auth/customer/register                       360 B         104 kB
+├ ƒ /api/auth/customer/session                        360 B         104 kB
+├ ƒ /api/auth/forgot-password                         360 B         104 kB
+├ ƒ /api/auth/reset-password                          360 B         104 kB
+├ ƒ /api/auth/validate-reset-token                    360 B         104 kB
+├ ƒ /api/billing/create-checkout-session              360 B         104 kB
+├ ƒ /api/billing/portal                               360 B         104 kB
+├ ƒ /api/billing/webhook                              360 B         104 kB
+├ ƒ /api/bot-detection                                360 B         104 kB
+├ ƒ /api/classify                                     360 B         104 kB
+├ ƒ /api/compliance/reports                           360 B         104 kB
+├ ƒ /api/customer/alerts                              360 B         104 kB
+├ ƒ /api/customer/api-discovery                       360 B         104 kB
+├ ƒ /api/customer/api-endpoints                       360 B         104 kB
+├ ƒ /api/customer/api-keys                            360 B         104 kB
+├ ƒ /api/customer/auth                                360 B         104 kB
+├ ƒ /api/customer/bot-detection                       360 B         104 kB
+├ ƒ /api/customer/compliance                          360 B         104 kB
+├ ƒ /api/customer/compliance-report                   360 B         104 kB
+├ ƒ /api/customer/custom-rules                        360 B         104 kB
+├ ƒ /api/customer/dashboard                           360 B         104 kB
+├ ƒ /api/customer/data-export                         360 B         104 kB
+├ ƒ /api/customer/enterprise-settings                 360 B         104 kB
+├ ƒ /api/customer/external-integrations               360 B         104 kB
+├ ƒ /api/customer/external-integrations/[id]          360 B         104 kB
+├ ƒ /api/customer/performance                         360 B         104 kB
+├ ƒ /api/customer/platform-api-keys                   360 B         104 kB
+├ ƒ /api/customer/platform-api-keys/[keyId]           360 B         104 kB
+├ ƒ /api/customer/platform-api-keys/[keyId]/rotate    360 B         104 kB
+├ ƒ /api/customer/rate-limits                         360 B         104 kB
+├ ƒ /api/customer/scan-external                       360 B         104 kB
+├ ƒ /api/customer/scheduled-scans                     360 B         104 kB
+├ ƒ /api/customer/security-scans                      360 B         104 kB
+├ ƒ /api/customer/threat-blocking                     360 B         104 kB
+├ ƒ /api/customer/threat-detection                    360 B         104 kB
+├ ƒ /api/customer/threat-patterns                     360 B         104 kB
+├ ƒ /api/customer/threat-trends                       360 B         104 kB
+├ ƒ /api/customer/verify                              360 B         104 kB
+├ ƒ /api/customer/vulnerabilities                     360 B         104 kB
+├ ƒ /api/customer/webhooks                            360 B         104 kB
+├ ƒ /api/discovery                                    360 B         104 kB
+├ ƒ /api/enforce                                      360 B         104 kB
+├ ƒ /api/health                                       360 B         104 kB
+├ ƒ /api/health/detailed                              360 B         104 kB
+├ ƒ /api/health/overview                              360 B         104 kB
+├ ƒ /api/import/openapi                               360 B         104 kB
+├ ƒ /api/integrations/slack                           360 B         104 kB
+├ ƒ /api/metrics                                      360 B         104 kB
+├ ƒ /api/middleware                                   360 B         104 kB
+├ ƒ /api/notifications                                360 B         104 kB
+├ ƒ /api/notifications/monitor                        360 B         104 kB
+├ ƒ /api/policies                                     360 B         104 kB
+├ ƒ /api/proxy                                        360 B         104 kB
+├ ƒ /api/reports                                      360 B         104 kB
+├ ƒ /api/reports/generate                             360 B         104 kB
+├ ƒ /api/scanner                                      360 B         104 kB
+├ ƒ /api/scans                                        360 B         104 kB
+├ ƒ /api/security-processor                           360 B         104 kB
+├ ƒ /api/security-scan                                360 B         104 kB
+├ ƒ /api/security-scan-results                        360 B         104 kB
+├ ƒ /api/stripe/manage-subscription                   360 B         104 kB
+├ ƒ /api/stripe/revenue                               360 B         104 kB
+├ ƒ /api/traffic                                      360 B         104 kB
+├ ƒ /api/usage                                        360 B         104 kB
+├ ƒ /api/violations/[id]                              360 B         104 kB
+├ ƒ /api/webhooks                                     360 B         104 kB
+├ ƒ /api/webhooks/trigger                             360 B         104 kB
+├ ○ /blog                                           5.66 kB         248 kB
+├ ○ /blog/api-security-trends-2025                  4.77 kB         217 kB
+├ ○ /company                                        2.22 kB         147 kB
+├ ○ /compliance                                     3.69 kB         145 kB
+├ ○ /customer                                         387 B         104 kB
+├ ○ /customer-simple                                1.71 kB         265 kB
+├ ○ /customer/billing                               2.76 kB         144 kB
+├ ○ /customer/dashboard                             10.1 kB         264 kB
+├ ○ /customer/login                                 3.01 kB         262 kB
+├ ○ /dashboard                                       188 kB         570 kB
+├ ○ /dashboard-test                                   610 B         227 kB
+├ ○ /dashboard/playground                           2.81 kB         146 kB
+├ ○ /debug                                            897 B         260 kB
+├ ○ /docs                                           1.82 kB         146 kB
+├ ○ /forgot-password                                2.49 kB         147 kB
+├ ○ /login                                          3.66 kB         148 kB
+├ ○ /pricing                                        12.6 kB         355 kB
+├ ○ /privacy                                        1.46 kB         142 kB
+├ ○ /products                                         906 B         107 kB
+├ ƒ /revenue                                          360 B         104 kB
+├ ○ /security                                       2.99 kB         144 kB
+├ ○ /solutions                                      1.95 kB         146 kB
+├ ○ /terms                                          1.56 kB         142 kB
+└ ○ /test                                             360 B         104 kB
++ First Load JS shared by all                        103 kB
+  ├ chunks/18-dd85b08a4bec067e.js                   46.2 kB
+  ├ chunks/87c73c54-09e1ba5c70e60a51.js             54.2 kB
+  └ other shared chunks (total)                     2.68 kB
+
+
+ƒ Middleware                                        78.7 kB
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

@@ -1,0 +1,196 @@
+import { logger } from "../../../../utils/logging/logger"
+import { NextRequest, NextResponse } from 'next/server'
+import { database } from '../../../../infrastructure/database'
+
+export async function GET(request: NextRequest) {
+  const tenantId = request.headers.get('x-tenant-id')
+  if (!tenantId) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+  }
+
+  try {
+    // Get real bot detection statistics
+    const botStats = await database.queryOne(
+      `SELECT 
+         COUNT(*) as total_requests,
+         COUNT(CASE WHEN is_bot = true THEN 1 END) as bot_requests,
+         COUNT(CASE WHEN is_blocked = true THEN 1 END) as blocked_requests,
+         COUNT(CASE WHEN confidence_score >= 80 THEN 1 END) as high_confidence_detections,
+         AVG(confidence_score) as avg_confidence_score,
+         COUNT(DISTINCT source_ip) as unique_ips
+       FROM bot_detection_log 
+       WHERE tenant_id = $1 AND created_at >= NOW() - INTERVAL '24 hours'`,
+      [tenantId]
+    )
+
+    // Get bot detection rules and configuration
+    const detectionRules = await database.queryMany(
+      `SELECT id, rule_name, rule_type, conditions, action, is_active, created_at
+       FROM bot_detection_rules 
+       WHERE tenant_id = $1 
+       ORDER BY created_at DESC`,
+      [tenantId]
+    )
+
+    // Get recent bot detections
+    const recentDetections = await database.queryMany(
+      `SELECT id, source_ip, user_agent, request_path, is_bot, confidence_score, 
+              detection_reason, is_blocked, created_at
+       FROM bot_detection_log 
+       WHERE tenant_id = $1 AND is_bot = true
+       ORDER BY created_at DESC 
+       LIMIT 20`,
+      [tenantId]
+    )
+
+    // Get top bot sources
+    const topBotSources = await database.queryMany(
+      `SELECT source_ip, COUNT(*) as detection_count, 
+              AVG(confidence_score) as avg_confidence,
+              MAX(created_at) as last_detected,
+              COUNT(CASE WHEN is_blocked = true THEN 1 END) as blocked_count
+       FROM bot_detection_log 
+       WHERE tenant_id = $1 AND is_bot = true AND created_at >= NOW() - INTERVAL '7 days'
+       GROUP BY source_ip 
+       ORDER BY detection_count DESC 
+       LIMIT 10`,
+      [tenantId]
+    )
+
+    // Get hourly bot activity trends
+    const hourlyTrends = await database.queryMany(
+      `SELECT 
+         DATE_TRUNC('hour', created_at) as hour,
+         COUNT(*) as total_requests,
+         COUNT(CASE WHEN is_bot = true THEN 1 END) as bot_requests,
+         COUNT(CASE WHEN is_blocked = true THEN 1 END) as blocked_requests
+       FROM bot_detection_log 
+       WHERE tenant_id = $1 AND created_at >= NOW() - INTERVAL '24 hours'
+       GROUP BY DATE_TRUNC('hour', created_at)
+       ORDER BY hour ASC`,
+      [tenantId]
+    )
+
+    const totalRequests = parseInt(botStats?.total_requests || '0')
+    const botRequests = parseInt(botStats?.bot_requests || '0')
+    const blockedRequests = parseInt(botStats?.blocked_requests || '0')
+
+    return NextResponse.json({
+      success: true,
+      botDetection: {
+        statistics: {
+          totalRequests,
+          botRequests,
+          blockedRequests,
+          highConfidenceDetections: parseInt(botStats?.high_confidence_detections || '0'),
+          uniqueIps: parseInt(botStats?.unique_ips || '0'),
+          botDetectionRate: totalRequests > 0 ? Math.round((botRequests / totalRequests) * 100 * 100) / 100 : 0,
+          blockRate: botRequests > 0 ? Math.round((blockedRequests / botRequests) * 100 * 100) / 100 : 0,
+          averageConfidenceScore: botStats?.avg_confidence_score ? Math.round(parseFloat(botStats.avg_confidence_score)) : null
+        },
+        rules: detectionRules.map(rule => ({
+          id: rule.id,
+          name: rule.rule_name,
+          type: rule.rule_type,
+          conditions: typeof rule.conditions === 'string' ? JSON.parse(rule.conditions) : rule.conditions,
+          action: rule.action,
+          isActive: rule.is_active,
+          createdAt: rule.created_at
+        })),
+        recentDetections: recentDetections.map(detection => ({
+          id: detection.id,
+          sourceIp: detection.source_ip,
+          userAgent: detection.user_agent,
+          requestPath: detection.request_path,
+          confidenceScore: detection.confidence_score,
+          detectionReason: detection.detection_reason,
+          isBlocked: detection.is_blocked,
+          detectedAt: detection.created_at
+        })),
+        topBotSources: topBotSources.map(source => ({
+          sourceIp: source.source_ip,
+          detectionCount: parseInt(source.detection_count || '0'),
+          averageConfidence: Math.round(parseFloat(source.avg_confidence || '0')),
+          lastDetected: source.last_detected,
+          blockedCount: parseInt(source.blocked_count || '0')
+        })),
+        hourlyTrends: hourlyTrends.map(trend => ({
+          hour: trend.hour,
+          totalRequests: parseInt(trend.total_requests || '0'),
+          botRequests: parseInt(trend.bot_requests || '0'),
+          blockedRequests: parseInt(trend.blocked_requests || '0')
+        }))
+      }
+    })
+
+  } catch (error) {
+    logger.error('Bot detection API error:', { error: error instanceof Error ? error.message : String(error) })
+    return NextResponse.json({ error: 'Failed to fetch bot detection data' }, { status: 500 })
+  }
+}
+
+export async function POST(request: NextRequest) {
+  const tenantId = request.headers.get('x-tenant-id')
+  const userId = request.headers.get('x-user-id')
+  
+  if (!tenantId) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+  }
+
+  try {
+    const { ruleName, ruleType, conditions, action = 'block' } = await request.json()
+
+    if (!ruleName || !ruleType || !conditions) {
+      return NextResponse.json({ error: 'Rule name, type, and conditions are required' }, { status: 400 })
+    }
+
+    // Validate rule type and action
+    const validRuleTypes = ['user_agent', 'request_pattern', 'rate_limit', 'behavioral']
+    const validActions = ['block', 'challenge', 'monitor']
+
+    if (!validRuleTypes.includes(ruleType)) {
+      return NextResponse.json({ error: 'Invalid rule type. Allowed: ' + validRuleTypes.join(', ') }, { status: 400 })
+    }
+
+    if (!validActions.includes(action)) {
+      return NextResponse.json({ error: 'Invalid action. Allowed: ' + validActions.join(', ') }, { status: 400 })
+    }
+
+    // Create bot detection rule
+    const newRule = await database.queryOne(
+      `INSERT INTO bot_detection_rules (tenant_id, rule_name, rule_type, conditions, action, is_active, created_by, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) RETURNING *`,
+      [
+        tenantId,
+        ruleName,
+        ruleType,
+        JSON.stringify(conditions),
+        action,
+        true,
+        userId || 'system'
+      ]
+    )
+
+    if (!newRule) {
+      return NextResponse.json({ error: 'Failed to create bot detection rule' }, { status: 500 })
+    }
+
+    return NextResponse.json({
+      success: true,
+      rule: {
+        id: newRule.id,
+        name: newRule.rule_name,
+        type: newRule.rule_type,
+        conditions: typeof newRule.conditions === 'string' ? JSON.parse(newRule.conditions) : newRule.conditions,
+        action: newRule.action,
+        isActive: newRule.is_active,
+        createdAt: newRule.created_at
+      },
+      message: 'Bot detection rule created successfully'
+    })
+
+  } catch (error) {
+    logger.error('Bot detection rule creation error:', { error: error instanceof Error ? error.message : String(error) })
+    return NextResponse.json({ error: 'Failed to create bot detection rule' }, { status: 500 })
+  }
+}

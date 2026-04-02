@@ -1,0 +1,25 @@
+
+To add API key management to the customer dashboard:
+
+1. Add 'apiKeyStats' to the destructuring array after 'upcomingScans'
+2. Add the API key query as the 7th item in Promise.all after the upcomingScans query
+3. Add apiKeyStats to the return object
+
+The query should be:
+      database.queryOne(
+        `SELECT 
+           COUNT(*) as total_keys,
+           COUNT(CASE WHEN is_active = true THEN 1 END) as active_keys,
+           COUNT(CASE WHEN last_used >= NOW() - INTERVAL '7 days' THEN 1 END) as recently_used_keys,
+           SUM(usage_count) as total_usage
+         FROM api_keys WHERE tenant_id = $1`,
+        [tenantId]
+      )
+
+And in the return object:
+        apiKeys: {
+          totalKeys: parseInt(apiKeyStats?.total_keys || '0'),
+          activeKeys: parseInt(apiKeyStats?.active_keys || '0'),
+          recentlyUsedKeys: parseInt(apiKeyStats?.recently_used_keys || '0'),
+          totalUsage: parseInt(apiKeyStats?.total_usage || '0')
+        }

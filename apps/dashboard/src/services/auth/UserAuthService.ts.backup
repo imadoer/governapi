@@ -1,0 +1,291 @@
+import * as bcrypt from 'bcryptjs'
+import { v4 as uuidv4 } from 'uuid'
+import { extendedDatabase } from '../../infrastructure/database-extended'
+
+export interface User {
+  id: string
+  email: string
+  firstName: string
+  lastName: string
+  role: string
+  companyId: string
+  emailVerified: boolean
+  lastLogin?: string
+  createdAt: string
+}
+
+export interface Company {
+  id: string
+  companyName: string
+  domain?: string
+  subscriptionPlan: string
+  subscriptionStatus: string
+  apiKey?: string
+  createdAt: string
+}
+
+export interface AuthResult {
+  success: boolean
+  user?: User
+  company?: Company
+  sessionToken?: string
+  error?: string
+}
+
+export interface RegisterData {
+  email: string
+  password: string
+  firstName: string
+  lastName: string
+  companyName: string
+  domain?: string
+}
+
+export class UserAuthService {
+  private static readonly SESSION_DURATION = 7 * 24 * 60 * 60 * 1000 // 7 days
+  private static readonly SALT_ROUNDS = 12
+
+  // Register new user and company
+  static async register(data: RegisterData): Promise<AuthResult> {
+    try {
+      const { email, password, firstName, lastName, companyName, domain } = data
+
+      // Check if user already exists
+      const { data: existingUser } = await extendedDatabase.supabase
+        .from('users')
+        .select('id')
+        .eq('email', email.toLowerCase())
+        .single()
+
+      if (existingUser) {
+        return { success: false, error: 'User already exists with this email' }
+      }
+
+      // Hash password
+      const passwordHash = await bcrypt.hash(password, this.SALT_ROUNDS)
+
+      // Create company first
+      const { data: company, error: companyError } = await extendedDatabase.supabase
+        .from('companies')
+        .insert({
+          company_name: companyName,
+          domain: domain?.toLowerCase(),
+          subscription_plan: 'starter',
+          subscription_status: 'active',
+          api_key: `gapi_${Math.random().toString(36).substring(2, 15)}` // Generate API key for backwards compatibility
+        })
+        .select()
+        .single()
+
+      if (companyError) {
+        console.error('Company creation error:', companyError)
+        return { success: false, error: 'Failed to create company account' }
+      }
+
+      // Create user
+      const { data: user, error: userError } = await extendedDatabase.supabase
+        .from('users')
+        .insert({
+          email: email.toLowerCase(),
+          password_hash: passwordHash,
+          first_name: firstName,
+          last_name: lastName,
+          role: 'admin', // First user is admin
+          company_id: company.id,
+          email_verified: true // Auto-verify for demo
+        })
+        .select()
+        .single()
+
+      if (userError) {
+        console.error('User creation error:', userError)
+        // Cleanup company if user creation failed
+        await extendedDatabase.supabase
+          .from('companies')
+          .delete()
+          .eq('id', company.id)
+        
+        return { success: false, error: 'Failed to create user account' }
+      }
+
+      // Create session
+      const sessionToken = await this.createSession(user.id)
+
+      return {
+        success: true,
+        user: this.formatUser(user),
+        company: this.formatCompany(company),
+        sessionToken
+      }
+
+    } catch (error) {
+      console.error('Registration error:', error)
+      return { success: false, error: 'Registration failed' }
+    }
+  }
+
+  // Login user
+  static async login(email: string, password: string): Promise<AuthResult> {
+    try {
+      // Get user with company data
+      const { data: userData } = await extendedDatabase.supabase
+        .from('users')
+        .select(`
+          *,
+          companies (*)
+        `)
+        .eq('email', email.toLowerCase())
+        .single()
+
+      if (!userData) {
+        return { success: false, error: 'Invalid email or password' }
+      }
+
+      // Verify password
+      const isValidPassword = await bcrypt.compare(password, userData.password_hash)
+      if (!isValidPassword) {
+        return { success: false, error: 'Invalid email or password' }
+      }
+
+      // Update last login
+      await extendedDatabase.supabase
+        .from('users')
+        .update({ last_login: new Date().toISOString() })
+        .eq('id', userData.id)
+
+      // Create session
+      const sessionToken = await this.createSession(userData.id)
+
+      return {
+        success: true,
+        user: this.formatUser(userData),
+        company: this.formatCompany(userData.companies),
+        sessionToken
+      }
+
+    } catch (error) {
+      console.error('Login error:', error)
+      return { success: false, error: 'Login failed' }
+    }
+  }
+
+  // Validate session
+  static async validateSession(sessionToken: string): Promise<AuthResult> {
+    try {
+      const { data: session } = await extendedDatabase.supabase
+        .from('user_sessions')
+        .select(`
+          *,
+          users (
+            *,
+            companies (*)
+          )
+        `)
+        .eq('session_token', sessionToken)
+        .gt('expires_at', new Date().toISOString())
+        .single()
+
+      if (!session || !session.users) {
+        return { success: false, error: 'Invalid or expired session' }
+      }
+
+      return {
+        success: true,
+        user: this.formatUser(session.users),
+        company: this.formatCompany(session.users.companies),
+        sessionToken
+      }
+
+    } catch (error) {
+      console.error('Session validation error:', error)
+      return { success: false, error: 'Session validation failed' }
+    }
+  }
+
+  // Logout user
+  static async logout(sessionToken: string): Promise<boolean> {
+    try {
+      await extendedDatabase.supabase
+        .from('user_sessions')
+        .delete()
+        .eq('session_token', sessionToken)
+      
+      return true
+    } catch (error) {
+      console.error('Logout error:', error)
+      return false
+    }
+  }
+
+  // Create session
+  private static async createSession(userId: string): Promise<string> {
+    const sessionToken = uuidv4()
+    const expiresAt = new Date(Date.now() + this.SESSION_DURATION)
+
+    await extendedDatabase.supabase
+      .from('user_sessions')
+      .insert({
+        user_id: userId,
+        session_token: sessionToken,
+        expires_at: expiresAt.toISOString()
+      })
+
+    return sessionToken
+  }
+
+  // Format user data
+  private static formatUser(user: any): User {
+    return {
+      id: user.id,
+      email: user.email,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      role: user.role,
+      companyId: user.company_id,
+      emailVerified: user.email_verified,
+      lastLogin: user.last_login,
+      createdAt: user.created_at
+    }
+  }
+
+  // Format company data
+  private static formatCompany(company: any): Company {
+    return {
+      id: company.id,
+      companyName: company.company_name,
+      domain: company.domain,
+      subscriptionPlan: company.subscription_plan,
+      subscriptionStatus: company.subscription_status,
+      apiKey: company.api_key,
+      createdAt: company.created_at
+    }
+  }
+
+  // Change password
+  static async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<boolean> {
+    try {
+      const { data: user } = await extendedDatabase.supabase
+        .from('users')
+        .select('password_hash')
+        .eq('id', userId)
+        .single()
+
+      if (!user) return false
+
+      const isValidPassword = await bcrypt.compare(currentPassword, user.password_hash)
+      if (!isValidPassword) return false
+
+      const newPasswordHash = await bcrypt.hash(newPassword, this.SALT_ROUNDS)
+
+      const { error } = await extendedDatabase.supabase
+        .from('users')
+        .update({ password_hash: newPasswordHash })
+        .eq('id', userId)
+
+      return !error
+    } catch (error) {
+      console.error('Change password error:', error)
+      return false
+    }
+  }
+}

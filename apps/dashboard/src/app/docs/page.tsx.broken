@@ -1,0 +1,284 @@
+'use client'
+
+import { motion } from 'framer-motion'
+import Link from 'next/link'
+import { useState } from 'react'
+
+export default function DocsPage() {
+  const [activeSection, setActiveSection] = useState('getting-started')
+
+  const sections = [
+    {
+      id: 'getting-started',
+      title: 'Getting Started',
+      icon: '🚀',
+      content: [
+        {
+          title: 'Quick Start Guide',
+          description: 'Get up and running with GovernAPI in 5 minutes',
+          steps: [
+            'Sign up for a GovernAPI account',
+            'Generate your first API key',
+            'Install our SDK or use the REST API',
+            'Run your first security scan',
+            'View results in the dashboard'
+          ]
+        },
+        {
+          title: 'Installation',
+          description: 'Install GovernAPI SDK in your preferred language',
+          code: `npm install @governapi/sdk\n# or\npip install governapi\n# or\ngo get github.com/governapi/sdk-go`
+        }
+      ]
+    },
+    {
+      id: 'api-reference',
+      title: 'API Reference',
+      icon: '📚',
+      content: [
+        {
+          title: 'Authentication',
+          description: 'All API requests require authentication using API keys',
+          code: `curl https://api.governapi.com/v1/scans \\\n  -H "Authorization: Bearer YOUR_API_KEY"`
+        },
+        {
+          title: 'Endpoints',
+          description: 'Core API endpoints available',
+          endpoints: [
+            'POST /v1/scans - Create a new security scan',
+            'GET /v1/scans/:id - Get scan results',
+            'GET /v1/apis - List discovered APIs',
+            'GET /v1/threats - Get threat intelligence',
+            'GET /v1/compliance - Get compliance reports'
+          ]
+        }
+      ]
+    },
+    {
+      id: 'sdk',
+      title: 'SDK Documentation',
+      icon: '⚙️',
+      content: [
+        {
+          title: 'JavaScript/Node.js',
+          code: `import { GovernAPI } from '@governapi/sdk';\n\nconst client = new GovernAPI({\n  apiKey: 'your-api-key'\n});\n\nconst scan = await client.scans.create({\n  target: 'https://api.example.com',\n  scanType: 'full'\n});`
+        },
+        {
+          title: 'Python',
+          code: `from governapi import Client\n\nclient = Client(api_key='your-api-key')\n\nscan = client.scans.create(\n    target='https://api.example.com',\n    scan_type='full'\n)`
+        }
+      ]
+    },
+    {
+      id: 'guides',
+      title: 'Guides & Tutorials',
+      icon: '📖',
+      content: [
+        {
+          title: 'Best Practices',
+          description: 'Security best practices for API protection',
+          items: [
+            'Always use HTTPS for API endpoints',
+            'Implement rate limiting on all endpoints',
+            'Rotate API keys regularly',
+            'Monitor for unusual traffic patterns',
+            'Keep security scans automated and continuous'
+          ]
+        },
+        {
+          title: 'Common Use Cases',
+          items: [
+            'Setting up automated security scanning',
+            'Integrating with CI/CD pipelines',
+            'Creating custom compliance reports',
+            'Configuring threat detection rules',
+            'Managing API keys and access control'
+          ]
+        }
+      ]
+    }
+  ]
+
+  const currentSection = sections.find(s => s.id === activeSection)
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-800">
+      {/* Header */}
+      <motion.div 
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-slate-900/50 border-b border-slate-700"
+      >
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+          <Link href="/" className="text-2xl font-bold text-white">
+            GovernAPI
+          </Link>
+          <nav className="flex gap-6">
+            <Link href="/products" className="text-slate-300 hover:text-white transition">
+              Products
+            </Link>
+            <Link href="/solutions" className="text-slate-300 hover:text-white transition">
+              Solutions
+            </Link>
+            <Link href="/pricing" className="text-slate-300 hover:text-white transition">
+              Pricing
+            </Link>
+            <Link href="/customer/login" className="text-slate-300 hover:text-white transition">
+              Login
+            </Link>
+          </nav>
+        </div>
+      </motion.div>
+
+      <div className="max-w-7xl mx-auto px-6 py-12">
+        {/* Page Title */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-12"
+        >
+          <h1 className="text-5xl font-bold text-white mb-4">Documentation</h1>
+          <p className="text-xl text-slate-300">
+            Everything you need to integrate and use GovernAPI
+          </p>
+        </motion.div>
+
+        <div className="grid md:grid-cols-4 gap-8">
+          {/* Sidebar Navigation */}
+          <div className="md:col-span-1">
+            <div className="bg-slate-800/50 backdrop-blur border border-slate-700 rounded-xl p-4 sticky top-6">
+              <nav className="space-y-2">
+                {sections.map((section) => (
+                  <button
+                    key={section.id}
+                    onClick={() => setActiveSection(section.id)}
+                    className={`w-full text-left px-4 py-3 rounded-lg transition flex items-center gap-3 ${
+                      activeSection === section.id
+                        ? 'bg-blue-600 text-white'
+                        : 'text-slate-300 hover:bg-slate-700/50'
+                    }`}
+                  >
+                    <span className="text-2xl">{section.icon}</span>
+                    <span className="font-medium">{section.title}</span>
+                  </button>
+                ))}
+              </nav>
+            </div>
+          </div>
+
+          {/* Content Area */}
+          <div className="md:col-span-3">
+            <motion.div
+              key={activeSection}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="space-y-8"
+            >
+              {currentSection?.content.map((item, index) => (
+                <div
+                  key={index}
+                  className="bg-slate-800/50 backdrop-blur border border-slate-700 rounded-xl p-8"
+                >
+                  <h3 className="text-2xl font-bold text-white mb-3">
+                    {item.title}
+                  </h3>
+                  
+                  {item.description && (
+                    <p className="text-slate-300 mb-6">{item.description}</p>
+                  )}
+
+                  {item.steps && (
+                    <ol className="space-y-3">
+                      {item.steps.map((step, i) => (
+                        <li key={i} className="flex items-start text-slate-300">
+                          <span className="bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center mr-3 mt-0.5 flex-shrink-0 text-sm">
+                            {i + 1}
+                          </span>
+                          <span>{step}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+
+                  {item.code && (
+                    <pre className="bg-slate-900 border border-slate-700 rounded-lg p-4 overflow-x-auto">
+                      <code className="text-green-400 text-sm">{item.code}</code>
+                    </pre>
+                  )}
+
+                  {item.endpoints && (
+                    <ul className="space-y-2">
+                      {item.endpoints.map((endpoint, i) => (
+                        <li key={i} className="font-mono text-sm text-slate-300 bg-slate-900 border border-slate-700 rounded p-3">
+                          {endpoint}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {item.items && (
+                    <ul className="space-y-2">
+                      {item.items.map((listItem, i) => (
+                        <li key={i} className="flex items-start text-slate-300">
+                          <span className="text-blue-500 mr-2 mt-1">•</span>
+                          <span>{listItem}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ))}
+
+              {/* API Status */}
+              <div className="bg-gradient-to-r from-green-600/20 to-blue-600/20 border border-green-500/30 rounded-xl p-6">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                  <h4 className="text-white font-semibold">API Status: Operational</h4>
+                </div>
+                <p className="text-slate-300 text-sm">
+                  All systems operational. Check status.governapi.com for updates.
+                </p>
+              </div>
+            </motion.div>
+          </div>
+        </div>
+
+        {/* Need Help Section */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
+          className="bg-slate-800/50 backdrop-blur border border-slate-700 rounded-xl p-8 mt-12 text-center"
+        >
+          <h2 className="text-2xl font-bold text-white mb-4">Need Help?</h2>
+          <p className="text-slate-300 mb-6">
+            Can't find what you're looking for? Our team is here to help.
+          </p>
+          <div className="flex gap-4 justify-center">
+            <Link
+              href="/company"
+              className="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition"
+            >
+              Contact Support
+            </Link>
+            
+              href="mailto:support@governapi.com"
+              className="bg-slate-700 text-white px-6 py-3 rounded-lg font-semibold hover:bg-slate-600 transition"
+            >
+              Email Us
+            </a>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Footer */}
+      <div className="border-t border-slate-700 mt-20">
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          <p className="text-center text-slate-400">
+            © 2025 GovernAPI. All rights reserved.
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}

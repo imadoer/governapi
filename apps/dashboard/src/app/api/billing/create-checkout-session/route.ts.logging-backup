@@ -1,0 +1,206 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { database } from '../../../../infrastructure/database'
+import Stripe from 'stripe'
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: '2025-08-27.basil'
+})
+
+export async function POST(request: NextRequest) {
+  const tenantId = request.headers.get('x-tenant-id')
+  if (!tenantId) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+  }
+
+  try {
+    const { planType, billingCycle = 'monthly' } = await request.json()
+
+    if (!planType) {
+      return NextResponse.json({ error: 'Plan type is required' }, { status: 400 })
+    }
+
+    // Validate plan type and billing cycle
+    const validPlans = ['starter', 'professional', 'enterprise']
+    const validCycles = ['monthly', 'yearly']
+
+    if (!validPlans.includes(planType)) {
+      return NextResponse.json({ error: 'Invalid plan type. Allowed: ' + validPlans.join(', ') }, { status: 400 })
+    }
+
+    if (!validCycles.includes(billingCycle)) {
+      return NextResponse.json({ error: 'Invalid billing cycle. Allowed: ' + validCycles.join(', ') }, { status: 400 })
+    }
+
+    // Get company information
+    const company = await database.queryOne(
+      'SELECT id, company_name, billing_email, stripe_customer_id FROM companies WHERE id = $1',
+      [tenantId]
+    )
+
+    if (!company) {
+      return NextResponse.json({ error: 'Company not found' }, { status: 404 })
+    }
+
+    // Define pricing
+    const pricing = {
+      starter: { monthly: 29, yearly: 290 },
+      professional: { monthly: 99, yearly: 990 },
+      enterprise: { monthly: 299, yearly: 2990 }
+    }
+
+    const amount = pricing[planType as keyof typeof pricing][billingCycle as keyof typeof pricing.starter]
+
+    // Create or retrieve Stripe customer
+    let stripeCustomerId = company.stripe_customer_id
+    if (!stripeCustomerId) {
+      const customer = await stripe.customers.create({
+        email: company.billing_email,
+        name: company.company_name,
+        metadata: {
+          tenant_id: tenantId
+        }
+      })
+      
+      stripeCustomerId = customer.id
+      
+      // Update company with Stripe customer ID
+      await database.query(
+        'UPDATE companies SET stripe_customer_id = $1 WHERE id = $2',
+        [stripeCustomerId, tenantId]
+      )
+    }
+
+    // Create Stripe checkout session
+    const session = await stripe.checkout.sessions.create({
+      customer: stripeCustomerId,
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: `${planType.charAt(0).toUpperCase() + planType.slice(1)} Plan`,
+              description: `${planType} security monitoring plan (${billingCycle})`
+            },
+            unit_amount: amount * 100, // Stripe uses cents
+            recurring: {
+              interval: billingCycle === 'yearly' ? 'year' : 'month'
+            }
+          },
+          quantity: 1
+        }
+      ],
+      mode: 'subscription',
+      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/billing/cancel`,
+      metadata: {
+        tenant_id: tenantId,
+        plan_type: planType,
+        billing_cycle: billingCycle
+      }
+    })
+
+    // Log checkout session creation
+    await database.query(
+      `INSERT INTO billing_sessions (tenant_id, stripe_session_id, plan_type, billing_cycle, 
+                                     amount, status, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
+      [tenantId, session.id, planType, billingCycle, amount, 'pending']
+    )
+
+    return NextResponse.json({
+      success: true,
+      checkout: {
+        sessionId: session.id,
+        url: session.url,
+        planType,
+        billingCycle,
+        amount,
+        currency: 'USD'
+      }
+    })
+
+  } catch (error) {
+    console.error('Checkout session creation error:', error)
+    
+    if (error instanceof Stripe.errors.StripeError) {
+      return NextResponse.json({ 
+        error: 'Payment processing error', 
+        details: error.message 
+      }, { status: 400 })
+    }
+
+    return NextResponse.json({ error: 'Failed to create checkout session' }, { status: 500 })
+  }
+}
+
+export async function GET(request: NextRequest) {
+  const tenantId = request.headers.get('x-tenant-id')
+  if (!tenantId) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+  }
+
+  try {
+    const url = new URL(request.url)
+    const sessionId = url.searchParams.get('sessionId')
+
+    if (!sessionId) {
+      return NextResponse.json({ error: 'Session ID is required' }, { status: 400 })
+    }
+
+    // Get session from database
+    const session = await database.queryOne(
+      'SELECT * FROM billing_sessions WHERE stripe_session_id = $1 AND tenant_id = $2',
+      [sessionId, tenantId]
+    )
+
+    if (!session) {
+      return NextResponse.json({ error: 'Session not found' }, { status: 404 })
+    }
+
+    // Get session status from Stripe
+    try {
+      const stripeSession = await stripe.checkout.sessions.retrieve(sessionId)
+      
+      // Update session status if needed
+      if (session.status !== stripeSession.payment_status) {
+        await database.query(
+          'UPDATE billing_sessions SET status = $1, updated_at = NOW() WHERE stripe_session_id = $2',
+          [stripeSession.payment_status, sessionId]
+        )
+      }
+
+      return NextResponse.json({
+        success: true,
+        session: {
+          id: session.id,
+          stripeSessionId: session.stripe_session_id,
+          planType: session.plan_type,
+          billingCycle: session.billing_cycle,
+          amount: session.amount,
+          status: stripeSession.payment_status,
+          createdAt: session.created_at
+        }
+      })
+
+    } catch (stripeError) {
+      console.error('Stripe session retrieval error:', stripeError)
+      return NextResponse.json({
+        success: true,
+        session: {
+          id: session.id,
+          stripeSessionId: session.stripe_session_id,
+          planType: session.plan_type,
+          billingCycle: session.billing_cycle,
+          amount: session.amount,
+          status: session.status,
+          createdAt: session.created_at
+        }
+      })
+    }
+
+  } catch (error) {
+    console.error('Session retrieval error:', error)
+    return NextResponse.json({ error: 'Failed to retrieve session' }, { status: 500 })
+  }
+}

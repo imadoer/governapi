@@ -1,0 +1,75 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { database } from '../../../../../infrastructure/database'
+import * as bcrypt from 'bcryptjs'
+
+export async function POST(request: NextRequest) {
+  try {
+    const { email, password } = await request.json()
+    console.log('Login attempt:', { email })
+
+    const user = await database.queryOne(
+      `SELECT u.id, u.email, u.password_hash, u.first_name, u.last_name, u.company_id,
+              c.company_name, c.subscription_plan, c.subscription_status
+       FROM users u
+       LEFT JOIN companies c ON u.company_id = c.id
+       WHERE u.email = $1`,
+      [email]
+    );
+
+    if (!user || !user.password_hash) {
+      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
+    }
+
+    // Verify password
+    const passwordMatch = await bcrypt.compare(password, user.password_hash)
+    if (!passwordMatch) {
+      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
+    }
+
+    // Check for existing API key using customer_email instead of user_id
+    const existingKey = await database.queryOne(
+      'SELECT key FROM api_keys WHERE customer_email = $1 AND is_active = true',
+      [user.email]
+    );
+
+    let apiKey = existingKey?.key
+    
+    if (!apiKey) {
+      apiKey = `gapi_${Math.random().toString(36).substring(2, 15)}`;
+      
+      // Insert using the actual table structure
+      await database.query(
+        `INSERT INTO api_keys (key, customer_name, customer_email, daily_limit, is_active, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          apiKey, 
+          `${user.first_name} ${user.last_name}`, 
+          user.email, 
+          5000, 
+          true, 
+          new Date().toISOString()
+        ]
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        company: user.company_name ? {
+          company_name: user.company_name,
+          subscription_plan: user.subscription_plan,
+          subscription_status: user.subscription_status,
+          apiKey
+        } : null,
+      }
+    })
+
+  } catch (error) {
+    console.error('Login error:', error)
+    return NextResponse.json({ error: 'Login failed' }, { status: 500 })
+  }
+}

@@ -1,0 +1,124 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { database } from '../../../../infrastructure/database';
+
+export async function GET(request: NextRequest) {
+  // Get tenant ID from middleware-injected headers
+  const tenantId = request.headers.get('x-tenant-id');
+  if (!tenantId) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  }
+
+  try {
+    // Get real custom rules from database
+    const customRules = await database.queryMany(
+      `SELECT id, name, rule_type, description, priority, action, conditions, 
+              is_active, triggered_count, created_at, updated_at
+       FROM custom_rules 
+       WHERE tenant_id = $1 
+       ORDER BY created_at DESC`,
+      [tenantId]
+    );
+
+    const formattedRules = customRules.map(rule => ({
+      id: rule.id,
+      name: rule.name,
+      ruleType: rule.rule_type,
+      description: rule.description,
+      priority: rule.priority,
+      action: rule.action,
+      conditions: typeof rule.conditions === 'string' ? JSON.parse(rule.conditions) : rule.conditions,
+      isActive: rule.is_active,
+      triggeredCount: rule.triggered_count || 0,
+      createdAt: rule.created_at,
+      updatedAt: rule.updated_at
+    }));
+
+    // Calculate real statistics from actual data
+    const activeRules = formattedRules.filter(r => r.isActive);
+    const totalTriggers = formattedRules.reduce((sum, r) => sum + r.triggeredCount, 0);
+
+    // Count rules by type from real data
+    const rulesByType = {};
+    formattedRules.forEach(rule => {
+      rulesByType[rule.ruleType] = (rulesByType[rule.ruleType] || 0) + 1;
+    });
+
+    const mostTriggeredRule = formattedRules
+      .sort((a, b) => b.triggeredCount - a.triggeredCount)[0]?.name || null;
+
+    return NextResponse.json({
+      success: true,
+      rules: formattedRules,
+      statistics: {
+        totalRules: formattedRules.length,
+        activeRules: activeRules.length,
+        totalTriggers,
+        rulesByType,
+        mostTriggeredRule
+      }
+    });
+
+  } catch (error) {
+    console.error('Custom rules API error:', error);
+    return NextResponse.json({ error: 'Failed to get custom rules' }, { status: 500 });
+  }
+}
+
+export async function POST(request: NextRequest) {
+  // Get tenant ID from middleware-injected headers
+  const tenantId = request.headers.get('x-tenant-id');
+  if (!tenantId) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  }
+
+  try {
+    const { name, ruleType, description, priority, action, conditions } = await request.json();
+
+    if (!name || !ruleType) {
+      return NextResponse.json({ error: 'Name and rule type are required' }, { status: 400 });
+    }
+
+    // Create new custom rule in database
+    const newRule = await database.queryOne(
+      `INSERT INTO custom_rules (tenant_id, name, rule_type, description, priority, action, conditions, is_active, triggered_count, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+       RETURNING *`,
+      [
+        tenantId,
+        name,
+        ruleType,
+        description || `Custom ${ruleType} rule`,
+        priority || 'Medium',
+        action || 'BLOCK',
+        JSON.stringify(conditions || {}),
+        true,
+        0
+      ]
+    );
+
+    if (!newRule) {
+      return NextResponse.json({ error: 'Failed to create custom rule' }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      rule: {
+        id: newRule.id,
+        name: newRule.name,
+        ruleType: newRule.rule_type,
+        description: newRule.description,
+        priority: newRule.priority,
+        action: newRule.action,
+        conditions: typeof newRule.conditions === 'string' ? JSON.parse(newRule.conditions) : newRule.conditions,
+        isActive: newRule.is_active,
+        triggeredCount: newRule.triggered_count,
+        createdAt: newRule.created_at
+      },
+      message: 'Custom rule created successfully'
+    });
+
+  } catch (error) {
+    console.error('Custom rule creation error:', error);
+    return NextResponse.json({ error: 'Failed to create custom rule' }, { status: 500 });
+  }
+}

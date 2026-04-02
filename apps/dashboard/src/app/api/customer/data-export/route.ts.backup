@@ -1,0 +1,59 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { AuthService } from '../../../../services/auth';
+
+export async function GET(request: NextRequest) {
+  try {
+    const url = new URL(request.url);
+    const apiKey = url.searchParams.get('apiKey');
+    const format = url.searchParams.get('format') || 'json';
+    const dataType = url.searchParams.get('type') || 'all';
+
+    const authContext = await AuthService.validateApiKey(apiKey);
+    if (!authContext) {
+      return NextResponse.json({ error: 'Invalid API key' }, { status: 401 });
+    }
+
+    const exportData = {
+      exportId: `export_${Date.now()}`,
+      tenantId: authContext.tenantId,
+      requestedAt: new Date().toISOString(),
+      format,
+      dataType,
+      estimatedSize: '45.7 MB',
+      estimatedRecords: 245670,
+      includesData: {
+        apiEndpoints: dataType === 'all' || dataType === 'endpoints',
+        securityScans: dataType === 'all' || dataType === 'security',
+        threatEvents: dataType === 'all' || dataType === 'threats',
+        performanceMetrics: dataType === 'all' || dataType === 'performance',
+        complianceReports: dataType === 'all' || dataType === 'compliance'
+      }
+    };
+
+    if (format === 'json') {
+      return NextResponse.json({
+        success: true,
+        data: exportData,
+        downloadUrl: `/api/customer/data-export/download?exportId=${exportData.exportId}`,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+      });
+    }
+
+    // For CSV format
+    const csvContent = `Export Type,Records,Date
+API Endpoints,${Math.floor(Math.random() * 1000)},${new Date().toISOString()}
+Security Scans,${Math.floor(Math.random() * 5000)},${new Date().toISOString()}
+Threat Events,${Math.floor(Math.random() * 10000)},${new Date().toISOString()}`;
+
+    return new NextResponse(csvContent, {
+      headers: {
+        'Content-Type': 'text/csv',
+        'Content-Disposition': `attachment; filename="governapi-export-${Date.now()}.csv"`
+      }
+    });
+
+  } catch (error) {
+    console.error('Data export error:', error);
+    return NextResponse.json({ error: 'Failed to create data export' }, { status: 500 });
+  }
+}

@@ -1,0 +1,131 @@
+import { NextRequest, NextResponse } from "next/server";
+
+const customAuthRoutes = [
+  "/api/admin/customers",
+  "/api/admin/billing",
+  "/api/admin/api-keys",
+  "/api/stripe/revenue",
+  "/api/admin/customers/[id]",
+  "/api/analytics/threats",
+  "/api/analytics/compliance",
+  "/api/bot-detection",
+  "/api/customer/verify",
+  "/api/stripe/manage-subscription",
+  "/api/customer/keys",
+];
+
+const publicRoutes = [
+  "/api/auth/",
+  "/api/customer/",
+  "/api/health",
+  "/api/billing/webhook",
+];
+
+const rateLimitExemptRoutes = ["/api/health", "/api/billing/webhook"];
+
+export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  console.log("Middleware pathname:", pathname);
+  const requestId = crypto.randomUUID();
+  const ip = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown" || request.headers.get("x-forwarded-for") || "unknown";
+
+  // Handle CORS preflight requests
+  if (request.method === "OPTIONS") {
+    return new NextResponse(null, {
+      status: 200,
+      headers: {
+        "Access-Control-Allow-Credentials": "true",
+        "Access-Control-Allow-Origin": process.env.ALLOWED_ORIGIN || "*",
+        "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS,PATCH",
+        "Access-Control-Allow-Headers":
+          "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization, x-tenant-id, x-user-id",
+      },
+    });
+  }
+
+  // Request size validation
+  if (["POST", "PUT", "PATCH"].includes(request.method)) {
+    const contentLength = request.headers.get("content-length");
+    if (contentLength && parseInt(contentLength) > 10 * 1024 * 1024) {
+      return NextResponse.json({ error: "Request too large" }, { status: 413 });
+    }
+  }
+
+  // Skip middleware for internal requests from security processor
+  if (request.headers.get("x-internal-request") === "true") {
+    const response = NextResponse.next();
+    // Add tenant-id from internal request for direct routing
+    if (request.headers.get("x-tenant-id")) {
+      response.headers.set(
+        "x-tenant-id",
+        request.headers.get("x-tenant-id") || "",
+      );
+    }
+    return addSecurityHeaders(response, requestId);
+  }
+
+  try {
+    // For public routes, apply security headers and pass through
+    if (publicRoutes.some((route) => pathname.startsWith(route))) {
+      const response = NextResponse.next();
+      return addSecurityHeaders(response, requestId);
+    }
+
+    // For all other routes, redirect through security processor
+    // This preserves the exact same security flow as the original
+    const securityUrl = new URL("/api/security-processor", request.url);
+    securityUrl.searchParams.set("target", pathname);
+    securityUrl.searchParams.set("rid", requestId);
+    securityUrl.searchParams.set("ip", ip);
+    securityUrl.searchParams.set("method", request.method);
+
+    // Preserve route classification logic
+    const requiresAuth =
+      !customAuthRoutes.some(
+        (route) => pathname === route || pathname.startsWith(route),
+      ) && pathname.startsWith("/api/");
+    const requiresRateLimit = !rateLimitExemptRoutes.some((route) =>
+      pathname.startsWith(route),
+    );
+
+    securityUrl.searchParams.set("auth", requiresAuth.toString());
+    securityUrl.searchParams.set("rate", requiresRateLimit.toString());
+
+    return NextResponse.rewrite(securityUrl);
+  } catch (error) {
+    const response = NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
+    return addSecurityHeaders(response, requestId);
+  }
+}
+
+function addSecurityHeaders(
+  response: NextResponse,
+  requestId: string,
+): NextResponse {
+  response.headers.set("Access-Control-Allow-Credentials", "true");
+  response.headers.set(
+    "Access-Control-Allow-Origin",
+    process.env.ALLOWED_ORIGIN || "*",
+  );
+  response.headers.set(
+    "Access-Control-Allow-Methods",
+    "GET,POST,PUT,DELETE,OPTIONS,PATCH",
+  );
+  response.headers.set(
+    "Access-Control-Allow-Headers",
+    "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization, x-tenant-id, x-user-id",
+  );
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("X-Frame-Options", "DENY");
+  response.headers.set("X-XSS-Protection", "1; mode=block");
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  response.headers.set("X-Request-ID", requestId);
+  return response;
+}
+
+export const config = {
+  matcher: "/api/:path*",
+};

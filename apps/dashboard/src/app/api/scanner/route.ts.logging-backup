@@ -1,0 +1,164 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { database } from '../../../infrastructure/database'
+
+export async function POST(request: NextRequest) {
+  const tenantId = request.headers.get('x-tenant-id')
+  if (!tenantId) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+  }
+
+  try {
+    const { target, scanType = 'security' } = await request.json()
+
+    if (!target) {
+      return NextResponse.json({ error: 'Target URL is required' }, { status: 400 })
+    }
+
+    // Validate target URL
+    try {
+      const parsedUrl = new URL(target)
+      if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+        return NextResponse.json({ error: 'Invalid URL protocol. Only HTTP and HTTPS are allowed' }, { status: 400 })
+      }
+    } catch {
+      return NextResponse.json({ error: 'Invalid target URL format' }, { status: 400 })
+    }
+
+    // Validate scan type
+    const validScanTypes = ['security', 'performance', 'availability', 'compliance']
+    if (!validScanTypes.includes(scanType)) {
+      return NextResponse.json({ error: 'Invalid scan type. Allowed: ' + validScanTypes.join(', ') }, { status: 400 })
+    }
+
+    // Create scan record with proper database-generated ID
+    const scan = await database.queryOne(
+      `INSERT INTO scan_results (tenant_id, target, scan_type, status, created_at)
+       VALUES ($1, $2, $3, $4, NOW()) RETURNING *`,
+      [tenantId, target, scanType, 'pending']
+    )
+
+    if (!scan) {
+      return NextResponse.json({ error: 'Failed to create scan' }, { status: 500 })
+    }
+
+    // Queue scan for processing
+    await database.query(
+      `INSERT INTO scan_queue (scan_id, tenant_id, priority, created_at)
+       VALUES ($1, $2, $3, NOW())`,
+      [scan.id, tenantId, 'normal']
+    )
+
+    // Simulate basic reachability test
+    let reachabilityStatus = 'unknown'
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 5000)
+      
+      const response = await fetch(target, {
+        method: 'HEAD',
+        signal: controller.signal
+      })
+      
+      clearTimeout(timeoutId)
+      reachabilityStatus = response.ok ? 'reachable' : 'unreachable'
+    } catch (error) {
+      reachabilityStatus = 'unreachable'
+    }
+
+    // Update scan with initial results
+    await database.query(
+      `UPDATE scan_results 
+       SET status = $1, preliminary_results = $2, updated_at = NOW()
+       WHERE id = $3`,
+      [
+        'running',
+        JSON.stringify({ reachability: reachabilityStatus }),
+        scan.id
+      ]
+    )
+
+    return NextResponse.json({
+      success: true,
+      scan: {
+        id: scan.id,
+        target: scan.target,
+        scanType: scan.scan_type,
+        status: 'running',
+        createdAt: scan.created_at,
+        preliminaryResults: {
+          reachability: reachabilityStatus
+        }
+      },
+      message: 'Security scan initiated successfully'
+    })
+
+  } catch (error) {
+    console.error('Scanner API error:', error)
+    return NextResponse.json({ error: 'Failed to initiate security scan' }, { status: 500 })
+  }
+}
+
+export async function GET(request: NextRequest) {
+  const tenantId = request.headers.get('x-tenant-id')
+  if (!tenantId) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+  }
+
+  try {
+    const url = new URL(request.url)
+    const scanId = url.searchParams.get('scanId')
+
+    if (scanId) {
+      // Get specific scan results
+      const scan = await database.queryOne(
+        `SELECT * FROM scan_results WHERE id = $1 AND tenant_id = $2`,
+        [scanId, tenantId]
+      )
+
+      if (!scan) {
+        return NextResponse.json({ error: 'Scan not found' }, { status: 404 })
+      }
+
+      return NextResponse.json({
+        success: true,
+        scan: {
+          id: scan.id,
+          target: scan.target,
+          scanType: scan.scan_type,
+          status: scan.status,
+          securityScore: scan.security_score,
+          analysis: typeof scan.analysis === 'string' ? JSON.parse(scan.analysis) : scan.analysis,
+          createdAt: scan.created_at,
+          completedAt: scan.completed_at
+        }
+      })
+    }
+
+    // Get all scans for tenant
+    const scans = await database.queryMany(
+      `SELECT id, target, scan_type, status, security_score, created_at, completed_at
+       FROM scan_results 
+       WHERE tenant_id = $1 
+       ORDER BY created_at DESC 
+       LIMIT 50`,
+      [tenantId]
+    )
+
+    return NextResponse.json({
+      success: true,
+      scans: scans.map(scan => ({
+        id: scan.id,
+        target: scan.target,
+        scanType: scan.scan_type,
+        status: scan.status,
+        securityScore: scan.security_score,
+        createdAt: scan.created_at,
+        completedAt: scan.completed_at
+      }))
+    })
+
+  } catch (error) {
+    console.error('Scanner fetch error:', error)
+    return NextResponse.json({ error: 'Failed to fetch scan results' }, { status: 500 })
+  }
+}

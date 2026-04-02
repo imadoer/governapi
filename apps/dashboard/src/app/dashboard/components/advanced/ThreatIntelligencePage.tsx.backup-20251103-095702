@@ -1,0 +1,569 @@
+"use client";
+
+import { useState } from "react";
+import useSWR from "swr";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  ShieldExclamationIcon,
+  FireIcon,
+  GlobeAltIcon,
+  ArrowPathIcon,
+  ChartBarIcon,
+  MapPinIcon,
+  ExclamationTriangleIcon,
+} from "@heroicons/react/24/outline";
+import { Select, Tag, Spin, Progress, Tabs, Empty } from "antd";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  AreaChart,
+  Area,
+} from "recharts";
+
+const fetcher = (url: string, tenantId: string) =>
+  fetch(url, { headers: { "x-tenant-id": tenantId } }).then((res) => res.json());
+
+interface ThreatIntelligenceData {
+  success: boolean;
+  threatIntelligence: {
+    summary: {
+      totalThreats: number;
+      blockedThreats: number;
+      criticalThreats: number;
+      highThreats: number;
+      mediumThreats: number;
+      lowThreats: number;
+      averageRiskScore: number;
+      uniqueSources: number;
+      timeframe: string;
+      updatedAt: string;
+    };
+    topThreats: Array<{
+      type: string;
+      count: number;
+      avgRiskScore: number;
+      lastSeen: string;
+    }>;
+    geoDistribution: Array<{
+      country: string;
+      count: number;
+      blocked: number;
+    }>;
+    trends: Array<{
+      timestamp: string;
+      count: number;
+      blocked: number;
+      avgRisk: number;
+    }>;
+    recentBlocked: Array<{
+      id: string;
+      threat_type: string;
+      source_ip: string;
+      target_endpoint: string;
+      severity: string;
+      action_taken: string;
+      blocked_at: string;
+      risk_score: number;
+      country: string;
+    }>;
+    threatSources: Array<{
+      source_ip: string;
+      threat_count: number;
+      blocked_count: number;
+      last_activity: string;
+      threat_types: string[];
+      country: string;
+      avg_risk_score: number;
+    }>;
+    patterns: Array<{
+      id: string;
+      name: string;
+      type: string;
+      severity: string;
+      isActive: boolean;
+      createdAt: string;
+    }>;
+    attackVectors: Array<{
+      vector: string;
+      count: number;
+    }>;
+  };
+}
+
+export function ThreatIntelligencePage({ companyId }: { companyId: string }) {
+  const [timeframe, setTimeframe] = useState("24h");
+  const [autoRefresh, setAutoRefresh] = useState(true);
+
+  const { data, error, isLoading, mutate } = useSWR<ThreatIntelligenceData>(
+    [`/api/customer/threat-intelligence?timeframe=${timeframe}`, companyId],
+    ([url, id]) => fetcher(url, id),
+    { refreshInterval: autoRefresh ? 30000 : 0 }
+  );
+
+  const getSeverityColor = (severity: string) => {
+    switch (severity.toUpperCase()) {
+      case "CRITICAL":
+        return "#dc2626";
+      case "HIGH":
+        return "#ea580c";
+      case "MEDIUM":
+        return "#ca8a04";
+      case "LOW":
+        return "#16a34a";
+      default:
+        return "#6b7280";
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Spin size="large" tip="Loading threat intelligence..." />
+      </div>
+    );
+  }
+
+  if (error || !data?.success) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <ExclamationTriangleIcon className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h3 className="text-xl font-semibold text-white mb-2">Failed to load threat data</h3>
+          <p className="text-slate-400 mb-4">Please try again later</p>
+          <button
+            onClick={() => mutate()}
+            className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const { threatIntelligence } = data;
+  const { summary } = threatIntelligence;
+
+  const threatDistribution = [
+    { name: "Critical", value: summary.criticalThreats, color: "#dc2626" },
+    { name: "High", value: summary.highThreats, color: "#ea580c" },
+    { name: "Medium", value: summary.mediumThreats, color: "#ca8a04" },
+    { name: "Low", value: summary.lowThreats, color: "#16a34a" },
+  ].filter((item) => item.value > 0);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-white mb-2">Threat Intelligence</h1>
+          <p className="text-slate-400">Real-time threat detection and security monitoring</p>
+          <p className="text-xs text-slate-500 mt-1">
+            Last updated: {new Date(summary.updatedAt).toLocaleString()}
+          </p>
+        </div>
+        <div className="flex items-center gap-4">
+          <Select
+            value={timeframe}
+            onChange={setTimeframe}
+            className="w-32"
+            options={[
+              { value: "1h", label: "Last Hour" },
+              { value: "24h", label: "Last 24h" },
+              { value: "7d", label: "Last 7d" },
+              { value: "30d", label: "Last 30d" },
+            ]}
+          />
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => mutate()}
+            className="p-2 bg-slate-700 hover:bg-slate-600 rounded-xl transition-colors"
+          >
+            <ArrowPathIcon className="w-5 h-5 text-white" />
+          </motion.button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-gradient-to-br from-red-500/10 to-red-600/5 border border-red-500/30 rounded-2xl p-6"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <FireIcon className="w-10 h-10 text-red-500" />
+            <div className="text-right">
+              <p className="text-sm text-red-300">Critical Threats</p>
+              <p className="text-3xl font-bold text-red-500">{summary.criticalThreats}</p>
+            </div>
+          </div>
+          <Progress
+            percent={summary.criticalThreats > 0 ? 100 : 0}
+            strokeColor="#dc2626"
+            showInfo={false}
+            className="mb-2"
+          />
+          <p className="text-xs text-red-300">Requires immediate attention</p>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <ShieldExclamationIcon className="w-10 h-10 text-cyan-500" />
+            <div className="text-right">
+              <p className="text-sm text-slate-400">Total Threats</p>
+              <p className="text-3xl font-bold text-white">{summary.totalThreats}</p>
+            </div>
+          </div>
+          <div className="text-sm text-slate-400">
+            <span className="text-green-500 font-semibold">{summary.blockedThreats}</span> blocked
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <GlobeAltIcon className="w-10 h-10 text-orange-500" />
+            <div className="text-right">
+              <p className="text-sm text-slate-400">Threat Sources</p>
+              <p className="text-3xl font-bold text-white">{summary.uniqueSources}</p>
+            </div>
+          </div>
+          <p className="text-xs text-slate-400">Unique IP addresses</p>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <ChartBarIcon className="w-10 h-10 text-purple-500" />
+            <div className="text-right">
+              <p className="text-sm text-slate-400">Avg Risk Score</p>
+              <p className="text-3xl font-bold text-purple-500">
+                {Math.round(summary.averageRiskScore)}
+              </p>
+            </div>
+          </div>
+          <Progress percent={summary.averageRiskScore} strokeColor="#a855f7" showInfo={false} />
+        </motion.div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6"
+        >
+          <h3 className="text-xl font-bold text-white mb-4">Threat Severity Distribution</h3>
+          {threatDistribution.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={threatDistribution}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, value }) => `${name}: ${value}`}
+                  outerRadius={100}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {threatDistribution.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <RechartsTooltip
+                  contentStyle={{
+                    backgroundColor: "#1e293b",
+                    border: "1px solid #475569",
+                    borderRadius: "8px",
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <Empty description="No threats detected" className="py-16" />
+          )}
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6"
+        >
+          <h3 className="text-xl font-bold text-white mb-4">Top Threat Types</h3>
+          {threatIntelligence.topThreats.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={threatIntelligence.topThreats.slice(0, 5)}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                <XAxis dataKey="type" stroke="#94a3b8" angle={-45} textAnchor="end" height={100} />
+                <YAxis stroke="#94a3b8" />
+                <RechartsTooltip
+                  contentStyle={{
+                    backgroundColor: "#1e293b",
+                    border: "1px solid #475569",
+                    borderRadius: "8px",
+                  }}
+                  labelStyle={{ color: "#e2e8f0" }}
+                />
+                <Bar dataKey="count" fill="#06b6d4" />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <Empty description="No threat data available" className="py-16" />
+          )}
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6 }}
+          className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6"
+        >
+          <h3 className="text-xl font-bold text-white mb-4">Geographic Distribution</h3>
+          {threatIntelligence.geoDistribution.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={threatIntelligence.geoDistribution.slice(0, 10)}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                <XAxis dataKey="country" stroke="#94a3b8" angle={-45} textAnchor="end" height={100} />
+                <YAxis stroke="#94a3b8" />
+                <RechartsTooltip
+                  contentStyle={{
+                    backgroundColor: "#1e293b",
+                    border: "1px solid #475569",
+                    borderRadius: "8px",
+                  }}
+                />
+                <Bar dataKey="count" fill="#f97316" />
+                <Bar dataKey="blocked" fill="#10b981" />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <Empty description="No geographic data available" className="py-16" />
+          )}
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.7 }}
+          className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6"
+        >
+          <h3 className="text-xl font-bold text-white mb-4">Threat Trends</h3>
+          {threatIntelligence.trends.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={threatIntelligence.trends}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                <XAxis
+                  dataKey="timestamp"
+                  stroke="#94a3b8"
+                  tickFormatter={(value) => new Date(value).toLocaleTimeString()}
+                />
+                <YAxis stroke="#94a3b8" />
+                <RechartsTooltip
+                  contentStyle={{
+                    backgroundColor: "#1e293b",
+                    border: "1px solid #475569",
+                    borderRadius: "8px",
+                  }}
+                  labelFormatter={(value) => new Date(value).toLocaleString()}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="count"
+                  stroke="#06b6d4"
+                  fill="#06b6d4"
+                  fillOpacity={0.3}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="blocked"
+                  stroke="#10b981"
+                  fill="#10b981"
+                  fillOpacity={0.3}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <Empty description="No trend data available" className="py-16" />
+          )}
+        </motion.div>
+      </div>
+
+      <Tabs
+        defaultActiveKey="live-threats"
+        items={[
+          {
+            key: "live-threats",
+            label: "🔴 Live Threats",
+            children: (
+              <div className="space-y-3">
+                {threatIntelligence.recentBlocked.length > 0 ? (
+                  <AnimatePresence>
+                    {threatIntelligence.recentBlocked.map((threat, index) => (
+                      <motion.div
+                        key={threat.id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 20 }}
+                        transition={{ delay: index * 0.05 }}
+                        className="bg-slate-800/50 border-l-4 rounded-r-xl p-5 hover:bg-slate-700/50 transition-all"
+                        style={{ borderLeftColor: getSeverityColor(threat.severity) }}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <Tag color={threat.severity === "CRITICAL" ? "red" : "orange"}>
+                                {threat.severity}
+                              </Tag>
+                              <span className="text-white font-semibold">{threat.threat_type}</span>
+                              <span className="text-slate-400 text-sm">
+                                Risk: {Math.round(threat.risk_score)}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-4 text-sm text-slate-400">
+                              <span>
+                                From: <code className="text-cyan-400">{threat.source_ip}</code>
+                              </span>
+                              {threat.country && (
+                                <>
+                                  <span>•</span>
+                                  <span>
+                                    <MapPinIcon className="w-4 h-4 inline mr-1" />
+                                    {threat.country}
+                                  </span>
+                                </>
+                              )}
+                              <span>•</span>
+                              <span>
+                                Target: <code className="text-purple-400">{threat.target_endpoint}</code>
+                              </span>
+                              <span>•</span>
+                              <span>{new Date(threat.blocked_at).toLocaleString()}</span>
+                            </div>
+                          </div>
+                          <Tag color="green">BLOCKED</Tag>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                ) : (
+                  <div className="text-center py-16 bg-slate-800/30 rounded-2xl">
+                    <ShieldExclamationIcon className="w-16 h-16 text-green-500 mx-auto mb-4" />
+                    <p className="text-xl text-white font-semibold mb-2">No Active Threats</p>
+                    <p className="text-slate-400">Your infrastructure is secure</p>
+                  </div>
+                )}
+              </div>
+            ),
+          },
+          {
+            key: "threat-sources",
+            label: "🌐 Threat Sources",
+            children: (
+              <div className="space-y-3">
+                {threatIntelligence.threatSources.length > 0 ? (
+                  threatIntelligence.threatSources.map((source, index) => (
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      className="bg-slate-800/50 border border-slate-700 rounded-xl p-5"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <code className="text-lg font-mono text-red-400">{source.source_ip}</code>
+                            <Tag color="red">{source.threat_count} threats</Tag>
+                            {source.country && (
+                              <span className="text-slate-400 text-sm">
+                                <MapPinIcon className="w-4 h-4 inline mr-1" />
+                                {source.country}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 text-sm text-slate-400 mb-2">
+                            <span>Blocked: {source.blocked_count}</span>
+                            <span>•</span>
+                            <span>Avg Risk: {Math.round(source.avg_risk_score)}</span>
+                            <span>•</span>
+                            <span>Last seen: {new Date(source.last_activity).toLocaleString()}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {source.threat_types.slice(0, 5).map((type, i) => (
+                              <Tag key={i} className="text-xs">{type}</Tag>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))
+                ) : (
+                  <Empty description="No threat sources identified" className="py-16" />
+                )}
+              </div>
+            ),
+          },
+          {
+            key: "patterns",
+            label: "🧬 Threat Patterns",
+            children: (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {threatIntelligence.patterns.length > 0 ? (
+                  threatIntelligence.patterns.map((pattern, index) => (
+                    <motion.div
+                      key={pattern.id}
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: index * 0.05 }}
+                      className="bg-slate-800/50 border border-slate-700 rounded-xl p-5"
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-white font-semibold">{pattern.name}</h4>
+                        <Tag color={pattern.isActive ? "green" : "red"}>
+                          {pattern.isActive ? "Active" : "Inactive"}
+                        </Tag>
+                      </div>
+                      <div className="flex items-center gap-3 text-sm text-slate-400">
+                        <Tag color={pattern.severity === "CRITICAL" ? "red" : "orange"}>
+                          {pattern.severity}
+                        </Tag>
+                        <span className="capitalize">{pattern.type}</span>
+                      </div>
+                    </motion.div>
+                  ))
+                ) : (
+                  <div className="col-span-2">
+                    <Empty description="No threat patterns detected" className="py-16" />
+                  </div>
+                )}
+              </div>
+            ),
+          },
+        ]}
+      />
+    </div>
+  );
+}

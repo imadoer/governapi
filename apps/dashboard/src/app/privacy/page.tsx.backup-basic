@@ -1,0 +1,62 @@
+'use client'
+
+import { motion } from 'framer-motion'
+import { ShieldCheckIcon } from '@heroicons/react/24/outline'
+
+export default function PrivacyPage() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900">
+      <div className="max-w-4xl mx-auto px-8 py-12">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+          <div className="flex items-center gap-4 mb-8">
+            <ShieldCheckIcon className="w-12 h-12 text-cyan-400" />
+            <div>
+              <h1 className="text-4xl font-bold text-white">Privacy Policy</h1>
+              <p className="text-slate-400 mt-1">Last updated: {new Date().toLocaleDateString()}</p>
+            </div>
+          </div>
+
+          <div className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-8 space-y-6">
+            <section>
+              <h2 className="text-2xl font-bold text-white mb-4">1. Information We Collect</h2>
+              <p className="text-slate-300 leading-relaxed">
+                We collect information you provide directly to us, including name, email address, company information, and usage data.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-2xl font-bold text-white mb-4">2. How We Use Your Information</h2>
+              <p className="text-slate-300 leading-relaxed">
+                We use the information we collect to provide, maintain, and improve our services, process transactions, and communicate with you.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-2xl font-bold text-white mb-4">3. Data Security</h2>
+              <p className="text-slate-300 leading-relaxed">
+                We implement appropriate technical and organizational measures to protect your personal data against unauthorized access, alteration, disclosure, or destruction.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-2xl font-bold text-white mb-4">4. Your Rights</h2>
+              <p className="text-slate-300 leading-relaxed">
+                You have the right to access, correct, or delete your personal data. Contact us at privacy@governapi.com for any requests.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-2xl font-bold text-white mb-4">5. Contact Us</h2>
+              <p className="text-slate-300 leading-relaxed">
+                If you have questions about this Privacy Policy, please contact us at{' '}
+                <a href="mailto:privacy@governapi.com" className="text-cyan-400 hover:text-cyan-300">
+                  privacy@governapi.com
+                </a>
+              </p>
+            </section>
+          </div>
+        </motion.div>
+      </div>
+    </div>
+  )
+}

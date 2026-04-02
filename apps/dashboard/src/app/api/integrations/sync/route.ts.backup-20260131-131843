@@ -1,0 +1,125 @@
+import { NextRequest, NextResponse } from "next/server";
+import { database } from "../../../../infrastructure/database";
+import { logger } from "../../../../utils/logging/logger";
+import { collectGitHubData } from "../../../../services/integrations/github-collector";
+import { collectJiraData } from "../../../../services/integrations/jira-collector";
+import { collectSlackData } from "../../../../services/integrations/slack-collector";
+
+export async function POST(request: NextRequest) {
+  const tenantId = request.headers.get("x-tenant-id");
+  
+  if (!tenantId) {
+    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  }
+
+  try {
+    const { integrationId } = await request.json();
+
+    const integration = await database.queryOne(
+      `SELECT id, integration_type, credentials, integration_name 
+       FROM external_integrations 
+       WHERE id = $1 AND tenant_id = $2 AND is_active = true`,
+      [integrationId, tenantId]
+    );
+
+    if (!integration) {
+      return NextResponse.json({ error: "Integration not found" }, { status: 404 });
+    }
+
+    const startTime = Date.now();
+    const credentials = typeof integration.credentials === 'string' 
+      ? JSON.parse(integration.credentials) 
+      : integration.credentials;
+
+    let metrics = {
+      open_vulnerabilities: 0,
+      dependency_alerts: 0,
+      stale_tickets: 0,
+      security_mentions: 0,
+      records_fetched: 0,
+    };
+
+    let success = true;
+    let errorMessage = null;
+
+    try {
+      switch (integration.integration_type) {
+        case 'github':
+          const githubData = await collectGitHubData(
+            credentials.access_token,
+            credentials.repository
+          );
+          metrics.open_vulnerabilities = githubData.openVulnerabilities;
+          metrics.dependency_alerts = githubData.dependencyAlerts;
+          metrics.records_fetched = githubData.securityIssues + githubData.dependencyAlerts;
+          break;
+
+        case 'jira':
+          const jiraData = await collectJiraData(
+            credentials.email || 'admin@governapi.com',
+            credentials.api_token,
+            credentials.instance_url,
+            credentials.project_key
+          );
+          metrics.stale_tickets = jiraData.openSecurityTickets; // Count all open security tickets
+          metrics.records_fetched = jiraData.openSecurityTickets;
+          break;
+
+        case 'slack':
+          const slackData = await collectSlackData(
+            credentials.bot_token || credentials.webhook_url,
+            credentials.channel_id || credentials.channel
+          );
+          metrics.security_mentions = slackData.securityMentions;
+          metrics.records_fetched = slackData.securityMentions + slackData.threatMentions;
+          break;
+
+        default:
+          throw new Error(`Unsupported integration type: ${integration.integration_type}`);
+      }
+    } catch (error) {
+      success = false;
+      errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error("Integration sync error", { error: errorMessage, integrationId });
+    }
+
+    const duration = Date.now() - startTime;
+
+    await database.query(
+      `INSERT INTO integration_metrics 
+       (tenant_id, integration_id, integration_type, open_vulnerabilities, 
+        dependency_alerts, stale_tickets, security_mentions, records_fetched, 
+        last_sync, sync_status, error_message)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), $9, $10)`,
+      [
+        tenantId, integrationId, integration.integration_type,
+        metrics.open_vulnerabilities, metrics.dependency_alerts,
+        metrics.stale_tickets, metrics.security_mentions, metrics.records_fetched,
+        success ? 'completed' : 'error', errorMessage
+      ]
+    );
+
+    await database.query(
+      `INSERT INTO integration_sync_logs 
+       (tenant_id, integration_id, integration_type, action, records_fetched, success, duration_ms, error_message)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [tenantId, integrationId, integration.integration_type, 'data_sync',
+       metrics.records_fetched, success, duration, errorMessage]
+    );
+
+    return NextResponse.json({
+      success,
+      message: success ? `Synced ${metrics.records_fetched} records in ${duration}ms` : 'Sync failed',
+      metrics,
+      duration,
+    });
+
+  } catch (error) {
+    logger.error("Sync API error", {
+      error: error instanceof Error ? error.message : String(error),
+      tenantId,
+    });
+    
+    return NextResponse.json({ error: "Failed to sync integration" }, { status: 500 });
+  }
+}

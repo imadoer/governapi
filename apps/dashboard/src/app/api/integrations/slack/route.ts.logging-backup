@@ -1,0 +1,122 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { database } from '../../../../infrastructure/database'
+
+export async function POST(req: NextRequest) {
+  // Get tenant ID from middleware-injected headers
+  const tenantId = req.headers.get('x-tenant-id')
+  if (!tenantId) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+  }
+
+  try {
+    const { webhook_url, message, channel, severity = 'HIGH' } = await req.json()
+
+    if (!webhook_url || !message) {
+      return NextResponse.json({ error: 'webhook_url and message are required' }, { status: 400 })
+    }
+
+    // Validate webhook URL format and ensure it's a Slack webhook
+    let webhookHost
+    try {
+      const url = new URL(webhook_url)
+      webhookHost = url.hostname
+      if (!url.hostname.includes('slack.com') && !url.hostname.includes('hooks.slack.com')) {
+        return NextResponse.json({ error: 'Invalid Slack webhook URL' }, { status: 400 })
+      }
+    } catch {
+      return NextResponse.json({ error: 'Invalid webhook URL format' }, { status: 400 })
+    }
+
+    // Check if this webhook is registered for this tenant
+    const registeredWebhook = await database.queryOne(
+      'SELECT * FROM slack_integrations WHERE tenant_id = $1 AND webhook_url = $2 AND enabled = true',
+      [tenantId, webhook_url]
+    )
+
+    if (!registeredWebhook) {
+      return NextResponse.json({ 
+        error: 'Webhook not registered for this account. Please configure the integration first.' 
+      }, { status: 403 })
+    }
+
+    const slackMessage = {
+      channel: channel || '#security-alerts',
+      username: 'GovernAPI Security',
+      icon_emoji: ':shield:',
+      text: message,
+      attachments: [{
+        color: severity === 'CRITICAL' ? 'danger' : severity === 'HIGH' ? 'warning' : 'good',
+        fields: [{
+          title: 'API Security Alert',
+          value: message,
+          short: false
+        }, {
+          title: 'Severity',
+          value: severity,
+          short: true
+        }, {
+          title: 'Timestamp',
+          value: new Date().toISOString(),
+          short: true
+        }]
+      }]
+    }
+
+    const response = await fetch(webhook_url, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'User-Agent': 'GovernAPI/1.0'
+      },
+      body: JSON.stringify(slackMessage),
+      signal: AbortSignal.timeout(10000) // 10 second timeout
+    })
+
+    // Log the integration usage
+    await database.query(
+      `INSERT INTO integration_logs (tenant_id, integration_type, webhook_url, message_sent, success, created_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())`,
+      [tenantId, 'slack', webhookHost, message.substring(0, 255), response.ok]
+    )
+
+    return NextResponse.json({ 
+      success: response.ok,
+      status: response.status,
+      message: response.ok ? 'Message sent successfully' : 'Failed to send message'
+    })
+
+  } catch (error) {
+    console.error('Slack integration error:', error)
+    return NextResponse.json({ 
+      error: 'Failed to send Slack message',
+      details: error.message 
+    }, { status: 500 })
+  }
+}
+
+export async function GET(req: NextRequest) {
+  // Get tenant ID from middleware-injected headers
+  const tenantId = req.headers.get('x-tenant-id')
+  if (!tenantId) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+  }
+
+  try {
+    // Get registered Slack integrations for this tenant
+    const integrations = await database.queryMany(
+      'SELECT id, webhook_name, channel, enabled, created_at FROM slack_integrations WHERE tenant_id = $1',
+      [tenantId]
+    )
+
+    return NextResponse.json({
+      success: true,
+      integrations
+    })
+
+  } catch (error) {
+    console.error('Slack integrations fetch error:', error)
+    return NextResponse.json({ 
+      error: 'Failed to fetch Slack integrations' 
+    }, { status: 500 })
+  }
+}

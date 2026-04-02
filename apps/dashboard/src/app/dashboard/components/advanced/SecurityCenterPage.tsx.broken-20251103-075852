@@ -1,0 +1,602 @@
+"use client";
+import React, { useState } from "react";
+import useSWR from "swr";
+import { motion, useReducedMotion } from "framer-motion";
+import {
+  Progress,
+  Badge,
+  Modal,
+  Form,
+  Input,
+  Select,
+  message,
+  Button,
+  Switch,
+  Space,
+  Skeleton,
+  Tag,
+} from "antd";
+import {
+  ReloadOutlined,
+  PlayCircleOutlined,
+  SecurityScanOutlined,
+  FireOutlined,
+  BugOutlined,
+  SafetyCertificateOutlined,
+  LineChartOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+} from "@ant-design/icons";
+import { 
+  fadeSlideDown, 
+  fadeLift, 
+  scaleInPulse,
+  cardLift,
+  hoverGlow, 
+  pulseLoop,
+  staggerContainer,
+  depthReveal,
+  springIn,
+  closingDepth
+} from "../../../../motion/variants";
+
+const { Option } = Select;
+
+interface SecurityMetrics {
+  securityScore: number;
+  securityScoreTrend: number;
+  activeThreats: number;
+  openVulnerabilities: number;
+  scansRunning: number;
+  complianceScore: number;
+  botDetectionRate: number;
+  criticalVulns: number;
+}
+
+const fetcher = (url: string, tenantId: string) =>
+  fetch(url, { headers: { "x-tenant-id": tenantId } }).then((res) => res.json());
+
+export function SecurityCenterPage({ company }) {
+  const [scanModalVisible, setScanModalVisible] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [form] = Form.useForm();
+  const [submitting, setSubmitting] = useState(false);
+  const shouldReduceMotion = useReducedMotion();
+
+  const tenantId = company?.id || "1";
+
+  const { data: metricsData, mutate: refreshMetrics, isLoading: metricsLoading } = useSWR(
+    [`/api/customer/security-metrics`, tenantId],
+    ([url, id]) => fetcher(url, id),
+    { refreshInterval: autoRefresh ? 30000 : 0 }
+  );
+
+  // ✅ Fetch recent security scans
+  const { data: scansData, isLoading: scansLoading } = useSWR(
+    [`/api/customer/security-scans?limit=10`, tenantId],
+    ([url, id]) => fetcher(url, id),
+    { refreshInterval: autoRefresh ? 10000 : 0 }
+  );
+
+  // ✅ Fetch open vulnerabilities
+  const { data: vulnsData, isLoading: vulnsLoading } = useSWR(
+    [`/api/customer/vulnerabilities?limit=5&status=open`, tenantId],
+    ([url, id]) => fetcher(url, id),
+    { refreshInterval: autoRefresh ? 15000 : 0 }
+  );
+    ([url, id]) => fetcher(url, id),
+    { refreshInterval: autoRefresh ? 10000 : 0 }
+  );
+
+    { refreshInterval: autoRefresh ? 10000 : 0 }
+  );
+
+  const metrics: SecurityMetrics | null = metricsData?.success ? metricsData.metrics : null;
+  const scans = scansData?.success ? scansData.securityScans : [];
+  const vulns = vulnsData?.success ? vulnsData.vulnerabilities : [];
+  const threats = threatsData?.success ? threatsData.threatBlocking : null;
+
+  const handleRefresh = () => {
+    refreshMetrics();
+    message.success("Dashboard refreshed");
+  };
+
+  const handleStartScan = async (values: any) => {
+    setSubmitting(true);
+    try {
+      const response = await fetch("/api/customer/security-scans", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-tenant-id": tenantId,
+        },
+        body: JSON.stringify(values),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        message.success("Security scan initiated");
+        setScanModalVisible(false);
+        form.resetFields();
+      } else {
+        message.error(data.error || "Failed to start scan");
+      }
+    } catch (error) {
+      message.error("Failed to start scan");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="security-center-viewport">
+      <style jsx global>{`
+        @media (prefers-reduced-motion: no-preference) {
+          @keyframes hueRotate {
+            from { filter: hue-rotate(0deg); }
+            to { filter: hue-rotate(20deg); }
+          }
+
+          @keyframes pulseGlow {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.6; }
+          }
+
+          @keyframes heartbeat {
+            0%, 100% { box-shadow: 0 0 8px rgba(6,182,212,0.3); }
+            50% { box-shadow: 0 0 16px rgba(6,182,212,0.6); }
+          }
+
+          .security-center-viewport {
+            animation: hueRotate 60s linear infinite;
+          }
+
+          .threat-pulse::before {
+            animation: pulseGlow 2.5s ease-in-out infinite;
+          }
+
+          .heartbeat-switch {
+            animation: heartbeat 10s ease-in-out infinite;
+          }
+        }
+
+        .security-center-viewport {
+          min-height: 100vh;
+          margin: -2rem;
+          padding: 2rem;
+          background: radial-gradient(120% 120% at 60% 30%, #0B1228 0%, #10172C 60%, #0A0F1E 100%);
+          position: relative;
+          overflow-x: hidden;
+        }
+
+        .security-center-viewport::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          height: 40%;
+          background: linear-gradient(180deg, rgba(22,119,255,0.04) 0%, transparent 100%);
+          pointer-events: none;
+          z-index: 0;
+        }
+
+        .security-center-viewport::after {
+          content: '';
+          position: absolute;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          height: 40%;
+          background: linear-gradient(0deg, rgba(0,0,0,0.3) 0%, transparent 100%);
+          pointer-events: none;
+          z-index: 0;
+        }
+
+        .glass-card {
+          background: rgba(20, 25, 40, 0.65);
+          backdrop-filter: blur(20px) saturate(150%);
+          border: 1px solid rgba(255,255,255,0.04);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 4px 18px rgba(0,0,0,0.35);
+          border-radius: 1rem;
+          position: relative;
+          transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+        }
+
+        .glass-card::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0));
+          border-radius: 16px;
+          pointer-events: none;
+          opacity: 0;
+          transition: opacity 0.3s ease;
+        }
+
+        .glass-card:hover::before {
+          opacity: 1;
+        }
+
+        .glass-card:hover {
+          filter: brightness(1.05);
+          border-color: rgba(22,119,255,0.15);
+        }
+
+        .threat-pulse {
+          position: relative;
+        }
+
+        .threat-pulse::before {
+          content: '';
+          position: absolute;
+          inset: -25px;
+          border-radius: inherit;
+          background: radial-gradient(circle, rgba(239,68,68,0.12) 0%, transparent 70%);
+          pointer-events: none;
+          z-index: -1;
+        }
+
+        .live-indicator {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: #06b6d4;
+          box-shadow: 0 0 12px rgba(6,182,212,0.7);
+        }
+
+        @keyframes pulse {
+          0%, 100% { opacity: 0.4; transform: scale(0.95); }
+          50% { opacity: 1; transform: scale(1.2); }
+        }
+
+        @media (prefers-reduced-motion: no-preference) {
+          .live-indicator {
+            animation: pulse 1.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+          }
+        }
+
+        .section-title {
+          position: relative;
+          cursor: pointer;
+        }
+
+        .section-title::after {
+          content: '';
+          position: absolute;
+          bottom: -4px;
+          left: 0;
+          width: 0;
+          height: 2px;
+          background: linear-gradient(90deg, #06b6d4, transparent);
+          transition: width 0.3s ease;
+        }
+
+        .section-title:hover::after {
+          width: 100%;
+        }
+
+        .scan-button {
+          box-shadow: 0 0 20px rgba(6,182,212,0.3);
+          transition: all 0.4s ease;
+        }
+
+        .scan-button:hover {
+          box-shadow: 0 0 35px rgba(6,182,212,0.6);
+          transform: translateY(-2px);
+        }
+
+        .icon-float:hover {
+          transform: translateY(-2px);
+          transition: transform 0.2s ease;
+        }
+      `}</style>
+
+      <div className="relative z-10">
+        <motion.div 
+          initial="hidden" 
+          animate="visible" 
+          variants={shouldReduceMotion ? undefined : fadeSlideDown}
+          className="flex items-center justify-between mb-8"
+        >
+          <div>
+            <h1 className="text-4xl font-bold text-white mb-2 flex items-center gap-3">
+              <SecurityScanOutlined className="text-cyan-400 icon-float" style={{ fontSize: 40 }} />
+              Security Center
+            </h1>
+            <p className="text-slate-400">Real-time security operations and threat intelligence</p>
+          </div>
+          <motion.div 
+            className="flex items-center gap-3"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={springIn}
+          >
+            <div className="flex items-center gap-2 text-sm text-slate-400">
+              <span>Auto-refresh</span>
+              <Switch 
+                checked={autoRefresh} 
+                onChange={setAutoRefresh} 
+                size="small" 
+                className={autoRefresh ? "heartbeat-switch" : ""}
+              />
+            </div>
+            <motion.button
+              whileHover={shouldReduceMotion ? undefined : { scale: 1.05, y: -2 }}
+              whileTap={shouldReduceMotion ? undefined : { scale: 0.95 }}
+              onClick={handleRefresh}
+              className="glass-card px-4 py-2 text-white flex items-center gap-2"
+            >
+              <ReloadOutlined spin={metricsLoading} />
+              Refresh
+            </motion.button>
+            <motion.button
+              whileHover={shouldReduceMotion ? undefined : { scale: 1.05, y: -2 }}
+              whileTap={shouldReduceMotion ? undefined : { scale: 0.95 }}
+              onClick={() => setScanModalVisible(true)}
+              className="scan-button px-6 py-3 bg-cyan-500 hover:bg-cyan-600 text-white rounded-xl font-semibold flex items-center gap-2"
+            >
+              <PlayCircleOutlined />
+              Start Scan
+            </motion.button>
+          </motion.div>
+        </motion.div>
+
+        {metrics && (
+          <motion.div
+            custom={0}
+            initial="hidden"
+            animate="visible"
+            variants={shouldReduceMotion ? undefined : fadeLift}
+            className="glass-card p-4 mb-6"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-6">
+                <div>
+                  <div className="text-xs text-gray-400 mb-1 uppercase tracking-wide">Security Score</div>
+                  <div className="text-2xl font-bold text-cyan-400">{metrics.securityScore}/100</div>
+                </div>
+                <div className="h-8 w-px bg-slate-600"></div>
+                <div>
+                  <div className="text-xs text-gray-400 mb-1 uppercase tracking-wide">Active Threats</div>
+                  <div className="text-2xl font-bold text-white">{metrics.activeThreats}</div>
+                </div>
+                <div className="h-8 w-px bg-slate-600"></div>
+                <div>
+                  <div className="text-xs text-gray-400 mb-1 uppercase tracking-wide">Vulnerabilities</div>
+                  <div className="text-2xl font-bold text-orange-400">{metrics.openVulnerabilities}</div>
+                </div>
+                <div className="h-8 w-px bg-slate-600"></div>
+                <div>
+                  <div className="text-xs text-gray-400 mb-1 uppercase tracking-wide">Compliance</div>
+                  <div className="text-2xl font-bold text-green-400">{metrics.complianceScore}%</div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+          <motion.div
+            initial="hidden"
+            animate="visible"
+            variants={shouldReduceMotion ? undefined : scaleInPulse}
+            whileHover={shouldReduceMotion ? undefined : hoverGlow}
+            className="glass-card p-8"
+          >
+            <div className="text-center">
+              {metricsLoading ? (
+                <Skeleton.Avatar active size={180} />
+              ) : (
+                <>
+                  <Progress
+                    type="circle"
+                    percent={metrics?.securityScore || 0}
+                    strokeWidth={10}
+                    size={200}
+                    strokeColor={{ "0%": "#10b981", "100%": "#06b6d4" }}
+                    format={(percent) => (
+                      <div>
+                        <div className="text-5xl font-bold text-white">{percent}</div>
+                        <div className="text-sm text-slate-400 mt-2">Security Score</div>
+                      </div>
+                    )}
+                  />
+                  {metrics?.securityScoreTrend !== undefined && (
+                    <motion.div 
+                      className="mt-4 text-sm"
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 1.2 }}
+                    >
+                      <span className={metrics.securityScoreTrend >= 0 ? "text-green-400" : "text-red-400"}>
+                        {metrics.securityScoreTrend >= 0 ? "↑" : "↓"} {Math.abs(metrics.securityScoreTrend)}%
+                      </span>
+                      <span className="text-slate-500"> vs last week</span>
+                    </motion.div>
+                  )}
+                </>
+              )}
+            </div>
+          </motion.div>
+
+          <div className="lg:col-span-2 grid grid-cols-2 gap-4">
+            <motion.div custom={0} initial="hidden" animate="visible" variants={shouldReduceMotion ? undefined : cardLift} whileHover={shouldReduceMotion ? undefined : hoverGlow} className="glass-card p-6">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-sm text-slate-400 font-medium">Active Threats</div>
+                <motion.div className="p-2 rounded-lg icon-float" style={{ background: "rgba(239,68,68,0.1)" }}>
+                  <FireOutlined className="text-xl text-red-400" />
+                </motion.div>
+              </div>
+              <div className="text-3xl font-bold text-white">{metrics?.activeThreats || 0}</div>
+              {metrics?.activeThreats > 0 && (
+                <div className="mt-2 flex items-center gap-2">
+                  <div className="live-indicator" />
+                  <span className="text-xs text-cyan-400">Live monitoring</span>
+                </div>
+              )}
+            </motion.div>
+
+            <motion.div custom={1} initial="hidden" animate="visible" variants={shouldReduceMotion ? undefined : cardLift} whileHover={shouldReduceMotion ? undefined : hoverGlow} className="glass-card p-6">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-sm text-slate-400 font-medium">Critical Vulns</div>
+                <motion.div className="p-2 rounded-lg icon-float" style={{ background: "rgba(251,146,60,0.1)" }}>
+                  <BugOutlined className="text-xl text-orange-400" />
+                </motion.div>
+              </div>
+              <div className="text-3xl font-bold text-white">{metrics?.criticalVulns || 0}</div>
+              <div className="text-xs text-slate-500 mt-2">Require immediate action</div>
+            </motion.div>
+
+            <motion.div custom={2} initial="hidden" animate="visible" variants={shouldReduceMotion ? undefined : cardLift} whileHover={shouldReduceMotion ? undefined : hoverGlow} className="glass-card p-6">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-sm text-slate-400 font-medium">Scans Running</div>
+                <motion.div className="p-2 rounded-lg icon-float" style={{ background: "rgba(6,182,212,0.1)" }}>
+                  <LineChartOutlined className="text-xl text-cyan-400" />
+                </motion.div>
+              </div>
+              <div className="text-3xl font-bold text-white">{metrics?.scansRunning || 0}</div>
+              <div className="text-xs text-slate-500 mt-2">Active scans</div>
+            </motion.div>
+
+            <motion.div custom={3} initial="hidden" animate="visible" variants={shouldReduceMotion ? undefined : cardLift} whileHover={shouldReduceMotion ? undefined : hoverGlow} className="glass-card p-6">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-sm text-slate-400 font-medium">Compliance</div>
+                <motion.div className="p-2 rounded-lg icon-float" style={{ background: "rgba(168,85,247,0.1)" }}>
+                  <SafetyCertificateOutlined className="text-xl text-purple-400" />
+                </motion.div>
+              </div>
+              <div className="text-3xl font-bold text-white">
+                {metrics?.complianceScore || 0}<span className="text-lg text-slate-400">%</span>
+              </div>
+              <div className="text-xs text-slate-500 mt-2">Overall score</div>
+            </motion.div>
+          </div>
+        </div>
+      </div>
+
+      <motion.div className="grid grid-cols-1 lg:grid-cols-2 gap-6 relative z-10" initial="hidden" animate="visible" variants={shouldReduceMotion ? undefined : staggerContainer}>
+        <motion.div variants={shouldReduceMotion ? undefined : depthReveal} whileHover={shouldReduceMotion ? undefined : hoverGlow} className="glass-card p-6">
+          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center gap-2 section-title">
+              <BugOutlined className="text-xl text-orange-400" />
+              <h3 className="text-lg font-semibold text-white">Critical Vulnerabilities</h3>
+              {metrics?.criticalVulns > 0 && (
+                <Badge count={metrics.criticalVulns} style={{ backgroundColor: "#f97316" }} />
+              )}
+            </div>
+            <button className="text-cyan-400 hover:text-cyan-300 text-sm transition-colors">View All →</button>
+          </div>
+          {vulnsLoading ? (
+            <Skeleton active paragraph={{ rows: 3 }} />
+          ) : vulns.length > 0 ? (
+            <div className="space-y-3">
+              {vulns.slice(0, 5).map((vuln: any, idx: number) => (
+                <motion.div key={idx} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 1.2 + (idx * 0.05), duration: 0.3, ease: "easeOut" }} whileHover={shouldReduceMotion ? undefined : { x: 5 }} className="glass-card p-4 cursor-pointer" style={{ border: "1px solid rgba(251,146,60,0.1)" }}>
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="w-2 h-2 bg-orange-400 rounded-full"></div>
+                        <span className="text-xs text-orange-400 font-semibold">{vuln.severity?.toUpperCase()}</span>
+                      </div>
+                      <div className="text-white font-medium mb-1 text-sm">{vuln.title}</div>
+                      <div className="text-xs text-slate-400">{vuln.vulnerability_type}</div>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          ) : (
+            <motion.div className="text-center py-12" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 1.2, duration: 0.4 }}>
+              <CheckCircleOutlined className="text-5xl text-green-500 mb-3" />
+              <p className="text-white font-medium">No critical vulnerabilities</p>
+              <p className="text-sm text-slate-400 mt-1">Your systems are secure</p>
+            </motion.div>
+          )}
+        </motion.div>
+
+        <motion.div variants={shouldReduceMotion ? undefined : depthReveal} animate={shouldReduceMotion ? undefined : (metrics?.activeThreats > 0 ? "animate" : undefined)} {...(shouldReduceMotion ? {} : (metrics?.activeThreats > 0 ? pulseLoop : {}))} whileHover={shouldReduceMotion ? undefined : hoverGlow} className="glass-card p-6">
+          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center gap-2 section-title">
+              <FireOutlined className="text-xl text-red-400" />
+              <h3 className="text-lg font-semibold text-white">Live Threat Monitor</h3>
+              <div className="live-indicator ml-1" />
+            </div>
+            <button className="text-cyan-400 hover:text-cyan-300 text-sm transition-colors">Details →</button>
+          </div>
+          {threatsLoading ? (
+            <Skeleton active paragraph={{ rows: 2 }} />
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              <motion.div className="glass-card p-6 text-center threat-pulse" style={{ background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.2)" }} whileHover={shouldReduceMotion ? undefined : { scale: 1.05 }}>
+                <Progress type="circle" percent={100} format={() => (<div><div className="text-3xl font-bold text-red-400">{threats?.recentBlocked?.length || 0}</div><div className="text-xs text-slate-400 mt-1">BLOCKED</div></div>)} strokeColor="#ef4444" size={100} strokeWidth={8} />
+                <div className="text-xs text-slate-500 mt-3">Today</div>
+              </motion.div>
+              <motion.div className="glass-card p-6 text-center" style={{ background: "rgba(251,146,60,0.05)", border: "1px solid rgba(251,146,60,0.2)" }} whileHover={shouldReduceMotion ? undefined : { scale: 1.05 }}>
+                <Progress type="circle" percent={100} format={() => (<div><div className="text-3xl font-bold text-orange-400">{metrics?.activeThreats || 0}</div><div className="text-xs text-slate-400 mt-1">ACTIVE</div></div>)} strokeColor="#f97316" size={100} strokeWidth={8} />
+                <div className="text-xs text-slate-500 mt-3">Right now</div>
+              </motion.div>
+            </div>
+          )}
+        </motion.div>
+
+        <motion.div variants={shouldReduceMotion ? undefined : closingDepth} whileHover={shouldReduceMotion ? undefined : hoverGlow} className="lg:col-span-2 glass-card p-6">
+          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center gap-2 section-title">
+              <LineChartOutlined className="text-xl text-cyan-400" />
+              <h3 className="text-lg font-semibold text-white">Recent Security Scans</h3>
+            </div>
+            <motion.button whileHover={shouldReduceMotion ? undefined : { scale: 1.05 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.95 }} onClick={() => setScanModalVisible(true)} className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg text-sm font-medium transition-colors">New Scan</motion.button>
+          </div>
+          {scansLoading ? (
+            <Skeleton active />
+          ) : scans.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {scans.slice(0, 6).map((scan: any, idx: number) => (
+                <motion.div key={idx} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 1.5 + (idx * 0.04), duration: 0.3, ease: "easeOut" }} whileHover={shouldReduceMotion ? undefined : { scale: 1.05, y: -5 }} className="glass-card p-4 cursor-pointer" style={{ border: "1px solid rgba(6,182,212,0.1)" }}>
+                  <div className="text-xs text-cyan-400 font-mono mb-2 truncate">{scan.target}</div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Tag style={{ background: "rgba(6, 182, 212, 0.1)", border: "none", borderRadius: 4, color: "#06b6d4", fontSize: 10 }}>{scan.scan_type}</Tag>
+                    <Tag style={{ background: scan.status === "completed" ? "rgba(16, 185, 129, 0.1)" : "rgba(251, 146, 60, 0.1)", border: "none", borderRadius: 4, color: scan.status === "completed" ? "#10b981" : "#fb923c", fontSize: 10 }}>{scan.status}</Tag>
+                  </div>
+                  {scan.security_score && (
+                    <Progress percent={scan.security_score} strokeColor={scan.security_score >= 80 ? "#10b981" : "#f97316"} size="small" showInfo={false} />
+                  )}
+                </motion.div>
+              ))}
+            </div>
+          ) : (
+            <motion.div className="text-center py-12" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 1.5, duration: 0.4 }}>
+              <ClockCircleOutlined className="text-5xl text-slate-600 mb-3" />
+              <p className="text-white font-medium mb-3">No recent scans</p>
+              <motion.button whileHover={shouldReduceMotion ? undefined : { scale: 1.05 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.95 }} onClick={() => setScanModalVisible(true)} className="px-6 py-2 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg font-medium transition-colors">Start First Scan</motion.button>
+            </motion.div>
+          )}
+        </motion.div>
+      </motion.div>
+
+      <Modal title={<span style={{ color: "#fff" }}>Start New Security Scan</span>} open={scanModalVisible} onCancel={() => setScanModalVisible(false)} footer={null} width={480}>
+        <Form form={form} onFinish={handleStartScan} layout="vertical" style={{ marginTop: 20 }}>
+          <Form.Item label={<span style={{ color: "#e2e8f0" }}>Target URL</span>} name="url" rules={[{ required: true, message: "Please enter target URL" }]}>
+            <Input placeholder="https://api.example.com" size="large" />
+          </Form.Item>
+          <Form.Item label={<span style={{ color: "#e2e8f0" }}>Scan Type</span>} name="scanType" initialValue="comprehensive">
+            <Select size="large">
+              <Option value="quick">Quick (5-10 min)</Option>
+              <Option value="comprehensive">Comprehensive (15-30 min)</Option>
+              <Option value="deep">Deep (30-60 min)</Option>
+              <Option value="owasp_top10">OWASP Top 10 (20-40 min)</Option>
+            </Select>
+          </Form.Item>
+          <Form.Item style={{ marginBottom: 0, marginTop: 24 }}>
+            <Space style={{ width: "100%", justifyContent: "flex-end" }}>
+              <Button onClick={() => setScanModalVisible(false)}>Cancel</Button>
+              <Button type="primary" htmlType="submit" loading={submitting}>Start Scan</Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+    </div>
+  );
+}

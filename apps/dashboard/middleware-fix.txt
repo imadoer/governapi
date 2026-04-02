@@ -1,0 +1,7 @@
+// Add this after line 48 in middleware.ts (before the try block)
+
+// Skip middleware for internal requests from security processor
+if (request.headers.get('x-internal-request') === 'true') {
+  const response = NextResponse.next()
+  return addSecurityHeaders(response, requestId)
+}

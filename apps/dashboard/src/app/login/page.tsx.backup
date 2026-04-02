@@ -1,0 +1,86 @@
+'use client'
+
+import { useState } from 'react'
+import { signIn } from 'next-auth/react'
+import { Button, Card, Form, Input, Divider, message } from 'antd'
+import { GoogleOutlined, MailOutlined, LockOutlined } from '@ant-design/icons'
+import { Logo } from '@/components/Logo'
+
+export default function LoginPage() {
+  const [loading, setLoading] = useState(false)
+
+  const handleCredentialsLogin = async (values: any) => {
+    setLoading(true)
+    const result = await signIn('credentials', {
+      email: values.email,
+      password: values.password,
+      redirect: false,
+    })
+    
+    if (result?.error) {
+      message.error('Invalid credentials')
+    } else {
+      window.location.href = '/dashboard'
+    }
+    setLoading(false)
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center px-4 bg-gray-50">
+      <Card className="w-full max-w-md mx-4 shadow-lg">
+        <div className="text-center mb-8">
+          <Logo size={48} className="justify-center mb-4" />
+          <h1 className="text-2xl font-bold">Welcome Back</h1>
+          <p className="text-gray-600 mt-2">Sign in to access your dashboard</p>
+        </div>
+        
+        <Form onFinish={handleCredentialsLogin} layout="vertical">
+          <Form.Item
+            name="email"
+            rules={[{ required: true, type: 'email', message: 'Please enter a valid email' }]}
+          >
+            <Input 
+              prefix={<MailOutlined />} 
+              placeholder="Email" 
+              size="large"
+            />
+          </Form.Item>
+          
+          <Form.Item
+            name="password"
+            rules={[{ required: true, message: 'Please enter your password' }]}
+          >
+            <Input.Password 
+              prefix={<LockOutlined />} 
+              placeholder="Password" 
+              size="large"
+            />
+          </Form.Item>
+          
+          <Form.Item>
+            <Button type="primary" htmlType="submit" block size="large" loading={loading}>
+              Sign In
+            </Button>
+          </Form.Item>
+        </Form>
+        
+        <Divider>OR</Divider>
+        
+        <Button
+          size="large"
+          block
+          icon={<GoogleOutlined />}
+          onClick={() => signIn('google', { callbackUrl: '/dashboard' })}
+        >
+          Sign in with Google
+        </Button>
+        
+        <div className="mt-6 text-center text-sm text-gray-500">
+          Demo credentials:<br/>
+          Email: demo@governapi.com<br/>
+          Password: demo123
+        </div>
+      </Card>
+    </div>
+  )
+}

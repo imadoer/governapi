@@ -1,0 +1,13 @@
+// In security-processor/route.ts, replace the fetch section (around line 75) with:
+
+const response = await fetch(targetUrl, {
+  method: request.method,
+  headers: {
+    'x-internal-request': 'true',  // ADD THIS LINE
+    'authorization': request.headers.get('authorization') || '',
+    'content-type': request.headers.get('content-type') || 'application/json',
+    'x-request-id': requestId,
+    ...authHeaders
+  },
+  body: ['POST', 'PUT', 'PATCH'].includes(request.method) ? request.body : undefined
+})

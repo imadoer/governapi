@@ -1,0 +1,269 @@
+'use client'
+
+import { motion } from 'framer-motion'
+import Link from 'next/link'
+
+export default function CompanyPage() {
+  const team = [
+    {
+      name: 'Leadership Team',
+      description: 'Experienced executives from leading tech companies',
+      icon: '👥'
+    },
+    {
+      name: 'Security Experts',
+      description: 'Former security researchers and penetration testers',
+      icon: '🔐'
+    },
+    {
+      name: 'Engineering',
+      description: 'World-class engineers building scalable solutions',
+      icon: '⚙️'
+    },
+    {
+      name: 'Customer Success',
+      description: 'Dedicated team ensuring your API security success',
+      icon: '🤝'
+    }
+  ]
+
+  const values = [
+    {
+      title: 'Security First',
+      description: 'We treat your API security as seriously as our own',
+      icon: '🛡️'
+    },
+    {
+      title: 'Innovation',
+      description: 'Continuously evolving to stay ahead of emerging threats',
+      icon: '💡'
+    },
+    {
+      title: 'Transparency',
+      description: 'Clear communication and honest reporting always',
+      icon: '📊'
+    },
+    {
+      title: 'Customer Focus',
+      description: 'Your success is our success',
+      icon: '⭐'
+    }
+  ]
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-800">
+      {/* Header */}
+      <motion.div 
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-slate-900/50 border-b border-slate-700"
+      >
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+          <Link href="/" className="text-2xl font-bold text-white">
+            GovernAPI
+          </Link>
+          <nav className="flex gap-6">
+            <Link href="/products" className="text-slate-300 hover:text-white transition">
+              Products
+            </Link>
+            <Link href="/solutions" className="text-slate-300 hover:text-white transition">
+              Solutions
+            </Link>
+            <Link href="/docs" className="text-slate-300 hover:text-white transition">
+              Docs
+            </Link>
+            <Link href="/pricing" className="text-slate-300 hover:text-white transition">
+              Pricing
+            </Link>
+            <Link href="/customer/login" className="text-slate-300 hover:text-white transition">
+              Login
+            </Link>
+          </nav>
+        </div>
+      </motion.div>
+
+      {/* Hero Section */}
+      <div className="max-w-7xl mx-auto px-6 py-20">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="text-center mb-20"
+        >
+          <h1 className="text-5xl font-bold text-white mb-6">
+            About GovernAPI
+          </h1>
+          <p className="text-xl text-slate-300 max-w-3xl mx-auto">
+            We're on a mission to make API security accessible, automated, and effective for every organization
+          </p>
+        </motion.div>
+
+        {/* Mission Statement */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="bg-gradient-to-r from-blue-600/20 to-purple-600/20 border border-blue-500/30 rounded-2xl p-12 mb-20"
+        >
+          <h2 className="text-3xl font-bold text-white mb-6 text-center">Our Mission</h2>
+          <p className="text-lg text-slate-200 text-center max-w-4xl mx-auto leading-relaxed">
+            In today's API-driven world, security can't be an afterthought. We built GovernAPI to provide 
+            enterprise-grade API security that's powerful enough for Fortune 500 companies yet simple enough 
+            for startups. Our platform helps organizations discover, protect, and monitor their APIs with 
+            confidence.
+          </p>
+        </motion.div>
+
+        {/* Our Values */}
+        <div className="mb-20">
+          <h2 className="text-3xl font-bold text-white mb-12 text-center">Our Values</h2>
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {values.map((value, index) => (
+              <motion.div
+                key={value.title}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 + index * 0.1 }}
+                className="bg-slate-800/50 backdrop-blur border border-slate-700 rounded-xl p-6 text-center hover:border-blue-500/50 transition-all"
+              >
+                <div className="text-5xl mb-4">{value.icon}</div>
+                <h3 className="text-xl font-bold text-white mb-3">{value.title}</h3>
+                <p className="text-slate-300">{value.description}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+
+        {/* Team */}
+        <div className="mb-20">
+          <h2 className="text-3xl font-bold text-white mb-12 text-center">Our Team</h2>
+          <div className="grid md:grid-cols-2 gap-6">
+            {team.map((member, index) => (
+              <motion.div
+                key={member.name}
+                initial={{ opacity: 0, x: index % 2 === 0 ? -20 : 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.5 + index * 0.1 }}
+                className="bg-slate-800/50 backdrop-blur border border-slate-700 rounded-xl p-8 hover:border-blue-500/50 transition-all"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="text-5xl">{member.icon}</div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white mb-2">{member.name}</h3>
+                    <p className="text-slate-300">{member.description}</p>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+
+        {/* Stats */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.7 }}
+          className="grid md:grid-cols-4 gap-6 mb-20"
+        >
+          {[
+            { number: '10M+', label: 'APIs Protected' },
+            { number: '500+', label: 'Enterprise Customers' },
+            { number: '99.9%', label: 'Uptime SLA' },
+            { number: '24/7', label: 'Security Monitoring' }
+          ].map((stat, index) => (
+            <div
+              key={stat.label}
+              className="bg-slate-800/50 backdrop-blur border border-slate-700 rounded-xl p-6 text-center"
+            >
+              <div className="text-4xl font-bold text-blue-500 mb-2">{stat.number}</div>
+              <div className="text-slate-300">{stat.label}</div>
+            </div>
+          ))}
+        </motion.div>
+
+        {/* Contact Section */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.8 }}
+          className="bg-slate-800/50 backdrop-blur border border-slate-700 rounded-2xl p-12"
+        >
+          <h2 className="text-3xl font-bold text-white mb-8 text-center">Get in Touch</h2>
+          
+          <div className="grid md:grid-cols-3 gap-8 mb-8">
+            <div className="text-center">
+              <div className="text-4xl mb-3">📧</div>
+              <h3 className="text-white font-semibold mb-2">Email</h3>
+              <a href="mailto:contact@governapi.com" className="text-blue-400 hover:text-blue-300">
+                contact@governapi.com
+              </a>
+            </div>
+            
+            <div className="text-center">
+              <div className="text-4xl mb-3">💼</div>
+              <h3 className="text-white font-semibold mb-2">Sales</h3>
+              <a href="mailto:sales@governapi.com" className="text-blue-400 hover:text-blue-300">
+                sales@governapi.com
+              </a>
+            </div>
+            
+            <div className="text-center">
+              <div className="text-4xl mb-3">🛟</div>
+              <h3 className="text-white font-semibold mb-2">Support</h3>
+              <a href="mailto:support@governapi.com" className="text-blue-400 hover:text-blue-300">
+                support@governapi.com
+              </a>
+            </div>
+          </div>
+
+          <div className="bg-slate-900/50 border border-slate-700 rounded-xl p-6">
+            <h3 className="text-white font-semibold mb-4 text-center">Office Location</h3>
+            <p className="text-slate-300 text-center">
+              123 Security Street<br />
+              San Francisco, CA 94105<br />
+              United States
+            </p>
+          </div>
+        </motion.div>
+
+        {/* CTA */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.9 }}
+          className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-12 text-center mt-12"
+        >
+          <h2 className="text-3xl font-bold text-white mb-4">
+            Ready to Secure Your APIs?
+          </h2>
+          <p className="text-white/90 mb-8 text-lg">
+            Join hundreds of companies trusting GovernAPI with their API security
+          </p>
+          <div className="flex gap-4 justify-center">
+            <Link
+              href="/pricing"
+              className="bg-white text-blue-600 px-8 py-3 rounded-lg font-semibold hover:bg-slate-100 transition"
+            >
+              View Pricing
+            </Link>
+            <Link
+              href="/customer/login"
+              className="bg-blue-700 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-800 transition border border-white/20"
+            >
+              Get Started
+            </Link>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Footer */}
+      <div className="border-t border-slate-700 mt-20">
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          <p className="text-center text-slate-400">
+            © 2025 GovernAPI. All rights reserved.
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}

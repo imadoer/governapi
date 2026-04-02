@@ -1,0 +1,546 @@
+"use client";
+import React, { useState } from "react";
+import useSWR from "swr";
+import type { Variants } from "framer-motion";
+import { motion } from "framer-motion";
+import {
+  Card,
+  Row,
+  Col,
+  Typography,
+  Button,
+  Space,
+  Progress,
+  Badge,
+  Tooltip,
+  Modal,
+  Form,
+  Input,
+  Select,
+  message,
+  Tag,
+} from "antd";
+import {
+  ReloadOutlined,
+  PlayCircleOutlined,
+  DownloadOutlined,
+  SecurityScanOutlined,
+  FireOutlined,
+  BugOutlined,
+  SafetyCertificateOutlined,
+  RobotOutlined,
+  ThunderboltOutlined,
+  LineChartOutlined,
+} from "@ant-design/icons";
+
+const { Title, Text } = Typography;
+const { Option } = Select;
+
+// ==================== TYPES ====================
+
+interface SecurityMetrics {
+  securityScore: number;
+  securityScoreTrend: number;
+  activeThreats: number;
+  openVulnerabilities: number;
+  scansRunning: number;
+  complianceScore: number;
+  botDetectionRate: number;
+  criticalVulns: number;
+}
+
+// ==================== FETCHER ====================
+
+const fetcher = (url: string, tenantId: string) =>
+  fetch(url, { headers: { "x-tenant-id": tenantId } }).then((res) => res.json());
+
+// ==================== ANIMATION VARIANTS ====================
+
+const fadeSlide: Variants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: { delay: i * 0.08, duration: 0.4, ease: "easeOut" },
+  }),
+};
+
+const scaleIn: Variants = {
+  hidden: { scale: 0.95, opacity: 0 },
+  visible: {
+    scale: 1,
+    opacity: 1,
+    transition: { duration: 0.3, ease: "easeOut" },
+  },
+};
+
+// ==================== KPI CARD COMPONENT ====================
+
+interface KPICardProps {
+  title: string;
+  value: number | string;
+  suffix?: string;
+  trend?: number;
+  icon: React.ReactNode;
+  color: string;
+  index: number;
+}
+
+function KPICard({ title, value, suffix, trend, icon, color, index }: KPICardProps) {
+  return (
+    <motion.div
+      custom={index}
+      initial="hidden"
+      animate="visible"
+      variants={fadeSlide}
+      whileHover={{ scale: 1.02, boxShadow: "0 8px 24px rgba(0,0,0,0.12)" }}
+      style={{ height: "100%" }}
+    >
+      <Card
+        style={{
+          height: "100%",
+          borderRadius: 16,
+          border: "1px solid #f0f0f0",
+          background: "linear-gradient(135deg, #ffffff 0%, #fafafa 100%)",
+        }}
+      >
+        <Space direction="vertical" size="small" style={{ width: "100%" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <Text type="secondary" style={{ fontSize: 13, fontWeight: 500 }}>
+              {title}
+            </Text>
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 12,
+                background: `${color}15`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: color,
+                fontSize: 20,
+              }}
+            >
+              {icon}
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+            <Text style={{ fontSize: 32, fontWeight: 600, color: "#262626" }}>
+              {value}
+            </Text>
+            {suffix && (
+              <Text type="secondary" style={{ fontSize: 16 }}>
+                {suffix}
+              </Text>
+            )}
+          </div>
+          {trend !== undefined && (
+            <Tag
+              color={trend >= 0 ? "success" : "error"}
+              style={{ borderRadius: 6, border: "none", fontWeight: 500 }}
+            >
+              {trend >= 0 ? "↑" : "↓"} {Math.abs(trend)}%
+            </Tag>
+          )}
+        </Space>
+      </Card>
+    </motion.div>
+  );
+}
+
+// ==================== MAIN COMPONENT ====================
+
+export function SecurityCenterPage({ company }) {
+  const [scanModalVisible, setScanModalVisible] = useState(false);
+  const [form] = Form.useForm();
+  const [submitting, setSubmitting] = useState(false);
+
+  const tenantId = company?.id || "1";
+
+  // ========== SWR DATA FETCHING ==========
+  const { data: metricsData, mutate: refreshMetrics } = useSWR(
+    [`/api/customer/security-metrics`, tenantId],
+    ([url, id]) => fetcher(url, id),
+    { refreshInterval: 30000 }
+  );
+
+  const { data: scansData } = useSWR(
+    [`/api/customer/security-scans?limit=10`, tenantId],
+    ([url, id]) => fetcher(url, id),
+    { refreshInterval: 10000 }
+  );
+
+  const { data: vulnsData } = useSWR(
+    [`/api/customer/vulnerabilities?limit=5&status=open`, tenantId],
+    ([url, id]) => fetcher(url, id)
+  );
+
+  const { data: threatsData } = useSWR(
+    [`/api/customer/threat-blocking`, tenantId],
+    ([url, id]) => fetcher(url, id),
+    { refreshInterval: 10000 }
+  );
+
+  const metrics: SecurityMetrics | null = metricsData?.success ? metricsData.metrics : null;
+  const scans = scansData?.success ? scansData.securityScans : [];
+  const vulns = vulnsData?.success ? vulnsData.vulnerabilities : [];
+  const threats = threatsData?.success ? threatsData.threatBlocking : null;
+
+  // ========== HANDLERS ==========
+  const handleRefresh = () => {
+    refreshMetrics();
+    message.success("Dashboard refreshed");
+  };
+
+  const handleStartScan = async (values: any) => {
+    setSubmitting(true);
+    try {
+      const response = await fetch("/api/customer/security-scans", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-tenant-id": tenantId,
+        },
+        body: JSON.stringify(values),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        message.success("Security scan initiated");
+        setScanModalVisible(false);
+        form.resetFields();
+      } else {
+        message.error(data.error || "Failed to start scan");
+      }
+    } catch (error) {
+      message.error("Failed to start scan");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ========== RENDER ==========
+  return (
+    <div style={{ padding: "32px", background: "#F5F7FA", minHeight: "100vh" }}>
+      {/* ==================== HEADER ==================== */}
+      <motion.div initial="hidden" animate="visible" variants={scaleIn}>
+        <div style={{ marginBottom: 32 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+                <SecurityScanOutlined style={{ fontSize: 32, color: "#1677FF" }} />
+                <Title level={2} style={{ margin: 0, fontWeight: 600 }}>
+                  Security Center
+                </Title>
+              </div>
+              <Text type="secondary" style={{ fontSize: 15 }}>
+                Comprehensive security operations and threat intelligence hub
+              </Text>
+            </div>
+            <Space size="middle">
+              <Button icon={<DownloadOutlined />} size="large">
+                Export Report
+              </Button>
+              <Button icon={<ReloadOutlined />} onClick={handleRefresh} size="large">
+                Refresh
+              </Button>
+              <Button
+                type="primary"
+                icon={<PlayCircleOutlined />}
+                onClick={() => setScanModalVisible(true)}
+                size="large"
+              >
+                Start Scan
+              </Button>
+            </Space>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* ==================== KPI ROW ==================== */}
+      <Row gutter={[24, 24]} style={{ marginBottom: 32 }}>
+        <Col xs={24} sm={12} lg={8} xl={4}>
+          <KPICard
+            title="Security Score"
+            value={metrics?.securityScore || 0}
+            suffix="/100"
+            trend={metrics?.securityScoreTrend}
+            icon={<SecurityScanOutlined />}
+            color="#1677FF"
+            index={0}
+          />
+        </Col>
+        <Col xs={24} sm={12} lg={8} xl={4}>
+          <KPICard
+            title="Active Threats"
+            value={metrics?.activeThreats || 0}
+            icon={<FireOutlined />}
+            color="#FF5252"
+            index={1}
+          />
+        </Col>
+        <Col xs={24} sm={12} lg={8} xl={4}>
+          <KPICard
+            title="Open Vulnerabilities"
+            value={metrics?.openVulnerabilities || 0}
+            icon={<BugOutlined />}
+            color="#FFC107"
+            index={2}
+          />
+        </Col>
+        <Col xs={24} sm={12} lg={8} xl={4}>
+          <KPICard
+            title="Scans Running"
+            value={metrics?.scansRunning || 0}
+            icon={<LineChartOutlined />}
+            color="#00C853"
+            index={3}
+          />
+        </Col>
+        <Col xs={24} sm={12} lg={8} xl={4}>
+          <KPICard
+            title="Compliance Score"
+            value={metrics?.complianceScore || 0}
+            suffix="%"
+            icon={<SafetyCertificateOutlined />}
+            color="#722ED1"
+            index={4}
+          />
+        </Col>
+        <Col xs={24} sm={12} lg={8} xl={4}>
+          <KPICard
+            title="Bot Detection"
+            value={metrics?.botDetectionRate || 0}
+            suffix="%"
+            icon={<RobotOutlined />}
+            color="#13C2C2"
+            index={5}
+          />
+        </Col>
+      </Row>
+
+      {/* ==================== INTELLIGENCE GRID ==================== */}
+      <Row gutter={[24, 24]}>
+        {/* Critical Vulnerabilities */}
+        <Col xs={24} lg={12}>
+          <motion.div custom={6} initial="hidden" animate="visible" variants={fadeSlide}>
+            <Card
+              title={
+                <Space>
+                  <BugOutlined style={{ color: "#FF5252" }} />
+                  <span>Critical Vulnerabilities</span>
+                  <Badge count={metrics?.criticalVulns || 0} style={{ backgroundColor: "#FF5252" }} />
+                </Space>
+              }
+              extra={<Button type="link" href="/dashboard?tab=vulnerability-scanner">View All →</Button>}
+              style={{ borderRadius: 16, height: "100%" }}
+            >
+              {vulns.length > 0 ? (
+                <Space direction="vertical" style={{ width: "100%" }} size="middle">
+                  {vulns.slice(0, 5).map((vuln: any, idx: number) => (
+                    <div
+                      key={idx}
+                      style={{
+                        padding: 16,
+                        background: "#FAFAFA",
+                        borderRadius: 12,
+                        border: "1px solid #F0F0F0",
+                      }}
+                    >
+                      <Space style={{ width: "100%", justifyContent: "space-between" }}>
+                        <div>
+                          <Tag color="red" style={{ marginBottom: 8 }}>
+                            {vuln.severity?.toUpperCase()}
+                          </Tag>
+                          <div>
+                            <Text strong>{vuln.title}</Text>
+                          </div>
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            {vuln.vulnerability_type}
+                          </Text>
+                        </div>
+                        <Button size="small" type="link">
+                          View
+                        </Button>
+                      </Space>
+                    </div>
+                  ))}
+                </Space>
+              ) : (
+                <div style={{ textAlign: "center", padding: "40px 0" }}>
+                  <Text type="secondary">No critical vulnerabilities</Text>
+                </div>
+              )}
+            </Card>
+          </motion.div>
+        </Col>
+
+        {/* Live Threat Monitor */}
+        <Col xs={24} lg={12}>
+          <motion.div custom={7} initial="hidden" animate="visible" variants={fadeSlide}>
+            <Card
+              title={
+                <Space>
+                  <FireOutlined style={{ color: "#FF5252" }} />
+                  <span>Live Threat Monitor</span>
+                  <Badge status="processing" text="Live" />
+                </Space>
+              }
+              extra={<Button type="link" href="/dashboard?tab=threat-intelligence">View Details →</Button>}
+              style={{ borderRadius: 16, height: "100%" }}
+            >
+              <Row gutter={16}>
+                <Col span={12} style={{ textAlign: "center" }}>
+                  <div style={{ marginBottom: 16 }}>
+                    <Progress
+                      type="circle"
+                      percent={100}
+                      format={() => (
+                        <div>
+                          <div style={{ fontSize: 28, fontWeight: 600 }}>
+                            {threats?.recentBlocked?.length || 0}
+                          </div>
+                          <div style={{ fontSize: 12, color: "#8C8C8C" }}>Blocked</div>
+                        </div>
+                      )}
+                      strokeColor="#FF5252"
+                      width={120}
+                    />
+                  </div>
+                  <Text type="secondary">Threats Today</Text>
+                </Col>
+                <Col span={12} style={{ textAlign: "center" }}>
+                  <div style={{ marginBottom: 16 }}>
+                    <Progress
+                      type="circle"
+                      percent={100}
+                      format={() => (
+                        <div>
+                          <div style={{ fontSize: 28, fontWeight: 600 }}>
+                            {metrics?.activeThreats || 0}
+                          </div>
+                          <div style={{ fontSize: 12, color: "#8C8C8C" }}>Active</div>
+                        </div>
+                      )}
+                      strokeColor="#FFC107"
+                      width={120}
+                    />
+                  </div>
+                  <Text type="secondary">Active Threats</Text>
+                </Col>
+              </Row>
+            </Card>
+          </motion.div>
+        </Col>
+
+        {/* Recent Scans */}
+        <Col xs={24}>
+          <motion.div custom={8} initial="hidden" animate="visible" variants={fadeSlide}>
+            <Card
+              title={
+                <Space>
+                  <LineChartOutlined style={{ color: "#1677FF" }} />
+                  <span>Recent Security Scans</span>
+                </Space>
+              }
+              extra={<Button type="link" onClick={() => setScanModalVisible(true)}>Start New →</Button>}
+              style={{ borderRadius: 16 }}
+            >
+              {scans.length > 0 ? (
+                <Row gutter={[16, 16]}>
+                  {scans.slice(0, 6).map((scan: any, idx: number) => (
+                    <Col xs={24} sm={12} lg={8} key={idx}>
+                      <div
+                        style={{
+                          padding: 16,
+                          background: "#FAFAFA",
+                          borderRadius: 12,
+                          border: "1px solid #F0F0F0",
+                        }}
+                      >
+                        <Space direction="vertical" style={{ width: "100%" }} size="small">
+                          <Text strong style={{ fontFamily: "monospace", fontSize: 13 }}>
+                            {scan.target}
+                          </Text>
+                          <Space>
+                            <Tag color="blue">{scan.scan_type}</Tag>
+                            <Tag color={scan.status === "completed" ? "green" : "orange"}>
+                              {scan.status}
+                            </Tag>
+                          </Space>
+                          {scan.security_score && (
+                            <Progress
+                              percent={scan.security_score}
+                              strokeColor={scan.security_score >= 80 ? "#00C853" : "#FFC107"}
+                              size="small"
+                            />
+                          )}
+                        </Space>
+                      </div>
+                    </Col>
+                  ))}
+                </Row>
+              ) : (
+                <div style={{ textAlign: "center", padding: "40px 0" }}>
+                  <Text type="secondary">No recent scans</Text>
+                  <br />
+                  <Button
+                    type="primary"
+                    style={{ marginTop: 16 }}
+                    onClick={() => setScanModalVisible(true)}
+                  >
+                    Start First Scan
+                  </Button>
+                </div>
+              )}
+            </Card>
+          </motion.div>
+        </Col>
+      </Row>
+
+      {/* ==================== START SCAN MODAL ==================== */}
+      <Modal
+        title="Start New Security Scan"
+        open={scanModalVisible}
+        onCancel={() => setScanModalVisible(false)}
+        footer={null}
+        width={500}
+      >
+        <Form form={form} onFinish={handleStartScan} layout="vertical" style={{ marginTop: 24 }}>
+          <Form.Item
+            label="Target URL"
+            name="target"
+            rules={[{ required: true, message: "Please enter target URL" }]}
+          >
+            <Input placeholder="https://api.example.com" size="large" />
+          </Form.Item>
+          <Form.Item
+            label="Scan Type"
+            name="scanType"
+            initialValue="comprehensive"
+            rules={[{ required: true }]}
+          >
+            <Select size="large">
+              <Option value="quick">Quick Scan (5-10 min)</Option>
+              <Option value="comprehensive">Comprehensive (15-30 min)</Option>
+              <Option value="deep">Deep Scan (30-60 min)</Option>
+              <Option value="owasp_top10">OWASP Top 10 (20-40 min)</Option>
+            </Select>
+          </Form.Item>
+          <Form.Item style={{ marginBottom: 0, textAlign: "right" }}>
+            <Space>
+              <Button onClick={() => setScanModalVisible(false)} size="large">
+                Cancel
+              </Button>
+              <Button type="primary" htmlType="submit" loading={submitting} size="large">
+                Start Scan
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+    </div>
+  );
+}

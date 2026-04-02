@@ -1,0 +1,485 @@
+/**
+ * Authentication Service
+ * Session validation, API key management, tenant authorization
+ */
+
+import { getServerSession } from "next-auth";
+import { database } from "../infrastructure/database";
+import { TenantId } from "../core/types";
+
+export interface AuthContext {
+  apiKey: string;
+  companyId: string;
+  tenantId: TenantId;
+  userId: string;
+  company?: {
+    company_name?: string;
+    daily_limit?: number;
+    stripe_customer_id?: string;
+    email?: string;
+    name?: string;
+  };
+  permissions: string[];
+  scopes: string[];
+  sessionId?: string;
+  expiresAt?: number;
+}
+
+export interface AuthenticationResult {
+  success: boolean;
+  context?: AuthContext;
+  error?: string;
+  retryAfter?: number;
+}
+
+export class AuthService {
+  static async validateSession(request?: Request): Promise<AuthContext | null> {
+    try {
+      const session = await getServerSession();
+
+      if (!session?.user?.email) {
+        return null;
+      }
+
+      // Get company/tenant info from database
+      const companyResult = await database.queryOne(
+        "SELECT * FROM companies WHERE email = $1 AND deleted_at IS NULL",
+        [session.user.email],
+      );
+
+      if (!companyResult) {
+        return null;
+      }
+
+      return {
+        apiKey: companyResult.api_key || "",
+        companyId: companyResult.id,
+        tenantId: companyResult.tenant_id as TenantId,
+        userId: session.user.email || companyResult.user_id,
+        company: {
+          company_name: companyResult.company_name,
+          daily_limit: companyResult.daily_limit,
+          stripe_customer_id: companyResult.stripe_customer_id,
+          email: companyResult.email,
+          name: companyResult.name,
+        },
+        permissions: companyResult.permissions || ["read", "write"],
+        scopes: companyResult.scopes || ["api:read", "api:write"],
+        sessionId: session.user.email,
+        expiresAt: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
+      };
+    } catch (error) {
+      console.error("Session validation failed:", (error as Error).message);
+      return null;
+    }
+  }
+
+  static async validateApiKey(apiKey: string): Promise<AuthContext | null> {
+    if (!apiKey || apiKey.length < 10) {
+      return null;
+    }
+
+    try {
+      const result = await database.queryOne(
+        `SELECT k.*, u.company_id, u.first_name, u.last_name 
+         FROM api_keys k 
+         JOIN users u ON k.customer_email = u.email 
+         WHERE k.key = $1 AND k.is_active = true`,
+        [apiKey],
+      );
+
+      if (!result) {
+        return null;
+      }
+
+      // Use the user's company_id as tenant_id
+      const tenantId = result.company_id.toString() as TenantId;
+
+      return {
+        apiKey: result.key,
+        companyId: result.company_id.toString(),
+        tenantId: tenantId,
+        userId: result.customer_email,
+        company: {
+          company_name: result.customer_name,
+          daily_limit: result.daily_limit,
+          email: result.customer_email,
+          name: result.customer_name,
+        },
+        permissions: ["read", "write"],
+        scopes: ["api:read", "api:write"],
+        expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+      };
+    } catch (error) {
+      console.error("API key validation failed:", (error as Error).message);
+      return null;
+    }
+  }
+
+  static async validateBearerToken(
+    authHeader: string,
+  ): Promise<AuthContext | null> {
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return null;
+    }
+
+    const token = authHeader.substring(7);
+    return this.validateApiKey(token);
+  }
+
+  static async authenticateRequest(
+    request: Request,
+  ): Promise<AuthenticationResult> {
+    try {
+      const authHeader = request.headers.get("authorization");
+      const apiKeyHeader = request.headers.get("x-api-key");
+
+      let context: AuthContext | null = null;
+
+      // Try API key authentication first
+      if (apiKeyHeader) {
+        context = await this.validateApiKey(apiKeyHeader);
+      } else if (authHeader) {
+        context = await this.validateBearerToken(authHeader);
+      } else {
+        // Fall back to session authentication
+        context = await this.validateSession(request);
+      }
+
+      if (!context) {
+        return {
+          success: false,
+          error: "Authentication failed - invalid credentials",
+        };
+      }
+
+      // Record authentication success
+      await this.recordAuthEvent(context.tenantId, "authentication_success", {
+        method: apiKeyHeader
+          ? "api_key"
+          : authHeader
+            ? "bearer_token"
+            : "session",
+        userId: context.userId,
+        timestamp: Date.now(),
+      });
+
+      return {
+        success: true,
+        context,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: `Authentication error: ${(error as Error).message}`,
+      };
+    }
+  }
+
+  static async checkPermission(
+    context: AuthContext,
+    permission: string,
+  ): Promise<boolean> {
+    if (!context.permissions) {
+      return false;
+    }
+
+    // Admin users have all permissions
+    if (context.permissions.includes("admin")) {
+      return true;
+    }
+
+    // Check exact permission match
+    if (context.permissions.includes(permission)) {
+      return true;
+    }
+
+    // Check wildcard permissions
+    const permissionParts = permission.split(":");
+    for (const userPerm of context.permissions) {
+      if (userPerm.endsWith("*")) {
+        const userPermPrefix = userPerm.slice(0, -1);
+        if (permission.startsWith(userPermPrefix)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  static async checkScope(
+    context: AuthContext,
+    scope: string,
+  ): Promise<boolean> {
+    if (!context.scopes) {
+      return false;
+    }
+
+    return context.scopes.includes(scope) || context.scopes.includes("*");
+  }
+
+  static async requirePermission(
+    context: AuthContext,
+    permission: string,
+  ): Promise<void> {
+    const hasPermission = await this.checkPermission(context, permission);
+
+    if (!hasPermission) {
+      throw new Error(`Insufficient permissions: ${permission} required`);
+    }
+  }
+
+  static async createApiKey(
+    tenantId: TenantId,
+    userId: string,
+    permissions: string[] = [],
+  ): Promise<string> {
+    const apiKey = this.generateApiKey();
+
+    await database.query(
+      `UPDATE companies 
+       SET api_key = $1, permissions = $2, updated_at = NOW() 
+       WHERE tenant_id = $3 AND user_id = $4`,
+      [apiKey, JSON.stringify(permissions), tenantId, userId],
+    );
+
+    await this.recordAuthEvent(tenantId, "api_key_created", {
+      userId,
+      permissions,
+      timestamp: Date.now(),
+    });
+
+    return apiKey;
+  }
+
+  static async revokeApiKey(tenantId: TenantId, userId: string): Promise<void> {
+    await database.query(
+      `UPDATE companies 
+       SET api_key = NULL, updated_at = NOW() 
+       WHERE tenant_id = $1 AND user_id = $2`,
+      [tenantId, userId],
+    );
+
+    await this.recordAuthEvent(tenantId, "api_key_revoked", {
+      userId,
+      timestamp: Date.now(),
+    });
+  }
+
+  static async updatePermissions(
+    tenantId: TenantId,
+    userId: string,
+    permissions: string[],
+  ): Promise<void> {
+    await database.query(
+      `UPDATE companies 
+       SET permissions = $1, updated_at = NOW() 
+       WHERE tenant_id = $2 AND user_id = $3`,
+      [JSON.stringify(permissions), tenantId, userId],
+    );
+
+    await this.recordAuthEvent(tenantId, "permissions_updated", {
+      userId,
+      permissions,
+      timestamp: Date.now(),
+    });
+  }
+
+  static async checkDailyUsage(tenantId: TenantId): Promise<number> {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const result = await database.queryOne(
+      `SELECT COUNT(*) as usage_count 
+       FROM api_usage_metrics 
+       WHERE tenant_id = $1 AND timestamp >= $2`,
+      [tenantId, startOfDay.toISOString()],
+    );
+
+    return parseInt(result?.usage_count || "0");
+  }
+
+  static async recordUsage(
+    tenantId: TenantId,
+    endpointId: string,
+    method: string,
+  ): Promise<void> {
+    await database.query(
+      `INSERT INTO api_usage_metrics (tenant_id, endpoint_id, timestamp, request_count, response_time, status_code, source_ip)
+       VALUES ($1, $2, $3, 1, 0, 200, '127.0.0.1')`,
+      [tenantId, endpointId, Date.now()],
+    );
+  }
+
+  static async getCompanyDetails(tenantId: TenantId): Promise<any> {
+    return database.queryOne(
+      "SELECT * FROM companies WHERE tenant_id = $1 AND deleted_at IS NULL",
+      [tenantId],
+    );
+  }
+
+  static async updateCompanyDetails(
+    tenantId: TenantId,
+    updates: any,
+  ): Promise<void> {
+    const setClauses = Object.keys(updates)
+      .map((key, index) => `${key} = $${index + 2}`)
+      .join(", ");
+    const values = [tenantId, ...Object.values(updates)];
+
+    await database.query(
+      `UPDATE companies SET ${setClauses}, updated_at = NOW() WHERE tenant_id = $1`,
+      values,
+    );
+  }
+
+  private static generateApiKey(): string {
+    const prefix = "apigov";
+    const chars =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    let result = "";
+
+    for (let i = 0; i < 32; i++) {
+      result += chars.charAt(
+        crypto.getRandomValues(new Uint32Array(1))[0] % chars.length,
+      );
+    }
+
+    return `${prefix}_${result}`;
+  }
+
+  private static async recordAuthEvent(
+    tenantId: TenantId,
+    eventType: string,
+    metadata: any,
+  ): Promise<void> {
+    try {
+      await database.query(
+        `INSERT INTO audit_events (tenant_id, event_type, metadata, created_at)
+         VALUES ($1, $2, $3, NOW())`,
+        [tenantId, eventType, JSON.stringify(metadata)],
+      );
+    } catch (error) {
+      // Don't fail auth operations if audit logging fails
+      console.warn("Failed to record auth event:", (error as Error).message);
+    }
+  }
+
+  // Middleware helper for Next.js API routes
+  static createAuthMiddleware(requiredPermission?: string) {
+    return async (request: Request): Promise<AuthContext> => {
+      const authResult = await this.authenticateRequest(request);
+
+      if (!authResult.success || !authResult.context) {
+        throw new Error(authResult.error || "Authentication required");
+      }
+
+      if (requiredPermission) {
+        await this.requirePermission(authResult.context, requiredPermission);
+      }
+
+      return authResult.context;
+    };
+  }
+
+  // Session management
+  static async refreshSession(context: AuthContext): Promise<AuthContext> {
+    const refreshed = await this.validateApiKey(context.apiKey);
+
+    if (!refreshed) {
+      throw new Error("Session refresh failed");
+    }
+
+    return {
+      ...refreshed,
+      sessionId: context.sessionId,
+      expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+    };
+  }
+
+  static async logout(context: AuthContext): Promise<void> {
+    await this.recordAuthEvent(context.tenantId, "logout", {
+      userId: context.userId,
+      sessionId: context.sessionId,
+      timestamp: Date.now(),
+    });
+  }
+
+  // Company/tenant management
+  static async createTenant(companyData: {
+    company_name: string;
+    email: string;
+    user_id: string;
+    daily_limit?: number;
+  }): Promise<{ tenantId: TenantId; apiKey: string }> {
+    const tenantId = crypto.randomUUID() as TenantId;
+    const apiKey = this.generateApiKey();
+
+    await database.query(
+      `INSERT INTO companies (id, tenant_id, company_name, email, user_id, api_key, daily_limit, active, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, true, NOW())`,
+      [
+        `company_${Date.now()}`,
+        tenantId,
+        companyData.company_name,
+        companyData.email,
+        companyData.user_id,
+        apiKey,
+        companyData.daily_limit || 10000,
+      ],
+    );
+
+    await this.recordAuthEvent(tenantId, "tenant_created", {
+      companyName: companyData.company_name,
+      email: companyData.email,
+      userId: companyData.user_id,
+      timestamp: Date.now(),
+    });
+
+    return { tenantId, apiKey };
+  }
+
+  static async deleteTenant(tenantId: TenantId): Promise<void> {
+    await database.query(
+      "UPDATE companies SET deleted_at = NOW() WHERE tenant_id = $1",
+      [tenantId],
+    );
+
+    await this.recordAuthEvent(tenantId, "tenant_deleted", {
+      timestamp: Date.now(),
+    });
+  }
+}
+
+// Export default auth methods for easy importing
+export const {
+  validateSession,
+  validateApiKey,
+  authenticateRequest,
+  checkPermission,
+  createAuthMiddleware,
+} = AuthService;
+
+// Helper function for API routes
+export async function requireAuth(
+  request: Request,
+  permission?: string,
+): Promise<AuthContext> {
+  const authResult = await AuthService.authenticateRequest(request);
+
+  if (!authResult.success || !authResult.context) {
+    throw new Error(authResult.error || "Authentication required");
+  }
+
+  if (
+    permission &&
+    !(await AuthService.checkPermission(authResult.context, permission))
+  ) {
+    throw new Error(`Permission denied: ${permission} required`);
+  }
+
+  return authResult.context;
+}
+
+export default AuthService;

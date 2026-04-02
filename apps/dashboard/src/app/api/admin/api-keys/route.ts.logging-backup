@@ -1,0 +1,143 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { database } from '../../../../infrastructure/database'
+
+export async function GET(request: NextRequest) {
+  const adminId = request.headers.get('x-admin-id')
+  const adminRole = request.headers.get('x-admin-role')
+  
+  if (!adminId || adminRole !== 'admin') {
+    return NextResponse.json({ error: 'Admin authentication required' }, { status: 401 })
+  }
+
+  try {
+    // Get real API key usage data
+    const apiKeysWithUsage = await database.queryMany(
+      `SELECT 
+         ak.key, ak.customer_name, ak.customer_email, ak.daily_limit, ak.is_active, ak.created_at,
+         COUNT(au.id) as total_calls,
+         COUNT(CASE WHEN au.timestamp >= NOW() - INTERVAL '24 hours' THEN 1 END) as calls_24h,
+         COUNT(CASE WHEN au.timestamp >= NOW() - INTERVAL '7 days' THEN 1 END) as calls_7d,
+         COUNT(CASE WHEN au.timestamp >= NOW() - INTERVAL '30 days' THEN 1 END) as calls_30d,
+         MAX(au.timestamp) as last_used,
+         AVG(au.response_time) as avg_response_time
+       FROM api_keys ak
+       LEFT JOIN api_usage au ON ak.key = au.api_key
+       GROUP BY ak.key, ak.customer_name, ak.customer_email, ak.daily_limit, ak.is_active, ak.created_at
+       ORDER BY total_calls DESC`,
+      []
+    )
+
+    // Get API key statistics
+    const keyStats = await database.queryOne(
+      `SELECT 
+         COUNT(*) as total_keys,
+         COUNT(CASE WHEN is_active = true THEN 1 END) as active_keys,
+         COUNT(CASE WHEN created_at >= NOW() - INTERVAL '30 days' THEN 1 END) as new_keys_30d,
+         AVG(daily_limit) as avg_daily_limit
+       FROM api_keys`,
+      []
+    )
+
+    // Get usage distribution
+    const usageDistribution = await database.queryMany(
+      `SELECT 
+         CASE 
+           WHEN total_calls = 0 THEN 'No usage'
+           WHEN total_calls < 1000 THEN 'Low usage (< 1K)'
+           WHEN total_calls < 10000 THEN 'Medium usage (1K-10K)'
+           WHEN total_calls < 100000 THEN 'High usage (10K-100K)'
+           ELSE 'Very high usage (100K+)'
+         END as usage_tier,
+         COUNT(*) as key_count
+       FROM (
+         SELECT ak.key, COUNT(au.id) as total_calls
+         FROM api_keys ak
+         LEFT JOIN api_usage au ON ak.key = au.api_key
+         GROUP BY ak.key
+       ) usage_summary
+       GROUP BY usage_tier
+       ORDER BY 
+         CASE usage_tier
+           WHEN 'No usage' THEN 1
+           WHEN 'Low usage (< 1K)' THEN 2
+           WHEN 'Medium usage (1K-10K)' THEN 3
+           WHEN 'High usage (10K-100K)' THEN 4
+           WHEN 'Very high usage (100K+)' THEN 5
+         END`,
+      []
+    )
+
+    // Get top consumers by usage
+    const topConsumers = await database.queryMany(
+      `SELECT 
+         ak.customer_name, ak.customer_email, 
+         COUNT(au.id) as total_calls,
+         COUNT(CASE WHEN au.timestamp >= NOW() - INTERVAL '30 days' THEN 1 END) as calls_30d
+       FROM api_keys ak
+       LEFT JOIN api_usage au ON ak.key = au.api_key
+       GROUP BY ak.customer_name, ak.customer_email
+       ORDER BY total_calls DESC
+       LIMIT 10`,
+      []
+    )
+
+    const formattedApiKeys = apiKeysWithUsage.map(key => ({
+      key: key.key,
+      customerName: key.customer_name,
+      customerEmail: key.customer_email,
+      dailyLimit: key.daily_limit,
+      isActive: key.is_active,
+      createdAt: key.created_at,
+      usage: {
+        totalCalls: parseInt(key.total_calls || '0'),
+        calls24h: parseInt(key.calls_24h || '0'),
+        calls7d: parseInt(key.calls_7d || '0'),
+        calls30d: parseInt(key.calls_30d || '0'),
+        lastUsed: key.last_used,
+        averageResponseTime: key.avg_response_time ? Math.round(parseFloat(key.avg_response_time)) : null
+      },
+      timeAgo: getTimeAgo(key.created_at)
+    }))
+
+    return NextResponse.json({
+      success: true,
+      apiKeys: formattedApiKeys,
+      statistics: {
+        totalKeys: parseInt(keyStats?.total_keys || '0'),
+        activeKeys: parseInt(keyStats?.active_keys || '0'),
+        newKeys30d: parseInt(keyStats?.new_keys_30d || '0'),
+        averageDailyLimit: keyStats?.avg_daily_limit ? Math.round(parseFloat(keyStats.avg_daily_limit)) : null
+      },
+      usageDistribution: usageDistribution.map(dist => ({
+        usageTier: dist.usage_tier,
+        keyCount: parseInt(dist.key_count || '0')
+      })),
+      topConsumers: topConsumers.map(consumer => ({
+        customerName: consumer.customer_name,
+        customerEmail: consumer.customer_email,
+        totalCalls: parseInt(consumer.total_calls || '0'),
+        calls30d: parseInt(consumer.calls_30d || '0')
+      }))
+    })
+
+  } catch (error) {
+    console.error('Admin API keys error:', error)
+    return NextResponse.json({ error: 'Failed to fetch API keys data' }, { status: 500 })
+  }
+}
+
+function getTimeAgo(dateString: string): string {
+  if (!dateString) return 'Never'
+  
+  const date = new Date(dateString)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+  
+  if (diffDays === 0) return 'Today'
+  if (diffDays === 1) return '1 day ago'
+  if (diffDays < 7) return `${diffDays} days ago`
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`
+  if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`
+  return `${Math.floor(diffDays / 365)} years ago`
+}

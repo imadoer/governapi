@@ -1,0 +1,40 @@
+
+> dashboard@0.1.0 build
+> next build
+
+ ⚠ outputFileTracingRoot should be absolute, using: /home/aigov/governapi-restored
+   ▲ Next.js 15.5.2
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+Failed to compile.
+
+./src/app/api/apis/route.ts
+Module not found: Can't resolve '../../../../lib/database/connection'
+
+https://nextjs.org/docs/messages/module-not-found
+
+./src/app/api/customer/compliance-report/route.ts
+Module not found: Can't resolve '../../../services/auth'
+
+https://nextjs.org/docs/messages/module-not-found
+
+./src/app/api/policies/route.ts
+Module not found: Can't resolve '../../../../lib/database/connection'
+
+https://nextjs.org/docs/messages/module-not-found
+
+./src/app/api/reports/route.ts
+Module not found: Can't resolve '../../../../lib/database/connection'
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+> Build failed because of webpack errors
+npm error Lifecycle script `build` failed with error:
+npm error code 1
+npm error path /home/aigov/governapi-restored/apps/dashboard
+npm error workspace dashboard@0.1.0
+npm error location /home/aigov/governapi-restored/apps/dashboard
+npm error command failed
+npm error command sh -c next build

@@ -1,0 +1,213 @@
+import { logger } from "../../../../utils/logging/logger";
+import { NextRequest, NextResponse } from "next/server";
+import { database } from "../../../../infrastructure/database";
+
+export async function POST(request: NextRequest) {
+  const tenantId = request.headers.get("x-tenant-id");
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: "Authentication required" },
+      { status: 401 },
+    );
+  }
+
+  try {
+    const body = await request.json();
+    const { url, content, name } = body;
+
+    if (!url && !content) {
+      return NextResponse.json(
+        { error: "Either URL or OpenAPI content is required" },
+        { status: 400 },
+      );
+    }
+
+    let openApiSpec: any;
+    let specSource: string;
+
+    // Get OpenAPI spec from URL or content
+    if (url) {
+      try {
+        // Validate URL format
+        const parsedUrl = new URL(url);
+        if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+          return NextResponse.json(
+            { error: "Invalid URL protocol. Only HTTP and HTTPS are allowed" },
+            { status: 400 },
+          );
+        }
+
+        // Fetch with AbortController for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+        const response = await fetch(url, {
+          headers: { Accept: "application/json, application/yaml, text/yaml" },
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          return NextResponse.json(
+            {
+              error: `Failed to fetch OpenAPI spec: ${response.status} ${response.statusText}`,
+            },
+            { status: 400 },
+          );
+        }
+
+        const specText = await response.text();
+        specSource = url;
+
+        // Parse JSON or YAML
+        try {
+          openApiSpec = JSON.parse(specText);
+        } catch {
+          return NextResponse.json(
+            { error: "Invalid OpenAPI format. Must be valid JSON" },
+            { status: 400 },
+          );
+        }
+      } catch (error) {
+        if (error.name === "AbortError") {
+          return NextResponse.json(
+            { error: "Request timeout. OpenAPI spec fetch took too long" },
+            { status: 408 },
+          );
+        }
+        return NextResponse.json(
+          { error: "Failed to fetch OpenAPI specification from URL" },
+          { status: 400 },
+        );
+      }
+    } else {
+      // Use provided content
+      try {
+        openApiSpec =
+          typeof content === "string" ? JSON.parse(content) : content;
+        specSource = "uploaded_content";
+      } catch {
+        return NextResponse.json(
+          { error: "Invalid OpenAPI content format" },
+          { status: 400 },
+        );
+      }
+    }
+
+    // Validate OpenAPI spec structure
+    if (!openApiSpec.openapi && !openApiSpec.swagger) {
+      return NextResponse.json(
+        { error: "Invalid OpenAPI specification. Missing version field" },
+        { status: 400 },
+      );
+    }
+
+    if (!openApiSpec.paths || typeof openApiSpec.paths !== "object") {
+      return NextResponse.json(
+        { error: "Invalid OpenAPI specification. Missing or invalid paths" },
+        { status: 400 },
+      );
+    }
+
+    // Extract real API information from spec
+    const baseUrl =
+      openApiSpec.servers?.[0]?.url ||
+      (openApiSpec.host
+        ? `https://${openApiSpec.host}${openApiSpec.basePath || ""}`
+        : null);
+
+    if (!baseUrl) {
+      return NextResponse.json(
+        { error: "No server URL found in OpenAPI specification" },
+        { status: 400 },
+      );
+    }
+
+    // Create import record
+    const importRecord = await database.queryOne(
+      `INSERT INTO api_imports (tenant_id, name, source_url, base_url, spec_version, import_type, status, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) RETURNING *`,
+      [
+        tenantId,
+        name || openApiSpec.info?.title || "Imported API",
+        specSource,
+        baseUrl,
+        openApiSpec.openapi || openApiSpec.swagger,
+        "openapi",
+        "processing",
+      ],
+    );
+
+    // Extract and create API endpoints
+    const endpoints = [];
+    for (const [path, pathItem] of Object.entries(openApiSpec.paths)) {
+      if (pathItem && typeof pathItem === "object") {
+        for (const [method, operation] of Object.entries(pathItem)) {
+          if (
+            [
+              "get",
+              "post",
+              "put",
+              "patch",
+              "delete",
+              "head",
+              "options",
+            ].includes(method) &&
+            operation
+          ) {
+            const endpoint = await database.queryOne(
+              `INSERT INTO apis (tenant_id, name, url, method, description, import_id, status, created_at)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) RETURNING *`,
+              [
+                tenantId,
+                (operation as any).operationId ||
+                  `${method.toUpperCase()} ${path}`,
+                `${baseUrl}${path}`,
+                method.toUpperCase(),
+                (operation as any).summary ||
+                  (operation as any).description ||
+                  "",
+                importRecord.id,
+                "active",
+              ],
+            );
+            endpoints.push(endpoint);
+          }
+        }
+      }
+    }
+
+    // Update import status
+    await database.query(
+      `UPDATE api_imports SET status = $1, endpoints_count = $2, completed_at = NOW() WHERE id = $3`,
+      ["completed", endpoints.length, importRecord.id],
+    );
+
+    return NextResponse.json({
+      success: true,
+      import: {
+        id: importRecord.id,
+        name: importRecord.name,
+        base_url: baseUrl,
+        spec_version: openApiSpec.openapi || openApiSpec.swagger,
+        endpoints_imported: endpoints.length,
+        status: "completed",
+      },
+      endpoints: endpoints.map((ep) => ({
+        id: ep.id,
+        name: ep.name,
+        url: ep.url,
+        method: ep.method,
+      })),
+    });
+  } catch (error) {
+    logger.error("OpenAPI import error:", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json(
+      { error: "Failed to import OpenAPI specification" },
+      { status: 500 },
+    );
+  }
+}

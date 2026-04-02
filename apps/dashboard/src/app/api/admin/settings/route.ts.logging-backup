@@ -1,0 +1,39 @@
+import { NextRequest, NextResponse } from 'next/server'
+
+export async function POST(request: NextRequest) {
+  try {
+    const settings = await request.json()
+    
+    // In a real app, you'd save these to a database
+    // For now, just validate and return success
+    console.log('Settings to save:', settings)
+    
+    // Simulate some processing time
+    await new Promise(resolve => setTimeout(resolve, 500))
+    
+    return NextResponse.json({ success: true, message: 'Settings saved successfully' })
+  } catch (error) {
+    console.error('Settings API error:', error)
+    return NextResponse.json({ success: false, error: 'Failed to save settings' }, { status: 500 })
+  }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    // Return current settings (in real app, load from database)
+    const currentSettings = {
+      rateLimitEnabled: true,
+      globalRateLimit: 1000,
+      threatDetectionEnabled: true,
+      autoBlockEnabled: true,
+      sessionTimeout: 24,
+      logRetention: 90,
+      timezone: 'UTC'
+    }
+    
+    return NextResponse.json({ success: true, settings: currentSettings })
+  } catch (error) {
+    console.error('Settings API error:', error)
+    return NextResponse.json({ success: false, error: 'Failed to load settings' }, { status: 500 })
+  }
+}

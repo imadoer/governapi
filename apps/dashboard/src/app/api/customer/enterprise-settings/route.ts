@@ -1,0 +1,256 @@
+import { logger } from "../../../../utils/logging/logger";
+import { NextRequest, NextResponse } from "next/server";
+import { database } from "../../../../infrastructure/database";
+
+export async function GET(request: NextRequest) {
+  const tenantId = request.headers.get("x-tenant-id");
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: "Authentication required" },
+      { status: 401 },
+    );
+  }
+
+  try {
+    // Get enterprise settings for the tenant
+    const enterpriseSettings = await database.queryOne(
+      `SELECT * FROM enterprise_settings WHERE tenant_id = $1`,
+      [tenantId],
+    );
+
+    // Get company subscription info
+    const companyInfo = await database.queryOne(
+      `SELECT subscription_plan, subscription_status, company_name 
+       FROM companies WHERE id = $1`,
+      [tenantId],
+    );
+
+    if (!companyInfo || companyInfo.subscription_plan !== "enterprise") {
+      return NextResponse.json(
+        {
+          error: "Enterprise subscription required",
+          currentPlan: companyInfo?.subscription_plan || "unknown",
+        },
+        { status: 403 },
+      );
+    }
+
+    // Default settings if none exist
+    const settings = enterpriseSettings || {
+      sso_enabled: false,
+      saml_config: null,
+      ip_whitelist: [],
+      custom_branding: false,
+      audit_logging: true,
+      data_retention_days: 90,
+      api_rate_limits: {
+        requests_per_minute: 1000,
+        burst_limit: 100,
+      },
+      security_policies: {
+        password_policy: "standard",
+        mfa_required: false,
+        session_timeout: 3600,
+      },
+    };
+
+    // Get usage statistics
+    const usageStats = await database.queryOne(
+      `SELECT 
+         COUNT(DISTINCT u.id) as total_users,
+         COUNT(DISTINCT a.id) as total_apis,
+         COUNT(sr.id) as total_scans_30d,
+         COUNT(au.id) as total_requests_30d
+       FROM companies c
+       LEFT JOIN users u ON c.id = u.company_id
+       LEFT JOIN apis a ON c.id = a.tenant_id
+       LEFT JOIN scan_results sr ON c.id = sr.tenant_id AND sr.created_at >= NOW() - INTERVAL '30 days'
+       LEFT JOIN api_usage au ON c.id = au.tenant_id AND au.timestamp >= NOW() - INTERVAL '30 days'
+       WHERE c.id = $1
+       GROUP BY c.id`,
+      [tenantId],
+    );
+
+    return NextResponse.json({
+      success: true,
+      enterpriseSettings: {
+        ssoEnabled: settings.sso_enabled,
+        samlConfig: settings.saml_config,
+        ipWhitelist: Array.isArray(settings.ip_whitelist)
+          ? settings.ip_whitelist
+          : [],
+        customBranding: settings.custom_branding,
+        auditLogging: settings.audit_logging,
+        dataRetentionDays: settings.data_retention_days,
+        apiRateLimits:
+          typeof settings.api_rate_limits === "string"
+            ? JSON.parse(settings.api_rate_limits)
+            : settings.api_rate_limits,
+        securityPolicies:
+          typeof settings.security_policies === "string"
+            ? JSON.parse(settings.security_policies)
+            : settings.security_policies,
+        lastUpdated: settings.updated_at || settings.created_at,
+      },
+      companyInfo: {
+        name: companyInfo.company_name,
+        subscriptionPlan: companyInfo.subscription_plan,
+        subscriptionStatus: companyInfo.subscription_status,
+      },
+      usage: {
+        totalUsers: parseInt(usageStats?.total_users || "0"),
+        totalApis: parseInt(usageStats?.total_apis || "0"),
+        scansLast30Days: parseInt(usageStats?.total_scans_30d || "0"),
+        requestsLast30Days: parseInt(usageStats?.total_requests_30d || "0"),
+      },
+    });
+  } catch (error) {
+    logger.error("Enterprise settings API error:", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json(
+      { error: "Failed to fetch enterprise settings" },
+      { status: 500 },
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  const tenantId = request.headers.get("x-tenant-id");
+  const userId = request.headers.get("x-user-id");
+
+  if (!tenantId) {
+    return NextResponse.json(
+      { error: "Authentication required" },
+      { status: 401 },
+    );
+  }
+
+  try {
+    const settings = await request.json();
+
+    // Verify enterprise subscription
+    const companyInfo = await database.queryOne(
+      `SELECT subscription_plan FROM companies WHERE id = $1`,
+      [tenantId],
+    );
+
+    if (!companyInfo || companyInfo.subscription_plan !== "enterprise") {
+      return NextResponse.json(
+        {
+          error: "Enterprise subscription required",
+        },
+        { status: 403 },
+      );
+    }
+
+    // Validate settings structure
+    const validatedSettings = {
+      sso_enabled: Boolean(settings.ssoEnabled),
+      saml_config: settings.samlConfig,
+      ip_whitelist: Array.isArray(settings.ipWhitelist)
+        ? settings.ipWhitelist
+        : [],
+      custom_branding: Boolean(settings.customBranding),
+      audit_logging: Boolean(settings.auditLogging !== false), // Default to true
+      data_retention_days: Math.max(
+        30,
+        Math.min(365, parseInt(settings.dataRetentionDays) || 90),
+      ),
+      api_rate_limits: {
+        requests_per_minute: Math.max(
+          100,
+          Math.min(
+            10000,
+            parseInt(settings.apiRateLimits?.requestsPerMinute) || 1000,
+          ),
+        ),
+        burst_limit: Math.max(
+          10,
+          Math.min(1000, parseInt(settings.apiRateLimits?.burstLimit) || 100),
+        ),
+      },
+      security_policies: {
+        password_policy: ["basic", "standard", "strict"].includes(
+          settings.securityPolicies?.passwordPolicy,
+        )
+          ? settings.securityPolicies.passwordPolicy
+          : "standard",
+        mfa_required: Boolean(settings.securityPolicies?.mfaRequired),
+        session_timeout: Math.max(
+          300,
+          Math.min(
+            86400,
+            parseInt(settings.securityPolicies?.sessionTimeout) || 3600,
+          ),
+        ),
+      },
+    };
+
+    // Upsert enterprise settings
+    const updatedSettings = await database.queryOne(
+      `INSERT INTO enterprise_settings (
+         tenant_id, sso_enabled, saml_config, ip_whitelist, custom_branding, 
+         audit_logging, data_retention_days, api_rate_limits, security_policies, 
+         updated_by, created_at, updated_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+       ON CONFLICT (tenant_id) 
+       DO UPDATE SET
+         sso_enabled = EXCLUDED.sso_enabled,
+         saml_config = EXCLUDED.saml_config,
+         ip_whitelist = EXCLUDED.ip_whitelist,
+         custom_branding = EXCLUDED.custom_branding,
+         audit_logging = EXCLUDED.audit_logging,
+         data_retention_days = EXCLUDED.data_retention_days,
+         api_rate_limits = EXCLUDED.api_rate_limits,
+         security_policies = EXCLUDED.security_policies,
+         updated_by = EXCLUDED.updated_by,
+         updated_at = NOW()
+       RETURNING *`,
+      [
+        tenantId,
+        validatedSettings.sso_enabled,
+        JSON.stringify(validatedSettings.saml_config),
+        JSON.stringify(validatedSettings.ip_whitelist),
+        validatedSettings.custom_branding,
+        validatedSettings.audit_logging,
+        validatedSettings.data_retention_days,
+        JSON.stringify(validatedSettings.api_rate_limits),
+        JSON.stringify(validatedSettings.security_policies),
+        userId || "system",
+      ],
+    );
+
+    return NextResponse.json({
+      success: true,
+      enterpriseSettings: {
+        ssoEnabled: updatedSettings.sso_enabled,
+        samlConfig: updatedSettings.saml_config,
+        ipWhitelist: Array.isArray(updatedSettings.ip_whitelist)
+          ? updatedSettings.ip_whitelist
+          : [],
+        customBranding: updatedSettings.custom_branding,
+        auditLogging: updatedSettings.audit_logging,
+        dataRetentionDays: updatedSettings.data_retention_days,
+        apiRateLimits:
+          typeof updatedSettings.api_rate_limits === "string"
+            ? JSON.parse(updatedSettings.api_rate_limits)
+            : updatedSettings.api_rate_limits,
+        securityPolicies:
+          typeof updatedSettings.security_policies === "string"
+            ? JSON.parse(updatedSettings.security_policies)
+            : updatedSettings.security_policies,
+        savedAt: updatedSettings.updated_at,
+      },
+      message: "Enterprise settings saved successfully",
+    });
+  } catch (error) {
+    logger.error("Enterprise settings save error:", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json(
+      { error: "Failed to save enterprise settings" },
+      { status: 500 },
+    );
+  }
+}

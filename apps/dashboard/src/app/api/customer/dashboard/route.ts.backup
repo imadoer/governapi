@@ -1,0 +1,201 @@
+import { logger } from "../../../../utils/logging/logger"
+import { NextRequest, NextResponse } from 'next/server'
+import { database } from '../../../../infrastructure/database'
+
+export async function GET(request: NextRequest) {
+  const tenantId = request.headers.get('x-tenant-id')
+  if (!tenantId) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+  }
+
+  try {
+    // Get comprehensive dashboard data
+    const [
+      apiStats,
+      scanStats,
+      threatStats,
+      recentActivity,
+      securityScore,
+      upcomingScans
+    ] = await Promise.all([
+      // API statistics
+      database.queryOne(
+        `SELECT 
+           COUNT(*) as total_apis,
+           COUNT(CASE WHEN status = 'active' THEN 1 END) as active_apis,
+           COUNT(CASE WHEN last_scanned IS NOT NULL THEN 1 END) as monitored_apis,
+           AVG(uptime_percentage) as avg_uptime
+         FROM apis WHERE tenant_id = $1`,
+        [tenantId]
+      ),
+
+      // Scan statistics
+      database.queryOne(
+        `SELECT 
+           COUNT(*) as total_scans,
+           COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_scans,
+           COUNT(CASE WHEN created_at >= NOW() - INTERVAL '7 days' THEN 1 END) as scans_7d,
+           AVG(security_score) as avg_security_score
+         FROM scan_results WHERE tenant_id = $1`,
+        [tenantId]
+      ),
+
+      // Threat statistics
+      database.queryOne(
+        `SELECT 
+           COUNT(*) as total_threats,
+           COUNT(CASE WHEN status = 'blocked' THEN 1 END) as blocked_threats,
+           COUNT(CASE WHEN severity = 'CRITICAL' THEN 1 END) as critical_threats,
+           COUNT(CASE WHEN created_at >= NOW() - INTERVAL '24 hours' THEN 1 END) as threats_24h
+         FROM threat_events WHERE tenant_id = $1`,
+        [tenantId]
+      ),
+
+      // Recent activity
+      database.queryMany(
+        `SELECT 
+           'scan' as activity_type, target as subject, status, created_at
+         FROM scan_results 
+         WHERE tenant_id = $1
+         UNION ALL
+         SELECT 
+           'threat' as activity_type, source_ip as subject, status, created_at
+         FROM threat_events 
+         WHERE tenant_id = $1
+         UNION ALL
+         SELECT 
+           'api' as activity_type, name as subject, status, created_at
+         FROM apis 
+         WHERE tenant_id = $1
+         ORDER BY created_at DESC
+         LIMIT 10`,
+        [tenantId]
+      ),
+
+      // Overall security score calculation
+      database.queryOne(
+        `SELECT 
+           AVG(sr.security_score) as scan_avg,
+           COUNT(v.id) as total_vulns,
+           COUNT(CASE WHEN v.severity = 'CRITICAL' THEN 1 END) as critical_vulns
+         FROM scan_results sr
+         LEFT JOIN vulnerabilities v ON sr.tenant_id = v.tenant_id
+         WHERE sr.tenant_id = $1 AND sr.security_score IS NOT NULL`,
+        [tenantId]
+      ),
+
+      // Upcoming scheduled scans
+      database.queryMany(
+        `SELECT id, name, target_url, scan_type, next_run
+         FROM scheduled_scans 
+         WHERE tenant_id = $1 AND is_active = true AND next_run > NOW()
+         ORDER BY next_run ASC
+         LIMIT 5`,
+        [tenantId]
+      )
+    ])
+
+    // Calculate overall security score
+    const baseScanScore = securityScore?.scan_avg ? parseFloat(securityScore.scan_avg) : 50
+    const criticalVulns = parseInt(securityScore?.critical_vulns || '0')
+    const totalVulns = parseInt(securityScore?.total_vulns || '0')
+    
+    let overallScore = baseScanScore
+    if (criticalVulns > 0) {
+      overallScore = Math.max(overallScore - (criticalVulns * 10), 0)
+    }
+    if (totalVulns > 10) {
+      overallScore = Math.max(overallScore - ((totalVulns - 10) * 2), 0)
+    }
+
+    // Get alerts and recommendations
+    const alerts = []
+    const recommendations = []
+
+    if (criticalVulns > 0) {
+      alerts.push({
+        type: 'critical',
+        message: `${criticalVulns} critical vulnerabilities require immediate attention`,
+        action: 'Review vulnerabilities'
+      })
+    }
+
+    if (parseInt(apiStats?.monitored_apis || '0') < parseInt(apiStats?.total_apis || '0')) {
+      recommendations.push({
+        type: 'monitoring',
+        message: 'Enable monitoring for all your APIs',
+        action: 'Set up API monitoring'
+      })
+    }
+
+    if (parseInt(scanStats?.scans_7d || '0') === 0) {
+      recommendations.push({
+        type: 'scanning',
+        message: 'No security scans performed in the last 7 days',
+        action: 'Schedule regular scans'
+      })
+    }
+
+    return NextResponse.json({
+      success: true,
+      dashboard: {
+        overview: {
+          totalApis: parseInt(apiStats?.total_apis || '0'),
+          activeApis: parseInt(apiStats?.active_apis || '0'),
+          monitoredApis: parseInt(apiStats?.monitored_apis || '0'),
+          averageUptime: apiStats?.avg_uptime ? Math.round(parseFloat(apiStats.avg_uptime)) : null,
+          totalScans: parseInt(scanStats?.total_scans || '0'),
+          completedScans: parseInt(scanStats?.completed_scans || '0'),
+          scansLast7Days: parseInt(scanStats?.scans_7d || '0'),
+          totalThreats: parseInt(threatStats?.total_threats || '0'),
+          blockedThreats: parseInt(threatStats?.blocked_threats || '0'),
+          criticalThreats: parseInt(threatStats?.critical_threats || '0'),
+          threatsLast24Hours: parseInt(threatStats?.threats_24h || '0')
+        },
+        security: {
+          overallScore: Math.round(overallScore),
+          averageScanScore: scanStats?.avg_security_score ? Math.round(parseFloat(scanStats.avg_security_score)) : null,
+          totalVulnerabilities: totalVulns,
+          criticalVulnerabilities: criticalVulns,
+          riskLevel: overallScore >= 80 ? 'Low' : overallScore >= 60 ? 'Medium' : overallScore >= 40 ? 'High' : 'Critical'
+        },
+        recentActivity: recentActivity.map(activity => ({
+          type: activity.activity_type,
+          subject: activity.subject,
+          status: activity.status,
+          timestamp: activity.created_at,
+          timeAgo: getTimeAgo(activity.created_at)
+        })),
+        upcomingScans: upcomingScans.map(scan => ({
+          id: scan.id,
+          name: scan.name,
+          target: scan.target_url,
+          scanType: scan.scan_type,
+          scheduledFor: scan.next_run
+        })),
+        alerts,
+        recommendations
+      }
+    })
+
+  } catch (error) {
+    logger.error('Dashboard API error:', { error: error instanceof Error ? error.message : String(error) })
+    return NextResponse.json({ error: 'Failed to fetch dashboard data' }, { status: 500 })
+  }
+}
+
+function getTimeAgo(dateString: string): string {
+  const date = new Date(dateString)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMinutes = Math.floor(diffMs / (1000 * 60))
+  
+  if (diffMinutes < 1) return 'Just now'
+  if (diffMinutes < 60) return `${diffMinutes} minutes ago`
+  
+  const diffHours = Math.floor(diffMinutes / 60)
+  if (diffHours < 24) return `${diffHours} hours ago`
+  
+  const diffDays = Math.floor(diffHours / 24)
+  return `${diffDays} days ago`
+}
