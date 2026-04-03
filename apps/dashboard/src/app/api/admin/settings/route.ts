@@ -1,7 +1,11 @@
 import { logger } from "../../../../utils/logging/logger";
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdmin, isAuthError } from "@/lib/auth/require-admin";
 
 export async function POST(request: NextRequest) {
+  const authResult = await requireAdmin(request);
+  if (isAuthError(authResult)) return authResult;
+
   try {
     const settings = await request.json();
 
@@ -28,6 +32,9 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
+  const authResult = await requireAdmin(request);
+  if (isAuthError(authResult)) return authResult;
+
   try {
     // Return current settings (in real app, load from database)
     const currentSettings = {

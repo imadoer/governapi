@@ -1,6 +1,5 @@
 "use client";
 
-import { Card, Statistic, Row, Col } from "antd";
 import { useState, useEffect } from "react";
 
 export function IntegrationStatus() {
@@ -33,34 +32,25 @@ export function IntegrationStatus() {
   }, []);
 
   return (
-    <Card title="Integration Status">
-      <Row gutter={16}>
-        <Col span={8}>
-          <Statistic
-            title="Active Webhooks"
-            value={stats.webhooks}
-            valueStyle={{ color: "#52c41a" }}
-          />
-        </Col>
-        <Col span={8}>
-          <Statistic
-            title="Alert Configs"
-            value={stats.alerts}
-            valueStyle={{ color: "#1890ff" }}
-          />
-        </Col>
-        <Col span={8}>
-          <Statistic
-            title="Report Types"
-            value={stats.reports}
-            valueStyle={{ color: "#722ed1" }}
-          />
-        </Col>
-      </Row>
-      <div style={{ marginTop: 16, color: "#666", fontSize: "12px" }}>
-        All enterprise integrations are operational and connected to your
-        security platform.
+    <div className="rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-6">
+      <h3 className="text-lg font-semibold text-white mb-4">Integration Status</h3>
+      <div className="grid grid-cols-3 gap-4">
+        <div className="text-center">
+          <div className="text-2xl font-bold text-emerald-400">{stats.webhooks}</div>
+          <div className="text-sm text-gray-400 mt-1">Active Webhooks</div>
+        </div>
+        <div className="text-center">
+          <div className="text-2xl font-bold text-cyan-400">{stats.alerts}</div>
+          <div className="text-sm text-gray-400 mt-1">Alert Configs</div>
+        </div>
+        <div className="text-center">
+          <div className="text-2xl font-bold text-purple-400">{stats.reports}</div>
+          <div className="text-sm text-gray-400 mt-1">Report Types</div>
+        </div>
       </div>
-    </Card>
+      <div className="mt-4 text-gray-500 text-xs">
+        All enterprise integrations are operational and connected to your security platform.
+      </div>
+    </div>
   );
 }

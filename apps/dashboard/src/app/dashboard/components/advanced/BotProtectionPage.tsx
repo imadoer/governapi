@@ -1,9 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import { Tabs, Spin, Table, Button, Tag, Modal, Form, Input, Select, Switch, Space, Drawer } from "antd";
-import type { TabsProps } from "antd";
+import { useState, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 
 import {
   ShieldExclamationIcon,
@@ -20,6 +18,7 @@ import {
   CpuChipIcon,
   MapIcon,
   DocumentTextIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
 
 import {
@@ -44,7 +43,222 @@ import {
 
 import { GlassCard } from "./GlassCard";
 
-// Interfaces
+// ─── Reusable Primitives ────────────────────────────────────────────────────
+
+function CustomModal({
+  open,
+  onClose,
+  title,
+  children,
+  footer,
+  width = 700,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+  width?: number;
+}) {
+  if (!open) return null;
+  return (
+    <AnimatePresence>
+      {open && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={onClose}
+          />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.92, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.92, y: 20 }}
+            transition={{ type: "spring", damping: 25, stiffness: 350 }}
+            className="relative z-10 rounded-2xl border border-cyan-400/20 shadow-2xl"
+            style={{
+              background: "#0b1628",
+              maxWidth: width,
+              width: "90vw",
+              maxHeight: "85vh",
+              overflow: "auto",
+            }}
+          >
+            {/* header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-cyan-400/10">
+              <h3 className="text-lg font-semibold text-[#E8F0FF]">{title}</h3>
+              <button
+                onClick={onClose}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                <XMarkIcon className="w-5 h-5" />
+              </button>
+            </div>
+            {/* body */}
+            <div className="px-6 py-5">{children}</div>
+            {/* footer */}
+            {footer && (
+              <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-cyan-400/10">
+                {footer}
+              </div>
+            )}
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+function SlidePanel({
+  open,
+  onClose,
+  title,
+  children,
+  width = 720,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+  width?: number;
+}) {
+  return (
+    <AnimatePresence>
+      {open && (
+        <div className="fixed inset-0 z-[9999]">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-black/50"
+            onClick={onClose}
+          />
+          <motion.div
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
+            transition={{ type: "spring", damping: 30, stiffness: 300 }}
+            className="fixed top-0 right-0 h-full bg-slate-800/95 backdrop-blur-xl border-l border-white/10 overflow-y-auto"
+            style={{ width, maxWidth: "90vw" }}
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+              <h3 className="text-lg font-semibold text-[#E8F0FF]">{title}</h3>
+              <button
+                onClick={onClose}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                <XMarkIcon className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6">{children}</div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+function ToggleSwitch({
+  checked,
+  onChange,
+  labelOn = "ON",
+  labelOff = "OFF",
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  labelOn?: string;
+  labelOff?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors duration-200 focus:outline-none ${
+        checked ? "bg-cyan-500" : "bg-slate-600"
+      }`}
+    >
+      <span
+        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-200 ${
+          checked ? "translate-x-8" : "translate-x-1"
+        }`}
+      />
+      <span className={`absolute text-[10px] font-bold ${checked ? "left-1.5 text-white" : "right-1.5 text-slate-300"}`}>
+        {checked ? labelOn : labelOff}
+      </span>
+    </button>
+  );
+}
+
+function Pill({
+  children,
+  color = "#94a3b8",
+  style,
+}: {
+  children: React.ReactNode;
+  color?: string;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <span
+      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold"
+      style={{
+        backgroundColor: color + "20",
+        color,
+        ...style,
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function ConfirmDialog({
+  open,
+  title,
+  message,
+  confirmLabel = "Confirm",
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <CustomModal
+      open={open}
+      onClose={onCancel}
+      title={title}
+      width={420}
+      footer={
+        <>
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-white/10 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-red-500/80 hover:bg-red-500 text-white transition-colors"
+          >
+            {confirmLabel}
+          </button>
+        </>
+      }
+    >
+      <p className="text-slate-300">{message}</p>
+    </CustomModal>
+  );
+}
+
+// ─── Interfaces ─────────────────────────────────────────────────────────────
+
 interface BotStatistics {
   totalRequests: number;
   botRequests: number;
@@ -104,6 +318,8 @@ interface ScoreDistribution {
   avg_score: number;
   max_score: number;
 }
+
+// ─── Main Component ─────────────────────────────────────────────────────────
 
 export default function BotProtectionPage({ companyId }: { companyId: string }) {
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -208,240 +424,63 @@ export default function BotProtectionPage({ companyId }: { companyId: string }) 
   const avgScore = scoreDistribution?.avg_score || 0;
   const botDetectionRate = stats?.botDetectionRate || 0;
 
-  const tabItems: TabsProps['items'] = [
+  const tabs = [
     {
-      key: 'dashboard',
-      label: (
-        <span className="flex items-center gap-2">
-          <ShieldCheckIcon className="w-4 h-4" />
-          Dashboard
-        </span>
-      ),
-      children: (
-        <DashboardTab 
-          stats={stats} 
-          scoreDistribution={scoreDistribution} 
-          hourlyTrends={hourlyTrends} 
-          loading={loading}
-          avgScore={avgScore}
-          botDetectionRate={botDetectionRate}
-        />
-      ),
+      key: "dashboard",
+      label: "Dashboard",
+      icon: <ShieldCheckIcon className="w-4 h-4" />,
     },
     {
-      key: 'live-threats',
-      label: (
-        <span className="flex items-center gap-2">
-          <FireIcon className="w-4 h-4" />
-          Live Threats
-        </span>
-      ),
-      children: (
-        <LiveThreatsTab 
-          recentDetections={recentDetections} 
-          topBotSources={topBotSources} 
-          blockedIps={blockedIps}
-          onBlock={handleBlockIp} 
-          onUnblock={handleUnblockIp} 
-          loading={loading} 
-        />
-      ),
+      key: "live-threats",
+      label: "Live Threats",
+      icon: <FireIcon className="w-4 h-4" />,
     },
     {
-      key: 'rules',
-      label: (
-        <span className="flex items-center gap-2">
-          <BoltIcon className="w-4 h-4" />
-          Rules & Actions
-        </span>
-      ),
-      children: <RulesTab companyId={companyId} />,
+      key: "rules",
+      label: "Rules & Actions",
+      icon: <BoltIcon className="w-4 h-4" />,
     },
     {
-      key: 'analytics',
-      label: (
-        <span className="flex items-center gap-2">
-          <ChartBarIcon className="w-4 h-4" />
-          Analytics
-        </span>
-      ),
-      children: (
-        <AnalyticsTab 
-          asnIntelligence={asnIntelligence} 
-          headlessDetection={headlessDetection} 
-          velocityAnalysis={velocityAnalysis} 
-          crawlerVerification={crawlerVerification} 
-          hourlyTrends={hourlyTrends} 
-          loading={loading} 
-        />
-      ),
+      key: "analytics",
+      label: "Analytics",
+      icon: <ChartBarIcon className="w-4 h-4" />,
     },
     {
-      key: 'reports',
-      label: (
-        <span className="flex items-center gap-2">
-          <DocumentTextIcon className="w-4 h-4" />
-          Reports
-        </span>
-      ),
-      children: <ReportsTab companyId={companyId} stats={stats} />,
+      key: "reports",
+      label: "Reports",
+      icon: <DocumentTextIcon className="w-4 h-4" />,
     },
   ];
 
   if (loading && !stats) {
     return (
-      <div className="security-center-viewport">
-        <div className="flex items-center justify-center min-h-screen">
-          <Spin size="large" />
-        </div>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "#0a0a0f" }}>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400" />
       </div>
     );
   }
 
   return (
-    <div className="security-center-viewport">
-      <style jsx global>{`
-        .security-center-viewport {
-          min-height: 100vh;
-          margin: -2rem;
-          padding: 2rem;
-          background: radial-gradient(120% 120% at 60% 30%, #0B1228 0%, #10172C 60%, #0A0F1E 100%);
-          position: relative;
-          overflow-x: hidden;
-        }
-        
-        .security-center-viewport::before {
-          content: '';
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          height: 40%;
-          background: linear-gradient(180deg, rgba(22,119,255,0.04) 0%, transparent 100%);
-          pointer-events: none;
-          z-index: 0;
-        }
-
-        .bot-protection-tabs .ant-tabs-nav {
-          background: rgba(20, 25, 40, 0.65);
-          backdrop-filter: blur(20px);
-          padding: 0 1.5rem;
-          border-radius: 1rem 1rem 0 0;
-          border: 1px solid rgba(255,255,255,0.04);
-        }
-
-        .bot-protection-tabs .ant-tabs-tab {
-          color: #94a3b8;
-          font-weight: 500;
-        }
-
-        .bot-protection-tabs .ant-tabs-tab-active {
-          color: #06b6d4 !important;
-        }
-
-        .bot-protection-tabs .ant-tabs-ink-bar {
-          background: #06b6d4;
-        }
-
-        /* Table Styling */
-        .ant-table {
-          background: transparent !important;
-        }
-        .ant-table-thead > tr > th {
-          background: rgba(11, 22, 40, 0.8) !important;
-          border-bottom: 1px solid rgba(6, 182, 212, 0.2) !important;
-          color: #94a3b8 !important;
-        }
-        .ant-table-tbody > tr > td {
-          background: rgba(11, 22, 40, 0.4) !important;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
-        }
-        .ant-table-tbody > tr:hover > td {
-          background: rgba(6, 182, 212, 0.1) !important;
-        }
-        .ant-table-tbody > tr.ant-table-row-selected > td {
-          background: rgba(6, 182, 212, 0.15) !important;
-        }
-        .ant-table-placeholder {
-          background: rgba(11, 22, 40, 0.4) !important;
-        }
-        .ant-table-cell-row-hover {
-          background: rgba(6, 182, 212, 0.1) !important;
-        }
-        .ant-empty-description {
-          color: #94a3b8 !important;
-        }
-        .bot-protection-tabs .ant-tabs-content {
-          padding: 2rem 0;
-        }
-        /* Modal Dark Theme */
-        .ant-modal-content {
-          background: #0b1628 !important;
-          border: 1px solid rgba(6, 182, 212, 0.2) !important;
-          border-radius: 16px !important;
-        }
-        .ant-modal-header {
-          background: transparent !important;
-          border-bottom: 1px solid rgba(6, 182, 212, 0.1) !important;
-        }
-        .ant-modal-title {
-          color: #E8F0FF !important;
-        }
-        .ant-modal-close-x {
-          color: #94a3b8 !important;
-        }
-        .ant-modal-body {
-          background: transparent !important;
-        }
-        .ant-modal-footer {
-          border-top: 1px solid rgba(6, 182, 212, 0.1) !important;
-        }
-        /* Form Dark Theme */
-        .ant-form-item-label > label {
-          color: #E8F0FF !important;
-        }
-        .ant-input, .ant-input-textarea textarea, .ant-select-selector {
-          background: rgba(11, 22, 40, 0.8) !important;
-          border: 1px solid rgba(6, 182, 212, 0.2) !important;
-          color: #E8F0FF !important;
-        }
-        .ant-input::placeholder, .ant-input-textarea textarea::placeholder {
-          color: #64748b !important;
-        }
-        .ant-select-arrow {
-          color: #94a3b8 !important;
-        }
-        .ant-select-dropdown {
-          background: #0b1628 !important;
-          border: 1px solid rgba(6, 182, 212, 0.2) !important;
-        }
-        .ant-select-item {
-          color: #E8F0FF !important;
-        }
-        .ant-select-item-option-active, .ant-select-item-option-selected {
-          background: rgba(6, 182, 212, 0.2) !important;
-        }
-        /* Template Cards Dark Theme */
-        .ant-card {
-          background: rgba(11, 22, 40, 0.9) !important;
-          border: 1px solid rgba(6, 182, 212, 0.2) !important;
-        }
-        .ant-card:hover {
-          border-color: rgba(6, 182, 212, 0.5) !important;
-        }
-      `}</style>
+    <div
+      className="min-h-screen relative overflow-x-hidden"
+      style={{
+        background: "radial-gradient(120% 120% at 60% 30%, #0B1228 0%, #10172C 60%, #0A0F1E 100%)",
+        margin: "-2rem",
+        padding: "2rem",
+      }}
+    >
+      {/* Subtle top glow */}
+      <div
+        className="absolute top-0 left-0 right-0 pointer-events-none z-0"
+        style={{
+          height: "40%",
+          background: "linear-gradient(180deg, rgba(22,119,255,0.04) 0%, transparent 100%)",
+        }}
+      />
 
       <div className="relative z-10">
         {/* HEADER */}
-        <div
-          className="relative w-full px-6 py-6 mb-8"
-          style={{
-            background:
-              "transparent",
-          }}
-        >
-          
-
+        <div className="relative w-full px-6 py-6 mb-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-5">
               <motion.div
@@ -477,38 +516,81 @@ export default function BotProtectionPage({ companyId }: { companyId: string }) 
               <ArrowPathIcon className="w-6 h-6 text-cyan-400" />
             </motion.button>
           </div>
-
-          
         </div>
 
         {/* TABS */}
         <div className="px-6">
-          <Tabs
-            activeKey={activeTab}
-            onChange={setActiveTab}
-            items={tabItems}
-            size="large"
-            className="bot-protection-tabs"
-          />
+          <div className="flex gap-1 p-1 rounded-t-2xl border border-white/[0.04] bg-[rgba(20,25,40,0.65)] backdrop-blur-[20px]">
+            {tabs.map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+                  activeTab === tab.key
+                    ? "text-cyan-400 bg-cyan-400/10 shadow-[0_0_12px_rgba(6,182,212,0.15)]"
+                    : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
+                }`}
+              >
+                {tab.icon}
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="py-8">
+            {activeTab === "dashboard" && (
+              <DashboardTab
+                stats={stats}
+                scoreDistribution={scoreDistribution}
+                hourlyTrends={hourlyTrends}
+                loading={loading}
+                avgScore={avgScore}
+                botDetectionRate={botDetectionRate}
+              />
+            )}
+            {activeTab === "live-threats" && (
+              <LiveThreatsTab
+                recentDetections={recentDetections}
+                topBotSources={topBotSources}
+                blockedIps={blockedIps}
+                onBlock={handleBlockIp}
+                onUnblock={handleUnblockIp}
+                loading={loading}
+              />
+            )}
+            {activeTab === "rules" && <RulesTab companyId={companyId} />}
+            {activeTab === "analytics" && (
+              <AnalyticsTab
+                asnIntelligence={asnIntelligence}
+                headlessDetection={headlessDetection}
+                velocityAnalysis={velocityAnalysis}
+                crawlerVerification={crawlerVerification}
+                hourlyTrends={hourlyTrends}
+                loading={loading}
+              />
+            )}
+            {activeTab === "reports" && <ReportsTab companyId={companyId} stats={stats} />}
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-// TAB 1: DASHBOARD
+// ─── TAB 1: DASHBOARD ───────────────────────────────────────────────────────
+
 function DashboardTab({ stats, scoreDistribution, hourlyTrends, loading, avgScore, botDetectionRate }: any) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Spin size="large" />
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400" />
       </div>
     );
   }
 
   return (
     <div className="space-y-8">
-      {/* KPI GRID - 2x2 */}
+      {/* KPI GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
         <KPICard
           title="Bot Requests"
@@ -550,15 +632,19 @@ function DashboardTab({ stats, scoreDistribution, hourlyTrends, loading, avgScor
   );
 }
 
-// TAB 2: LIVE THREATS
+// ─── TAB 2: LIVE THREATS ────────────────────────────────────────────────────
+
 function LiveThreatsTab({ recentDetections, topBotSources, blockedIps, onBlock, onUnblock, loading }: any) {
   const [selectedThreat, setSelectedThreat] = useState<any>(null);
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [selectedRows, setSelectedRows] = useState<any[]>([]);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const [sortField, setSortField] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
-  // Auto-refresh indicator
   useEffect(() => {
     if (autoRefresh) {
       const interval = setInterval(() => {
@@ -600,117 +686,41 @@ function LiveThreatsTab({ recentDetections, topBotSources, blockedIps, onBlock, 
     return "#2F81F7";
   };
 
-  const columns = [
-    {
-      title: 'Time',
-      dataIndex: 'detectedAt',
-      key: 'detectedAt',
-      width: 120,
-      render: (text: string) => (
-        <span className="text-slate-300">
-          {new Date(text).toLocaleTimeString()}
-        </span>
-      ),
-    },
-    {
-      title: 'Source IP',
-      dataIndex: 'sourceIp',
-      key: 'sourceIp',
-      width: 150,
-      render: (ip: string) => <span className="font-mono text-cyan-400 font-semibold">{ip}</span>,
-    },
-    {
-      title: 'Threat Type',
-      dataIndex: 'detectionReason',
-      key: 'detectionReason',
-      render: (reason: string) => <span className="text-slate-200">{reason}</span>,
-    },
-    {
-      title: 'Confidence',
-      dataIndex: 'confidenceScore',
-      key: 'confidenceScore',
-      width: 120,
-      sorter: (a: any, b: any) => b.confidenceScore - a.confidenceScore,
-      render: (score: number) => (
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: getSeverityColor(score) }} />
-          <Tag
-            style={{
-              backgroundColor: `${getSeverityColor(score)}20`,
-              color: getSeverityColor(score),
-              border: "none",
-              fontWeight: 600,
-            }}
-          >
-            {score}%
-          </Tag>
-        </div>
-      ),
-    },
-    {
-      title: 'Status',
-      key: 'status',
-      width: 120,
-      render: (_: any, record: any) => {
-        const isBlocked = blockedIps.has(record.sourceIp);
-        return (
-          <Tag color={isBlocked ? "red" : "orange"}>
-            {isBlocked ? "BLOCKED" : "DETECTED"}
-          </Tag>
-        );
-      },
-    },
-    {
-      title: 'Actions',
-      key: 'actions',
-      width: 200,
-      render: (_: any, record: any) => {
-        const isBlocked = blockedIps.has(record.sourceIp);
-        return (
-          <Space>
-            {!isBlocked ? (
-              <Button
-                size="small"
-                danger
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onBlock(record.sourceIp);
-                }}
-              >
-                Block
-              </Button>
-            ) : (
-              <Button
-                size="small"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onUnblock(record.sourceIp);
-                }}
-              >
-                Unblock
-              </Button>
-            )}
-            <Button
-              size="small"
-              type="primary"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleRowClick(record);
-              }}
-            >
-              Investigate
-            </Button>
-          </Space>
-        );
-      },
-    },
-  ];
+  const toggleRowSelection = (record: any) => {
+    setSelectedRows((prev) => {
+      const exists = prev.find((r) => r.id === record.id);
+      if (exists) return prev.filter((r) => r.id !== record.id);
+      return [...prev, record];
+    });
+  };
 
-  const rowSelection = {
-    selectedRowKeys: selectedRows.map((r) => r.id),
-    onChange: (_: any, selectedRowsData: any[]) => {
-      setSelectedRows(selectedRowsData);
-    },
+  const toggleSelectAll = () => {
+    if (selectedRows.length === paginatedData.length) {
+      setSelectedRows([]);
+    } else {
+      setSelectedRows([...paginatedData]);
+    }
+  };
+
+  // Sorting
+  const sortedData = [...recentDetections].sort((a: any, b: any) => {
+    if (!sortField) return 0;
+    const aVal = a[sortField];
+    const bVal = b[sortField];
+    if (sortDir === "asc") return aVal > bVal ? 1 : -1;
+    return aVal < bVal ? 1 : -1;
+  });
+
+  const totalPages = Math.max(1, Math.ceil(sortedData.length / pageSize));
+  const paginatedData = sortedData.slice((page - 1) * pageSize, page * pageSize);
+
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDir("desc");
+    }
   };
 
   return (
@@ -728,20 +738,23 @@ function LiveThreatsTab({ recentDetections, topBotSources, blockedIps, onBlock, 
               </motion.div>
               Live Threat Feed
             </h3>
-            <Tag color="red">{recentDetections.length} threats</Tag>
+            <Pill color="#ff5b67">{recentDetections.length} threats</Pill>
           </div>
 
           <div className="flex items-center gap-3">
             <span className="text-xs text-slate-400">
               Last updated: {lastUpdate.toLocaleTimeString()}
             </span>
-            <Button
-              size="small"
-              type={autoRefresh ? "primary" : "default"}
+            <button
               onClick={() => setAutoRefresh(!autoRefresh)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                autoRefresh
+                  ? "bg-cyan-500/20 text-cyan-400 border border-cyan-400/30"
+                  : "bg-white/5 text-slate-400 border border-white/10 hover:bg-white/10"
+              }`}
             >
               {autoRefresh ? "Auto-refresh ON" : "Auto-refresh OFF"}
-            </Button>
+            </button>
           </div>
         </div>
 
@@ -760,35 +773,184 @@ function LiveThreatsTab({ recentDetections, topBotSources, blockedIps, onBlock, 
               <span className="text-cyan-400 font-semibold">
                 {selectedRows.length} threat(s) selected
               </span>
-              <Space>
-                <Button danger onClick={handleBulkBlock}>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleBulkBlock}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/20 text-red-400 border border-red-400/30 hover:bg-red-500/30 transition-colors"
+                >
                   Block Selected
-                </Button>
-                <Button onClick={handleBulkUnblock}>Unblock Selected</Button>
-                <Button onClick={() => setSelectedRows([])}>Clear</Button>
-              </Space>
+                </button>
+                <button
+                  onClick={handleBulkUnblock}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10 transition-colors"
+                >
+                  Unblock Selected
+                </button>
+                <button
+                  onClick={() => setSelectedRows([])}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10 transition-colors"
+                >
+                  Clear
+                </button>
+              </div>
             </div>
           </motion.div>
         )}
 
-        <Table
-          columns={columns}
-          dataSource={recentDetections}
-          rowKey="id"
-          loading={loading}
-          pagination={{
-            pageSize: 20,
-            showSizeChanger: true,
-            showTotal: (total) => `Total ${total} threats`,
-          }}
-          rowSelection={rowSelection}
-          onRow={(record) => ({
-            onClick: () => handleRowClick(record),
-            style: { cursor: 'pointer' },
-            className: "hover:bg-cyan-400/5 transition-colors",
-          })}
-          scroll={{ x: 1000 }}
-        />
+        {/* TABLE */}
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-cyan-400" />
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-white/10">
+                  <th className="px-3 py-3 text-left">
+                    <input
+                      type="checkbox"
+                      checked={selectedRows.length === paginatedData.length && paginatedData.length > 0}
+                      onChange={toggleSelectAll}
+                      className="rounded border-slate-600 bg-slate-800 text-cyan-400 focus:ring-cyan-400/30"
+                    />
+                  </th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Time</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Source IP</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Threat Type</th>
+                  <th
+                    className="px-3 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider cursor-pointer select-none hover:text-cyan-400 transition-colors"
+                    onClick={() => handleSort("confidenceScore")}
+                  >
+                    Confidence {sortField === "confidenceScore" ? (sortDir === "asc" ? "^" : "v") : ""}
+                  </th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Status</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedData.map((record: any) => {
+                  const isBlocked = blockedIps.has(record.sourceIp);
+                  const isSelected = selectedRows.some((r) => r.id === record.id);
+                  return (
+                    <tr
+                      key={record.id}
+                      onClick={() => handleRowClick(record)}
+                      className={`border-b border-white/5 cursor-pointer transition-colors hover:bg-cyan-400/5 ${
+                        isSelected ? "bg-cyan-400/10" : ""
+                      }`}
+                    >
+                      <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleRowSelection(record)}
+                          className="rounded border-slate-600 bg-slate-800 text-cyan-400 focus:ring-cyan-400/30"
+                        />
+                      </td>
+                      <td className="px-3 py-3 text-slate-300 text-sm">
+                        {new Date(record.detectedAt).toLocaleTimeString()}
+                      </td>
+                      <td className="px-3 py-3 font-mono text-cyan-400 font-semibold text-sm">
+                        {record.sourceIp}
+                      </td>
+                      <td className="px-3 py-3 text-slate-200 text-sm">{record.detectionReason}</td>
+                      <td className="px-3 py-3">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-2 h-2 rounded-full"
+                            style={{ backgroundColor: getSeverityColor(record.confidenceScore) }}
+                          />
+                          <Pill
+                            color={getSeverityColor(record.confidenceScore)}
+                            style={{ fontWeight: 600 }}
+                          >
+                            {record.confidenceScore}%
+                          </Pill>
+                        </div>
+                      </td>
+                      <td className="px-3 py-3">
+                        <Pill color={isBlocked ? "#ff5b67" : "#ffb35b"}>
+                          {isBlocked ? "BLOCKED" : "DETECTED"}
+                        </Pill>
+                      </td>
+                      <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-2">
+                          {!isBlocked ? (
+                            <button
+                              onClick={() => onBlock(record.sourceIp)}
+                              className="px-2.5 py-1 rounded-md text-xs font-medium bg-red-500/20 text-red-400 border border-red-400/30 hover:bg-red-500/30 transition-colors"
+                            >
+                              Block
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => onUnblock(record.sourceIp)}
+                              className="px-2.5 py-1 rounded-md text-xs font-medium bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10 transition-colors"
+                            >
+                              Unblock
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleRowClick(record)}
+                            className="px-2.5 py-1 rounded-md text-xs font-medium bg-cyan-500/20 text-cyan-400 border border-cyan-400/30 hover:bg-cyan-500/30 transition-colors"
+                          >
+                            Investigate
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {paginatedData.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="px-3 py-16 text-center text-slate-400">
+                      No threats detected
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+
+            {/* Pagination */}
+            <div className="flex items-center justify-between mt-4 pt-4 border-t border-white/5">
+              <span className="text-xs text-slate-400">
+                Total {sortedData.length} threats
+              </span>
+              <div className="flex items-center gap-2">
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setPage(1);
+                  }}
+                  className="bg-slate-800/80 border border-white/10 text-slate-300 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-cyan-400/40"
+                >
+                  <option value={10}>10 / page</option>
+                  <option value={20}>20 / page</option>
+                  <option value={50}>50 / page</option>
+                </select>
+                <button
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => p - 1)}
+                  className="px-2.5 py-1 rounded-md text-xs font-medium bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  Prev
+                </button>
+                <span className="text-xs text-slate-400">
+                  {page} / {totalPages}
+                </span>
+                <button
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((p) => p + 1)}
+                  className="px-2.5 py-1 rounded-md text-xs font-medium bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </GlassCard>
 
       {/* TOP ATTACKERS */}
@@ -848,12 +1010,10 @@ function LiveThreatsTab({ recentDetections, topBotSources, blockedIps, onBlock, 
       </GlassCard>
 
       {/* INVESTIGATE DRAWER */}
-      <Drawer
-        title="Threat Investigation"
-        placement="right"
-        width={720}
-        onClose={() => setDrawerVisible(false)}
+      <SlidePanel
         open={drawerVisible}
+        onClose={() => setDrawerVisible(false)}
+        title="Threat Investigation"
       >
         {selectedThreat && (
           <div className="space-y-6">
@@ -866,18 +1026,16 @@ function LiveThreatsTab({ recentDetections, topBotSources, blockedIps, onBlock, 
             >
               <div className="flex items-center justify-between mb-3">
                 <span className="text-sm font-semibold text-slate-400">THREAT LEVEL</span>
-                <Tag
-                  style={{
-                    backgroundColor: `${getSeverityColor(selectedThreat.confidenceScore)}20`,
-                    color: getSeverityColor(selectedThreat.confidenceScore),
-                    border: "none",
-                    fontSize: 14,
-                    padding: "4px 12px",
-                    fontWeight: 600,
-                  }}
+                <Pill
+                  color={getSeverityColor(selectedThreat.confidenceScore)}
+                  style={{ fontSize: 14, padding: "4px 12px", fontWeight: 600 }}
                 >
-                  {selectedThreat.confidenceScore >= 80 ? "CRITICAL" : selectedThreat.confidenceScore >= 60 ? "HIGH" : "MEDIUM"}
-                </Tag>
+                  {selectedThreat.confidenceScore >= 80
+                    ? "CRITICAL"
+                    : selectedThreat.confidenceScore >= 60
+                    ? "HIGH"
+                    : "MEDIUM"}
+                </Pill>
               </div>
               <div className="text-4xl font-bold">
                 <span style={{ color: getSeverityColor(selectedThreat.confidenceScore) }}>
@@ -899,9 +1057,9 @@ function LiveThreatsTab({ recentDetections, topBotSources, blockedIps, onBlock, 
                 </div>
                 <div className="flex justify-between p-3 bg-slate-800/30 rounded-lg">
                   <span className="text-slate-400">Status</span>
-                  <Tag color={blockedIps.has(selectedThreat.sourceIp) ? "red" : "orange"}>
+                  <Pill color={blockedIps.has(selectedThreat.sourceIp) ? "#ff5b67" : "#ffb35b"}>
                     {blockedIps.has(selectedThreat.sourceIp) ? "BLOCKED" : "DETECTED"}
-                  </Tag>
+                  </Pill>
                 </div>
               </div>
             </div>
@@ -925,26 +1083,31 @@ function LiveThreatsTab({ recentDetections, topBotSources, blockedIps, onBlock, 
             </div>
 
             <div className="pt-4 border-t border-slate-700/50">
-              <Space size="middle" style={{ width: "100%" }}>
-                {!blockedIps.has(selectedThreat.sourceIp) ? (
-                  <Button danger size="large" block onClick={() => onBlock(selectedThreat.sourceIp)}>
-                    Block This IP
-                  </Button>
-                ) : (
-                  <Button size="large" block onClick={() => onUnblock(selectedThreat.sourceIp)}>
-                    Unblock This IP
-                  </Button>
-                )}
-              </Space>
+              {!blockedIps.has(selectedThreat.sourceIp) ? (
+                <button
+                  onClick={() => onBlock(selectedThreat.sourceIp)}
+                  className="w-full px-6 py-3 rounded-xl text-sm font-semibold bg-red-500/20 text-red-400 border border-red-400/30 hover:bg-red-500/30 transition-colors"
+                >
+                  Block This IP
+                </button>
+              ) : (
+                <button
+                  onClick={() => onUnblock(selectedThreat.sourceIp)}
+                  className="w-full px-6 py-3 rounded-xl text-sm font-semibold bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10 transition-colors"
+                >
+                  Unblock This IP
+                </button>
+              )}
             </div>
           </div>
         )}
-      </Drawer>
+      </SlidePanel>
     </div>
   );
 }
 
-// TAB 3: RULES
+// ─── TAB 3: RULES ───────────────────────────────────────────────────────────
+
 function RulesTab({ companyId }: { companyId: string }) {
   const [rules, setRules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -953,7 +1116,27 @@ function RulesTab({ companyId }: { companyId: string }) {
   const [testModalVisible, setTestModalVisible] = useState(false);
   const [testResults, setTestResults] = useState<any>(null);
   const [templatesVisible, setTemplatesVisible] = useState(false);
-  const [form] = Form.useForm();
+  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+
+  // Form state (replaces antd Form)
+  const [formName, setFormName] = useState("");
+  const [formDescription, setFormDescription] = useState("");
+  const [formAction, setFormAction] = useState("BLOCK");
+  const [formPriority, setFormPriority] = useState(50);
+
+  const resetForm = () => {
+    setFormName("");
+    setFormDescription("");
+    setFormAction("BLOCK");
+    setFormPriority(50);
+  };
+
+  const populateForm = (values: any) => {
+    setFormName(values.name || "");
+    setFormDescription(values.description || "");
+    setFormAction(values.action || "BLOCK");
+    setFormPriority(values.priority ?? 50);
+  };
 
   const RULE_TEMPLATES = [
     {
@@ -1014,7 +1197,15 @@ function RulesTab({ companyId }: { companyId: string }) {
     fetchRules();
   }, [companyId]);
 
-  const handleCreateRule = async (values: any) => {
+  const handleCreateRule = async () => {
+    const values = {
+      name: formName,
+      description: formDescription,
+      action: formAction,
+      priority: formPriority,
+    };
+    if (!values.name) return;
+
     try {
       const response = await fetch("/api/customer/bot-rules", {
         method: editingRule ? "PUT" : "POST",
@@ -1028,7 +1219,7 @@ function RulesTab({ companyId }: { companyId: string }) {
       if (response.ok) {
         setModalVisible(false);
         setEditingRule(null);
-        form.resetFields();
+        resetForm();
         fetchRules();
       }
     } catch (error) {
@@ -1038,7 +1229,7 @@ function RulesTab({ companyId }: { companyId: string }) {
 
   const handleToggleRule = async (ruleId: number, enabled: boolean) => {
     try {
-      const rule = rules.find(r => r.id === ruleId);
+      const rule = rules.find((r) => r.id === ruleId);
       if (!rule) return;
 
       await fetch("/api/customer/bot-rules", {
@@ -1048,7 +1239,11 @@ function RulesTab({ companyId }: { companyId: string }) {
           "x-tenant-id": companyId,
         },
         body: JSON.stringify({
-          action: "block", ...rule, id: ruleId, enabled }),
+          action: "block",
+          ...rule,
+          id: ruleId,
+          enabled,
+        }),
       });
       fetchRules();
     } catch (error) {
@@ -1057,23 +1252,22 @@ function RulesTab({ companyId }: { companyId: string }) {
   };
 
   const handleDeleteRule = async (ruleId: number) => {
-    Modal.confirm({
-      title: "Delete Rule",
-      content: "Are you sure you want to delete this rule?",
-      okText: "Delete",
-      okType: "danger",
-      onOk: async () => {
-        try {
-          await fetch(`/api/customer/bot-rules?id=${ruleId}`, {
-            method: "POST",
-            headers: { "x-tenant-id": companyId },
-          });
-          fetchRules();
-        } catch (error) {
-          console.error("Failed to delete rule:", error);
-        }
-      },
-    });
+    setDeleteConfirm(ruleId);
+  };
+
+  const confirmDelete = async () => {
+    if (deleteConfirm === null) return;
+    try {
+      await fetch(`/api/customer/bot-rules?id=${deleteConfirm}`, {
+        method: "POST",
+        headers: { "x-tenant-id": companyId },
+      });
+      fetchRules();
+    } catch (error) {
+      console.error("Failed to delete rule:", error);
+    } finally {
+      setDeleteConfirm(null);
+    }
   };
 
   const handleTestRule = async (rule: any) => {
@@ -1088,7 +1282,7 @@ function RulesTab({ companyId }: { companyId: string }) {
   };
 
   const handleCreateFromTemplate = (template: any) => {
-    form.setFieldsValue({
+    populateForm({
       name: template.name,
       description: template.description,
       action: template.action,
@@ -1100,88 +1294,18 @@ function RulesTab({ companyId }: { companyId: string }) {
 
   const getActionColor = (action: string) => {
     switch (action) {
-      case "BLOCK": return "red";
-      case "CHALLENGE": return "orange";
-      case "MONITOR": return "blue";
-      case "ALLOW": return "green";
-      default: return "default";
+      case "BLOCK":
+        return "#ff5b67";
+      case "CHALLENGE":
+        return "#ffb35b";
+      case "MONITOR":
+        return "#2F81F7";
+      case "ALLOW":
+        return "#22c55e";
+      default:
+        return "#94a3b8";
     }
   };
-
-  const columns = [
-    {
-      title: "Priority",
-      dataIndex: "priority",
-      key: "priority",
-      width: 100,
-      sorter: (a: any, b: any) => b.priority - a.priority,
-      render: (priority: number) => (
-        <Tag color="cyan" style={{ fontWeight: 600, fontSize: 14 }}>
-          {priority}
-        </Tag>
-      ),
-    },
-    {
-      title: "Rule Name",
-      dataIndex: "name",
-      key: "name",
-      render: (name: string, record: any) => (
-        <div>
-          <div className="font-semibold text-white mb-1">{name}</div>
-          {record.description && (
-            <div className="text-xs text-slate-400">{record.description}</div>
-          )}
-        </div>
-      ),
-    },
-    {
-      title: "Action",
-      dataIndex: "action",
-      key: "action",
-      width: 120,
-      render: (action: string) => (
-        <Tag color={getActionColor(action)} style={{ fontWeight: 600 }}>
-          {action}
-        </Tag>
-      ),
-    },
-    {
-      title: "Status",
-      dataIndex: "enabled",
-      key: "enabled",
-      width: 100,
-      render: (enabled: boolean, record: any) => (
-        <Switch
-          checked={enabled}
-          onChange={(checked) => handleToggleRule(record.id, checked)}
-          checkedChildren="ON"
-          unCheckedChildren="OFF"
-        />
-      ),
-    },
-    {
-      title: "Actions",
-      key: "actions",
-      width: 180,
-      render: (_: any, record: any) => (
-        <Space>
-          <Button size="small" onClick={() => handleTestRule(record)}>
-            Test
-          </Button>
-          <Button size="small" onClick={() => {
-            setEditingRule(record);
-            form.setFieldsValue(record);
-            setModalVisible(true);
-          }}>
-            Edit
-          </Button>
-          <Button size="small" danger onClick={() => handleDeleteRule(record.id)}>
-            Delete
-          </Button>
-        </Space>
-      ),
-    },
-  ];
 
   return (
     <div className="space-y-6">
@@ -1190,22 +1314,24 @@ function RulesTab({ companyId }: { companyId: string }) {
           <h3 className="text-2xl font-semibold text-[#E8F0FF] mb-2">Bot Detection Rules</h3>
           <p className="text-sm text-slate-400">Configure automated rules to detect and block bot traffic</p>
         </div>
-        <Space>
-          <Button onClick={() => setTemplatesVisible(true)}>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setTemplatesVisible(true)}
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10 transition-colors"
+          >
             Rule Templates
-          </Button>
-          <Button
-            type="primary"
+          </button>
+          <button
             onClick={() => {
               setEditingRule(null);
-              form.resetFields();
+              resetForm();
               setModalVisible(true);
             }}
-            size="large"
+            className="px-5 py-2.5 rounded-lg text-sm font-semibold bg-cyan-500/20 text-cyan-400 border border-cyan-400/30 hover:bg-cyan-500/30 transition-colors"
           >
             Create Rule
-          </Button>
-        </Space>
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -1216,71 +1342,202 @@ function RulesTab({ companyId }: { companyId: string }) {
         <GlassCard className="p-4">
           <div className="text-sm text-slate-400 mb-1">Active Rules</div>
           <div className="text-3xl font-bold text-green-400">
-            {rules.filter(r => r.enabled).length}
+            {rules.filter((r) => r.enabled).length}
           </div>
         </GlassCard>
         <GlassCard className="p-4">
           <div className="text-sm text-slate-400 mb-1">Blocking Rules</div>
           <div className="text-3xl font-bold text-red-400">
-            {rules.filter(r => r.action === "BLOCK" && r.enabled).length}
+            {rules.filter((r) => r.action === "BLOCK" && r.enabled).length}
           </div>
         </GlassCard>
         <GlassCard className="p-4">
           <div className="text-sm text-slate-400 mb-1">Challenge Rules</div>
           <div className="text-3xl font-bold text-orange-400">
-            {rules.filter(r => r.action === "CHALLENGE" && r.enabled).length}
+            {rules.filter((r) => r.action === "CHALLENGE" && r.enabled).length}
           </div>
         </GlassCard>
       </div>
 
       <GlassCard className="p-6">
-        <Table
-          columns={columns}
-          dataSource={rules}
-          rowKey="id"
-          loading={loading}
-          pagination={false}
-        />
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-cyan-400" />
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-white/10">
+                  <th className="px-3 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Priority</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Rule Name</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Action</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Status</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rules.map((rule: any) => (
+                  <tr
+                    key={rule.id}
+                    className="border-b border-white/5 hover:bg-cyan-400/5 transition-colors"
+                  >
+                    <td className="px-3 py-3">
+                      <Pill color="#06b6d4" style={{ fontWeight: 600, fontSize: 14 }}>
+                        {rule.priority}
+                      </Pill>
+                    </td>
+                    <td className="px-3 py-3">
+                      <div className="font-semibold text-white mb-1">{rule.name}</div>
+                      {rule.description && (
+                        <div className="text-xs text-slate-400">{rule.description}</div>
+                      )}
+                    </td>
+                    <td className="px-3 py-3">
+                      <Pill color={getActionColor(rule.action)} style={{ fontWeight: 600 }}>
+                        {rule.action}
+                      </Pill>
+                    </td>
+                    <td className="px-3 py-3">
+                      <ToggleSwitch
+                        checked={rule.enabled}
+                        onChange={(checked) => handleToggleRule(rule.id, checked)}
+                      />
+                    </td>
+                    <td className="px-3 py-3">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleTestRule(rule)}
+                          className="px-2.5 py-1 rounded-md text-xs font-medium bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10 transition-colors"
+                        >
+                          Test
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditingRule(rule);
+                            populateForm(rule);
+                            setModalVisible(true);
+                          }}
+                          className="px-2.5 py-1 rounded-md text-xs font-medium bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10 transition-colors"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteRule(rule.id)}
+                          className="px-2.5 py-1 rounded-md text-xs font-medium bg-red-500/20 text-red-400 border border-red-400/30 hover:bg-red-500/30 transition-colors"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {rules.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-3 py-16 text-center text-slate-400">
+                      No rules configured
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </GlassCard>
 
-      <Modal
-        title={editingRule ? "Edit Rule" : "Create Bot Detection Rule"}
+      {/* Create/Edit Rule Modal */}
+      <CustomModal
         open={modalVisible}
-        onCancel={() => {
+        onClose={() => {
           setModalVisible(false);
           setEditingRule(null);
-          form.resetFields();
+          resetForm();
         }}
-        onOk={() => form.submit()}
-        width={700}
+        title={editingRule ? "Edit Rule" : "Create Bot Detection Rule"}
+        footer={
+          <>
+            <button
+              onClick={() => {
+                setModalVisible(false);
+                setEditingRule(null);
+                resetForm();
+              }}
+              className="px-4 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-white/10 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleCreateRule}
+              className="px-5 py-2 rounded-lg text-sm font-semibold bg-cyan-500/20 text-cyan-400 border border-cyan-400/30 hover:bg-cyan-500/30 transition-colors"
+            >
+              {editingRule ? "Update" : "Create"}
+            </button>
+          </>
+        }
       >
-        <Form form={form} layout="vertical" onFinish={handleCreateRule}>
-          <Form.Item name="name" label="Rule Name" rules={[{ required: true }]}>
-            <Input placeholder="e.g., Block Datacenter IPs" />
-          </Form.Item>
-          <Form.Item name="description" label="Description">
-            <Input.TextArea rows={2} placeholder="Describe what this rule does..." />
-          </Form.Item>
-          <Form.Item name="action" label="Action" rules={[{ required: true }]} initialValue="BLOCK">
-            <Select>
-              <Select.Option value="BLOCK">Block</Select.Option>
-              <Select.Option value="CHALLENGE">Challenge</Select.Option>
-              <Select.Option value="MONITOR">Monitor</Select.Option>
-              <Select.Option value="ALLOW">Allow</Select.Option>
-            </Select>
-          </Form.Item>
-          <Form.Item name="priority" label="Priority" initialValue={50}>
-            <Input type="number" placeholder="0-100" />
-          </Form.Item>
-        </Form>
-      </Modal>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleCreateRule();
+          }}
+          className="space-y-5"
+        >
+          <div>
+            <label className="block text-sm font-medium text-[#E8F0FF] mb-1.5">
+              Rule Name <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="text"
+              value={formName}
+              onChange={(e) => setFormName(e.target.value)}
+              placeholder="e.g., Block Datacenter IPs"
+              required
+              className="w-full px-3 py-2.5 rounded-lg bg-[rgba(11,22,40,0.8)] border border-cyan-400/20 text-[#E8F0FF] placeholder-slate-500 text-sm focus:outline-none focus:border-cyan-400/50 transition-colors"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[#E8F0FF] mb-1.5">Description</label>
+            <textarea
+              rows={2}
+              value={formDescription}
+              onChange={(e) => setFormDescription(e.target.value)}
+              placeholder="Describe what this rule does..."
+              className="w-full px-3 py-2.5 rounded-lg bg-[rgba(11,22,40,0.8)] border border-cyan-400/20 text-[#E8F0FF] placeholder-slate-500 text-sm focus:outline-none focus:border-cyan-400/50 transition-colors resize-none"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[#E8F0FF] mb-1.5">
+              Action <span className="text-red-400">*</span>
+            </label>
+            <select
+              value={formAction}
+              onChange={(e) => setFormAction(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-lg bg-[rgba(11,22,40,0.8)] border border-cyan-400/20 text-[#E8F0FF] text-sm focus:outline-none focus:border-cyan-400/50 transition-colors appearance-none cursor-pointer"
+            >
+              <option value="BLOCK">Block</option>
+              <option value="CHALLENGE">Challenge</option>
+              <option value="MONITOR">Monitor</option>
+              <option value="ALLOW">Allow</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[#E8F0FF] mb-1.5">Priority</label>
+            <input
+              type="number"
+              value={formPriority}
+              onChange={(e) => setFormPriority(Number(e.target.value))}
+              placeholder="0-100"
+              className="w-full px-3 py-2.5 rounded-lg bg-[rgba(11,22,40,0.8)] border border-cyan-400/20 text-[#E8F0FF] placeholder-slate-500 text-sm focus:outline-none focus:border-cyan-400/50 transition-colors"
+            />
+          </div>
+        </form>
+      </CustomModal>
 
-      <Modal
-        title="Rule Templates"
+      {/* Rule Templates Modal */}
+      <CustomModal
         open={templatesVisible}
-        onCancel={() => setTemplatesVisible(false)}
-        footer={null}
-        width={700}
+        onClose={() => setTemplatesVisible(false)}
+        title="Rule Templates"
       >
         <div className="space-y-3">
           {RULE_TEMPLATES.map((template, idx) => (
@@ -1291,24 +1548,28 @@ function RulesTab({ companyId }: { companyId: string }) {
             >
               <h4 className="font-semibold text-lg mb-1 text-white">{template.name}</h4>
               <p className="text-sm text-slate-400 mb-2">{template.description}</p>
-              <Space>
-                <Tag color={getActionColor(template.action)}>{template.action}</Tag>
-                <Tag>Priority: {template.priority}</Tag>
-              </Space>
+              <div className="flex items-center gap-2">
+                <Pill color={getActionColor(template.action)}>{template.action}</Pill>
+                <Pill color="#94a3b8">Priority: {template.priority}</Pill>
+              </div>
             </div>
           ))}
         </div>
-      </Modal>
+      </CustomModal>
 
-      <Modal
-        title="Rule Test Results"
+      {/* Test Results Modal */}
+      <CustomModal
         open={testModalVisible}
-        onCancel={() => setTestModalVisible(false)}
-        footer={[
-          <Button key="close" onClick={() => setTestModalVisible(false)}>
+        onClose={() => setTestModalVisible(false)}
+        title="Rule Test Results"
+        footer={
+          <button
+            onClick={() => setTestModalVisible(false)}
+            className="px-4 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-white/10 border border-white/10 transition-colors"
+          >
             Close
-          </Button>,
-        ]}
+          </button>
+        }
       >
         {testResults && (
           <div className="grid grid-cols-2 gap-4">
@@ -1330,17 +1591,28 @@ function RulesTab({ companyId }: { companyId: string }) {
             </div>
           </div>
         )}
-      </Modal>
+      </CustomModal>
+
+      {/* Delete Confirmation */}
+      <ConfirmDialog
+        open={deleteConfirm !== null}
+        title="Delete Rule"
+        message="Are you sure you want to delete this rule?"
+        confirmLabel="Delete"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteConfirm(null)}
+      />
     </div>
   );
 }
 
-// TAB 4: ANALYTICS
+// ─── TAB 4: ANALYTICS ───────────────────────────────────────────────────────
+
 function AnalyticsTab({ asnIntelligence, headlessDetection, velocityAnalysis, crawlerVerification, hourlyTrends, loading }: any) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Spin size="large" />
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400" />
       </div>
     );
   }
@@ -1360,36 +1632,36 @@ function AnalyticsTab({ asnIntelligence, headlessDetection, velocityAnalysis, cr
   );
 }
 
-// TAB 5: REPORTS
+// ─── TAB 5: REPORTS ─────────────────────────────────────────────────────────
+
 function ReportsTab({ companyId, stats }: any) {
   const [exportLoading, setExportLoading] = useState(false);
 
   const handleExportPDF = async () => {
     setExportLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Generate simple CSV as fallback for now
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
       const csvData = [
-        ['Metric', 'Value'],
-        ['Total Requests', stats?.totalRequests || 0],
-        ['Bot Requests', stats?.botRequests || 0],
-        ['Blocked Requests', stats?.blockedRequests || 0],
-        ['Detection Rate', `${stats?.botDetectionRate || 0}%`],
+        ["Metric", "Value"],
+        ["Total Requests", stats?.totalRequests || 0],
+        ["Bot Requests", stats?.botRequests || 0],
+        ["Blocked Requests", stats?.blockedRequests || 0],
+        ["Detection Rate", `${stats?.botDetectionRate || 0}%`],
       ];
 
-      const csvContent = csvData.map(row => row.join(',')).join('\n');
-      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const csvContent = csvData.map((row) => row.join(",")).join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv" });
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
-      a.download = `Bot-Protection-Report-${new Date().toISOString().split('T')[0]}.csv`;
+      a.download = `Bot-Protection-Report-${new Date().toISOString().split("T")[0]}.csv`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error) {
-      console.error('Export error:', error);
+      console.error("Export error:", error);
     } finally {
       setExportLoading(false);
     }
@@ -1398,29 +1670,29 @@ function ReportsTab({ companyId, stats }: any) {
   const handleExportCSV = async () => {
     setExportLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      await new Promise((resolve) => setTimeout(resolve, 1500));
 
       const csvData = [
-        ['Metric', 'Value'],
-        ['Total Requests', stats?.totalRequests || 0],
-        ['Bot Requests', stats?.botRequests || 0],
-        ['Blocked Requests', stats?.blockedRequests || 0],
-        ['Detection Rate', `${stats?.botDetectionRate || 0}%`],
-        ['Unique IPs', stats?.uniqueIps || 0],
+        ["Metric", "Value"],
+        ["Total Requests", stats?.totalRequests || 0],
+        ["Bot Requests", stats?.botRequests || 0],
+        ["Blocked Requests", stats?.blockedRequests || 0],
+        ["Detection Rate", `${stats?.botDetectionRate || 0}%`],
+        ["Unique IPs", stats?.uniqueIps || 0],
       ];
 
-      const csvContent = csvData.map(row => row.join(',')).join('\n');
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const csvContent = csvData.map((row) => row.join(",")).join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
-      a.download = `Bot-Protection-Data-${new Date().toISOString().split('T')[0]}.csv`;
+      a.download = `Bot-Protection-Data-${new Date().toISOString().split("T")[0]}.csv`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error) {
-      console.error('CSV export error:', error);
+      console.error("CSV export error:", error);
     } finally {
       setExportLoading(false);
     }
@@ -1442,16 +1714,16 @@ function ReportsTab({ companyId, stats }: any) {
             <p className="text-sm text-slate-400 mb-4">
               Comprehensive security report with analysis
             </p>
-            <Button
-              type="primary"
-              danger
-              size="large"
-              block
-              loading={exportLoading}
+            <button
+              disabled={exportLoading}
               onClick={handleExportPDF}
+              className="w-full px-6 py-3 rounded-xl text-sm font-semibold bg-red-500/20 text-red-400 border border-red-400/30 hover:bg-red-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
+              {exportLoading && (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-400" />
+              )}
               Generate PDF
-            </Button>
+            </button>
           </div>
         </GlassCard>
 
@@ -1459,19 +1731,17 @@ function ReportsTab({ companyId, stats }: any) {
           <div className="text-center">
             <DocumentTextIcon className="w-16 h-16 mx-auto mb-4 text-green-400" />
             <h4 className="text-lg font-semibold text-white mb-2">Export CSV Data</h4>
-            <p className="text-sm text-slate-400 mb-4">
-              Raw data for analysis in Excel
-            </p>
-            <Button
-              type="primary"
-              size="large"
-              block
-              loading={exportLoading}
+            <p className="text-sm text-slate-400 mb-4">Raw data for analysis in Excel</p>
+            <button
+              disabled={exportLoading}
               onClick={handleExportCSV}
-              style={{ background: "#22c55e", borderColor: "#22c55e" }}
+              className="w-full px-6 py-3 rounded-xl text-sm font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-400/30 hover:bg-emerald-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
+              {exportLoading && (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-emerald-400" />
+              )}
               Generate CSV
-            </Button>
+            </button>
           </div>
         </GlassCard>
       </div>
@@ -1502,6 +1772,8 @@ function ReportsTab({ companyId, stats }: any) {
   );
 }
 
+// ─── Sub-components ─────────────────────────────────────────────────────────
+
 function KPICard({ title, value, icon, accentColor }: any) {
   return (
     <motion.div
@@ -1531,18 +1803,18 @@ function KPICard({ title, value, icon, accentColor }: any) {
 
 function UnifiedScoreCard({ score }: any) {
   const gaugeColor =
-    score >= 80 ? "#ff5b67" :
-    score >= 60 ? "#ffb35b" :
-    score >= 40 ? "#ffdd6b" :
-    "#00e7b7";
+    score >= 80
+      ? "#ff5b67"
+      : score >= 60
+      ? "#ffb35b"
+      : score >= 40
+      ? "#ffdd6b"
+      : "#00e7b7";
 
   const data = [{ name: "Score", value: score, fill: gaugeColor }];
 
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-    >
+    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
       <GlassCard className="p-6 relative overflow-hidden h-full">
         <div className="absolute inset-0 flex items-center justify-center opacity-5">
           <ShieldCheckIcon className="w-64 h-64" />
@@ -1567,12 +1839,7 @@ function UnifiedScoreCard({ score }: any) {
               startAngle={180}
               endAngle={0}
             >
-              <RadialBar
-                background
-                dataKey="value"
-                cornerRadius={15}
-                fill={gaugeColor}
-              />
+              <RadialBar background dataKey="value" cornerRadius={15} fill={gaugeColor} />
             </RadialBarChart>
           </ResponsiveContainer>
 
@@ -1626,9 +1893,7 @@ function ScoreDistributionCard({ distribution }: any) {
             className="w-6 h-6"
             style={{ color: "#00cfff", filter: "drop-shadow(0 0 8px #00cfff80)" }}
           />
-          <h3 className="text-lg font-semibold text-[#E8F0FF]">
-            Threat Score Distribution
-          </h3>
+          <h3 className="text-lg font-semibold text-[#E8F0FF]">Threat Score Distribution</h3>
         </div>
 
         <div className="grid grid-cols-5 gap-4">
@@ -1649,9 +1914,7 @@ function ScoreDistributionCard({ distribution }: any) {
               <div className="text-3xl font-semibold mb-2" style={{ color: item.color }}>
                 {item.count}
               </div>
-              <div className="text-sm font-semibold mb-1 text-[#E8F0FF]">
-                {item.level}
-              </div>
+              <div className="text-sm font-semibold mb-1 text-[#E8F0FF]">{item.level}</div>
               <div className="text-xs text-slate-300/85">{item.range}</div>
             </motion.div>
           ))}
@@ -1680,9 +1943,7 @@ function ActivityTimelineCard({ trends }: any) {
             className="w-6 h-6"
             style={{ color: "#00cfff", filter: "drop-shadow(0 0 8px #00cfff80)" }}
           />
-          <h3 className="text-lg font-semibold text-[#E8F0FF]">
-            24-Hour Activity Timeline
-          </h3>
+          <h3 className="text-lg font-semibold text-[#E8F0FF]">24-Hour Activity Timeline</h3>
         </div>
 
         {chartData.length > 0 ? (
@@ -1744,10 +2005,7 @@ function AsnIntelligenceCard({ data }: any) {
   const topAsn = data?.topDatacenterAsns?.[0];
 
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-    >
+    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
       <GlassCard className="p-6 relative overflow-hidden h-full">
         <div className="absolute right-0 bottom-0 opacity-5">
           <GlobeAltIcon className="w-48 h-48" />
@@ -1758,9 +2016,7 @@ function AsnIntelligenceCard({ data }: any) {
             className="w-6 h-6"
             style={{ color: "#00e1b0", filter: "drop-shadow(0 0 8px #00e1b080)" }}
           />
-          <h3 className="text-lg font-semibold text-[#E8F0FF]">
-            ASN Intelligence
-          </h3>
+          <h3 className="text-lg font-semibold text-[#E8F0FF]">ASN Intelligence</h3>
         </div>
 
         {topAsn ? (
@@ -1831,10 +2087,7 @@ function HeadlessBrowserCard({ data }: any) {
   const total = stats?.total_headless || 0;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-    >
+    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
       <GlassCard className="p-6 relative overflow-hidden h-full">
         <div className="absolute bottom-0 right-0 opacity-5">
           <CpuChipIcon className="w-40 h-40" />
@@ -1887,9 +2140,7 @@ function HeadlessBrowserCard({ data }: any) {
                 <div key={idx} className="flex items-center justify-between">
                   <span className="text-sm text-slate-300/85">{item.name}</span>
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-semibold text-[#E8F0FF]">
-                      {item.value}
-                    </span>
+                    <span className="text-sm font-semibold text-[#E8F0FF]">{item.value}</span>
                     <div
                       className="w-20 h-2 rounded-full overflow-hidden"
                       style={{ background: item.color + "20" }}
@@ -1933,9 +2184,7 @@ function CrawlerVerificationCard({ data }: any) {
             className="w-6 h-6"
             style={{ color: "#00cfff", filter: "drop-shadow(0 0 8px #00cfff80)" }}
           />
-          <h3 className="text-lg font-semibold text-[#E8F0FF]">
-            Crawler Verification
-          </h3>
+          <h3 className="text-lg font-semibold text-[#E8F0FF]">Crawler Verification</h3>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -1948,10 +2197,7 @@ function CrawlerVerificationCard({ data }: any) {
               boxShadow: "0 0 20px #00e7b720",
             }}
           >
-            <CheckCircleIcon
-              className="w-8 h-8 mx-auto mb-2"
-              style={{ color: "#00e7b7" }}
-            />
+            <CheckCircleIcon className="w-8 h-8 mx-auto mb-2" style={{ color: "#00e7b7" }} />
             <p className="text-3xl font-semibold" style={{ color: "#00e7b7" }}>
               {verified}
             </p>
@@ -1967,10 +2213,7 @@ function CrawlerVerificationCard({ data }: any) {
               boxShadow: "0 0 20px #ff5b6720",
             }}
           >
-            <NoSymbolIcon
-              className="w-8 h-8 mx-auto mb-2"
-              style={{ color: "#ff5b67" }}
-            />
+            <NoSymbolIcon className="w-8 h-8 mx-auto mb-2" style={{ color: "#ff5b67" }} />
             <p className="text-3xl font-semibold" style={{ color: "#ff5b67" }}>
               {fake}
             </p>
@@ -1982,21 +2225,15 @@ function CrawlerVerificationCard({ data }: any) {
           <div className="mt-4 pt-4 space-y-2 border-t border-cyan-400/10">
             <div className="flex justify-between text-sm">
               <span className="text-slate-300/85">Googlebot</span>
-              <span className="font-semibold text-[#E8F0FF]">
-                {stats.googlebot_count || 0}
-              </span>
+              <span className="font-semibold text-[#E8F0FF]">{stats.googlebot_count || 0}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-slate-300/85">Bingbot</span>
-              <span className="font-semibold text-[#E8F0FF]">
-                {stats.bingbot_count || 0}
-              </span>
+              <span className="font-semibold text-[#E8F0FF]">{stats.bingbot_count || 0}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-slate-300/85">DuckDuckBot</span>
-              <span className="font-semibold text-[#E8F0FF]">
-                {stats.duckduckbot_count || 0}
-              </span>
+              <span className="font-semibold text-[#E8F0FF]">{stats.duckduckbot_count || 0}</span>
             </div>
           </div>
         )}

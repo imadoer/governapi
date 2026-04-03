@@ -1,1 +1,50 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+.next/
+.turbo/
+dist/
+out/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Backups — never commit
+**/*.backup*
+**/*.bak
+**/*.INSECURE-backup
+**/lib-backup-*/
+**/dashboard-recovery/
+**/moved-out-customer-dashboard/
 apps/governapi-backups/
+*.tar.gz
+governapi-db-backup-*.sql
+middleware-backup-*.ts
+
+# Temp/debug files
+check_database.js
+test-*.js
+temp_*.js
+debug_query.js
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Database
+*.db
+prisma/dev.db
+
+# Logs
+*.log
+npm-debug.log*

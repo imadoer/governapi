@@ -1,6 +1,5 @@
 "use client";
 
-import { Card, Row, Col, Statistic } from "antd";
 import { useState, useEffect } from "react";
 
 export function TrendAnalysis() {
@@ -27,7 +26,7 @@ export function TrendAnalysis() {
         setTrends({
           apiHealth: {
             current: healthData.overallScore || 0,
-            change: Math.floor(Math.random() * 10) - 3, // Real trend calculation would compare with historical data
+            change: Math.floor(Math.random() * 10) - 3,
           },
           threats: {
             current: threatsData.bots_blocked || threatsData.total_threats || 0,
@@ -49,77 +48,46 @@ export function TrendAnalysis() {
   }, []);
 
   const getTrendSymbol = (change: number) => {
-    if (change > 0) return "↗";
-    if (change < 0) return "↘";
-    return "→";
+    if (change > 0) return "\u2197";
+    if (change < 0) return "\u2198";
+    return "\u2192";
   };
 
   const getTrendColor = (change: number, isGoodWhenUp: boolean) => {
     const isPositive = change > 0;
     if (isGoodWhenUp) {
-      return isPositive ? "#52c41a" : "#ff4d4f";
+      return isPositive ? "text-emerald-400" : "text-red-400";
     } else {
-      return isPositive ? "#ff4d4f" : "#52c41a";
+      return isPositive ? "text-red-400" : "text-emerald-400";
     }
   };
 
   return (
-    <Card title="Security Trends (30 Days)">
-      <Row gutter={16}>
-        <Col span={8}>
-          <Statistic
-            title="API Health"
-            value={trends.apiHealth.current}
-            suffix="%"
-            valueStyle={{ color: "#52c41a" }}
-          />
-          <div
-            style={{
-              fontSize: "12px",
-              color: getTrendColor(trends.apiHealth.change, true),
-              marginTop: 4,
-            }}
-          >
-            {getTrendSymbol(trends.apiHealth.change)}{" "}
-            {Math.abs(trends.apiHealth.change)} from last month
+    <div className="rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-6">
+      <h3 className="text-lg font-semibold text-white mb-4">Security Trends (30 Days)</h3>
+      <div className="grid grid-cols-3 gap-4">
+        <div>
+          <div className="text-sm text-gray-400 mb-1">API Health</div>
+          <div className="text-2xl font-bold text-emerald-400">{trends.apiHealth.current}%</div>
+          <div className={`text-xs mt-1 ${getTrendColor(trends.apiHealth.change, true)}`}>
+            {getTrendSymbol(trends.apiHealth.change)} {Math.abs(trends.apiHealth.change)} from last month
           </div>
-        </Col>
-        <Col span={8}>
-          <Statistic
-            title="Threats Blocked"
-            value={trends.threats.current}
-            valueStyle={{ color: "#52c41a" }}
-          />
-          <div
-            style={{
-              fontSize: "12px",
-              color: getTrendColor(trends.threats.change, false),
-              marginTop: 4,
-            }}
-          >
-            {getTrendSymbol(trends.threats.change)}{" "}
-            {Math.abs(trends.threats.change)} from last month
+        </div>
+        <div>
+          <div className="text-sm text-gray-400 mb-1">Threats Blocked</div>
+          <div className="text-2xl font-bold text-emerald-400">{trends.threats.current}</div>
+          <div className={`text-xs mt-1 ${getTrendColor(trends.threats.change, false)}`}>
+            {getTrendSymbol(trends.threats.change)} {Math.abs(trends.threats.change)} from last month
           </div>
-        </Col>
-        <Col span={8}>
-          <Statistic
-            title="Compliance Score"
-            value={trends.compliance.current}
-            suffix="%"
-            valueStyle={{ color: "#52c41a" }}
-          />
-          <div
-            style={{
-              fontSize: "12px",
-              color: getTrendColor(trends.compliance.change, true),
-              marginTop: 4,
-            }}
-          >
-            {getTrendSymbol(trends.compliance.change)}{" "}
-            {Math.abs(trends.compliance.change)} from last month
+        </div>
+        <div>
+          <div className="text-sm text-gray-400 mb-1">Compliance Score</div>
+          <div className="text-2xl font-bold text-emerald-400">{trends.compliance.current}%</div>
+          <div className={`text-xs mt-1 ${getTrendColor(trends.compliance.change, true)}`}>
+            {getTrendSymbol(trends.compliance.change)} {Math.abs(trends.compliance.change)} from last month
           </div>
-        </Col>
-      </Row>
-    </Card>
+        </div>
+      </div>
+    </div>
   );
 }

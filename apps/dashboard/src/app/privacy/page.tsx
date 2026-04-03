@@ -6,11 +6,11 @@ import { ShieldCheckIcon } from '@heroicons/react/24/outline'
 
 export default function PrivacyPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900">
+    <div className="min-h-screen bg-[#0a0a0f]">
       {/* Header */}
-      <div className="bg-slate-900/50 border-b border-slate-700">
+      <div className="border-b border-white/5">
         <div className="max-w-7xl mx-auto px-6 py-4">
-          <Link href="/" className="text-2xl font-bold text-white hover:text-blue-400 transition">
+          <Link href="/" className="text-2xl font-bold text-white hover:text-cyan-400 transition">
             GovernAPI
           </Link>
         </div>

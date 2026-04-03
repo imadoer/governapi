@@ -1,57 +1,6 @@
 "use client";
-import React, { useState, useEffect } from "react";
-import {
-  Card,
-  Row,
-  Col,
-  Typography,
-  Button,
-  Tag,
-  Space,
-  Table,
-  Progress,
-  Tabs,
-  Drawer,
-  Descriptions,
-  Timeline,
-  Select,
-  Input,
-  Badge,
-  Alert,
-  Modal,
-  Form,
-  message,
-  Tooltip,
-  Statistic,
-  Empty,
-  Divider,
-} from "antd";
-import {
-  BugOutlined,
-  SearchOutlined,
-  FilterOutlined,
-  DownloadOutlined,
-  ExclamationCircleOutlined,
-  CheckCircleOutlined,
-  ClockCircleOutlined,
-  WarningOutlined,
-  ApiOutlined,
-  CodeOutlined,
-  SafetyCertificateOutlined,
-  FileTextOutlined,
-  LinkOutlined,
-  ReloadOutlined,
-  EyeOutlined,
-  PlayCircleOutlined,
-  GlobalOutlined,
-  ThunderboltOutlined,
-} from "@ant-design/icons";
-import type { ColumnsType } from "antd/es/table";
-
-const { Title, Paragraph, Text } = Typography;
-const { Option } = Select;
-const { TabPane } = Tabs;
-const { TextArea } = Input;
+import React, { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 
 // ==================== TYPES ====================
 
@@ -75,14 +24,6 @@ interface Vulnerability {
   resolved_at?: string;
 }
 
-interface ScanTemplate {
-  id: string;
-  name: string;
-  description: string;
-  duration: string;
-  scanType: string;
-}
-
 interface OWASPCategory {
   id: string;
   name: string;
@@ -90,9 +31,26 @@ interface OWASPCategory {
   severity: string;
 }
 
+// ==================== TOAST HELPER ====================
+
+function showToast(msg: string, type: "success" | "error" = "success") {
+  const el = document.createElement("div");
+  el.textContent = msg;
+  el.className = `fixed top-6 right-6 z-[9999] px-5 py-3 rounded-lg text-sm font-medium shadow-lg transition-opacity duration-300 ${
+    type === "success"
+      ? "bg-emerald-600/90 text-white border border-emerald-400/30"
+      : "bg-red-600/90 text-white border border-red-400/30"
+  }`;
+  document.body.appendChild(el);
+  setTimeout(() => {
+    el.style.opacity = "0";
+    setTimeout(() => el.remove(), 300);
+  }, 2500);
+}
+
 // ==================== MAIN COMPONENT ====================
 
-export function VulnerabilitiesPage({ company }) {
+export function VulnerabilitiesPage({ company }: { company?: any }) {
   // ========== STATE ==========
   const [activeTab, setActiveTab] = useState("vulnerabilities");
   const [vulnerabilities, setVulnerabilities] = useState<Vulnerability[]>([]);
@@ -106,7 +64,19 @@ export function VulnerabilitiesPage({ company }) {
   const [owaspData, setOwaspData] = useState<OWASPCategory[]>([]);
   const [workflowModalVisible, setWorkflowModalVisible] = useState(false);
   const [jiraModalVisible, setJiraModalVisible] = useState(false);
-  const [form] = Form.useForm();
+
+  // Form state for JIRA modal
+  const [jiraProject, setJiraProject] = useState("");
+  const [jiraIssueType, setJiraIssueType] = useState("Bug");
+  const [jiraPriority, setJiraPriority] = useState("High");
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+
+  // Sort state
+  const [sortField, setSortField] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
   // ========== FETCH DATA ==========
   useEffect(() => {
@@ -130,7 +100,7 @@ export function VulnerabilitiesPage({ company }) {
       }
     } catch (error) {
       console.error("Error fetching vulnerabilities:", error);
-      message.error("Failed to load vulnerabilities");
+      showToast("Failed to load vulnerabilities", "error");
     } finally {
       setLoading(false);
     }
@@ -153,7 +123,6 @@ export function VulnerabilitiesPage({ company }) {
   const filterVulnerabilities = () => {
     let filtered = [...vulnerabilities];
 
-    // Search filter
     if (searchText) {
       filtered = filtered.filter(
         (v) =>
@@ -163,17 +132,16 @@ export function VulnerabilitiesPage({ company }) {
       );
     }
 
-    // Severity filter
     if (severityFilter !== "all") {
       filtered = filtered.filter((v) => v.severity === severityFilter);
     }
 
-    // Status filter
     if (statusFilter !== "all") {
       filtered = filtered.filter((v) => v.status === statusFilter);
     }
 
     setFilteredVulnerabilities(filtered);
+    setCurrentPage(1);
   };
 
   // ========== ACTIONS ==========
@@ -189,20 +157,22 @@ export function VulnerabilitiesPage({ company }) {
       });
 
       if (response.ok) {
-        message.success(`Vulnerability ${newStatus.replace("_", " ")}`);
+        showToast(`Vulnerability ${newStatus.replace("_", " ")}`);
         fetchVulnerabilities();
         setWorkflowModalVisible(false);
         setDrawerVisible(false);
       } else {
-        message.error("Failed to update vulnerability status");
+        showToast("Failed to update vulnerability status", "error");
       }
     } catch (error) {
-      message.error("Failed to update vulnerability");
+      showToast("Failed to update vulnerability", "error");
     }
   };
 
-  const handleCreateJiraTicket = async (values: any) => {
+  const handleCreateJiraTicket = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!selectedVulnerability) return;
+    if (!jiraProject) return;
 
     try {
       const response = await fetch("/api/integrations/jira/create-ticket", {
@@ -213,19 +183,23 @@ export function VulnerabilitiesPage({ company }) {
         },
         body: JSON.stringify({
           vulnerabilityId: selectedVulnerability.id,
-          ...values,
+          project: jiraProject,
+          issueType: jiraIssueType,
+          priority: jiraPriority,
         }),
       });
 
       if (response.ok) {
-        message.success("JIRA ticket created successfully");
+        showToast("JIRA ticket created successfully");
         setJiraModalVisible(false);
-        form.resetFields();
+        setJiraProject("");
+        setJiraIssueType("Bug");
+        setJiraPriority("High");
       } else {
-        message.error("Failed to create JIRA ticket");
+        showToast("Failed to create JIRA ticket", "error");
       }
     } catch (error) {
-      message.error("Failed to create JIRA ticket");
+      showToast("Failed to create JIRA ticket", "error");
     }
   };
 
@@ -242,10 +216,10 @@ export function VulnerabilitiesPage({ company }) {
         a.href = url;
         a.download = `vulnerabilities_${Date.now()}.${format}`;
         a.click();
-        message.success(`Vulnerabilities exported as ${format.toUpperCase()}`);
+        showToast(`Vulnerabilities exported as ${format.toUpperCase()}`);
       }
     } catch (error) {
-      message.error("Failed to export vulnerabilities");
+      showToast("Failed to export vulnerabilities", "error");
     }
   };
 
@@ -267,37 +241,54 @@ export function VulnerabilitiesPage({ company }) {
     }
   };
 
-  const getStatusColor = (status: string) => {
+  const getSeverityClasses = (severity: string) => {
+    switch (severity) {
+      case "critical":
+        return "bg-red-500/20 text-red-400 border-red-500/30";
+      case "high":
+        return "bg-orange-500/20 text-orange-400 border-orange-500/30";
+      case "medium":
+        return "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
+      case "low":
+        return "bg-blue-500/20 text-blue-400 border-blue-500/30";
+      case "info":
+        return "bg-slate-500/20 text-slate-400 border-slate-500/30";
+      default:
+        return "bg-slate-500/20 text-slate-400 border-slate-500/30";
+    }
+  };
+
+  const getStatusClasses = (status: string) => {
     switch (status) {
       case "open":
-        return "red";
+        return "bg-red-500/20 text-red-400 border-red-500/30";
       case "acknowledged":
-        return "orange";
+        return "bg-orange-500/20 text-orange-400 border-orange-500/30";
       case "in_progress":
-        return "blue";
+        return "bg-blue-500/20 text-blue-400 border-blue-500/30";
       case "resolved":
-        return "green";
+        return "bg-emerald-500/20 text-emerald-400 border-emerald-500/30";
       case "false_positive":
-        return "default";
+        return "bg-slate-500/20 text-slate-400 border-slate-500/30";
       default:
-        return "default";
+        return "bg-slate-500/20 text-slate-400 border-slate-500/30";
     }
   };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "open":
-        return <ExclamationCircleOutlined />;
+        return "!";
       case "acknowledged":
-        return <EyeOutlined />;
+        return "👁";
       case "in_progress":
-        return <ClockCircleOutlined />;
+        return "⏳";
       case "resolved":
-        return <CheckCircleOutlined />;
+        return "✓";
       case "false_positive":
-        return <WarningOutlined />;
+        return "⚠";
       default:
-        return null;
+        return "";
     }
   };
 
@@ -306,7 +297,7 @@ export function VulnerabilitiesPage({ company }) {
     const now = new Date();
     const hoursOpen = (now.getTime() - created.getTime()) / (1000 * 60 * 60);
 
-    let slaHours = 168; // 7 days default
+    let slaHours = 168;
     if (severity === "critical") slaHours = 24;
     else if (severity === "high") slaHours = 72;
     else if (severity === "medium") slaHours = 168;
@@ -321,124 +312,37 @@ export function VulnerabilitiesPage({ company }) {
     };
   };
 
-  // ========== TABLE COLUMNS ==========
-  const columns: ColumnsType<Vulnerability> = [
-    {
-      title: "Severity",
-      dataIndex: "severity",
-      key: "severity",
-      width: 100,
-      sorter: (a, b) => {
-        const order = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
-        return order[a.severity] - order[b.severity];
-      },
-      render: (severity: string) => (
-        <Tag color={getSeverityColor(severity)} style={{ fontWeight: "bold" }}>
-          {severity.toUpperCase()}
-        </Tag>
-      ),
-    },
-    {
-      title: "Title",
-      dataIndex: "title",
-      key: "title",
-      ellipsis: true,
-      render: (title: string, record: Vulnerability) => (
-        <Space direction="vertical" size="small">
-          <Text strong style={{ fontSize: "13px" }}>
-            {title}
-          </Text>
-          <Space size="small">
-            {record.cwe_id && <Tag>CWE-{record.cwe_id}</Tag>}
-            {record.cvss_score && (
-              <Tag color={record.cvss_score >= 7 ? "red" : "orange"}>CVSS: {record.cvss_score}</Tag>
-            )}
-          </Space>
-        </Space>
-      ),
-    },
-    {
-      title: "Type",
-      dataIndex: "vulnerability_type",
-      key: "vulnerability_type",
-      width: 180,
-      render: (type: string) => <Tag color="blue">{type}</Tag>,
-    },
-    {
-      title: "Affected",
-      dataIndex: "affected_url",
-      key: "affected_url",
-      ellipsis: true,
-      render: (url: string, record: Vulnerability) => (
-        <Space direction="vertical" size="small">
-          {url && (
-            <Text code style={{ fontSize: "11px" }}>
-              {url}
-            </Text>
-          )}
-          {record.affected_parameter && (
-            <Text type="secondary" style={{ fontSize: "11px" }}>
-              Param: {record.affected_parameter}
-            </Text>
-          )}
-        </Space>
-      ),
-    },
-    {
-      title: "Status",
-      dataIndex: "status",
-      key: "status",
-      width: 140,
-      render: (status: string) => (
-        <Tag color={getStatusColor(status)} icon={getStatusIcon(status)}>
-          {status.replace("_", " ").toUpperCase()}
-        </Tag>
-      ),
-    },
-    {
-      title: "SLA",
-      key: "sla",
-      width: 100,
-      render: (_, record: Vulnerability) => {
-        const sla = calculateSLA(record.created_at, record.severity);
-        return (
-          <Tooltip title={`${Math.abs(sla.remaining).toFixed(0)}h ${sla.breached ? "overdue" : "remaining"}`}>
-            <Progress
-              percent={sla.percent}
-              size="small"
-              strokeColor={sla.breached ? "#ff4d4f" : sla.percent < 20 ? "#fa8c16" : "#52c41a"}
-              showInfo={false}
-            />
-          </Tooltip>
-        );
-      },
-    },
-    {
-      title: "Discovered",
-      dataIndex: "created_at",
-      key: "created_at",
-      width: 120,
-      sorter: (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-      render: (date: string) => new Date(date).toLocaleDateString(),
-    },
-    {
-      title: "Actions",
-      key: "actions",
-      width: 100,
-      render: (_, record: Vulnerability) => (
-        <Button
-          type="link"
-          size="small"
-          onClick={() => {
-            setSelectedVulnerability(record);
-            setDrawerVisible(true);
-          }}
-        >
-          Details
-        </Button>
-      ),
-    },
-  ];
+  // ========== SORTING ==========
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
+
+  const getSortedData = () => {
+    let data = [...filteredVulnerabilities];
+    if (sortField) {
+      data.sort((a, b) => {
+        let cmp = 0;
+        if (sortField === "severity") {
+          const order: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
+          cmp = order[a.severity] - order[b.severity];
+        } else if (sortField === "created_at") {
+          cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        }
+        return sortDirection === "asc" ? cmp : -cmp;
+      });
+    }
+    return data;
+  };
+
+  // ========== PAGINATION ==========
+  const sortedData = getSortedData();
+  const totalPages = Math.ceil(sortedData.length / pageSize);
+  const paginatedData = sortedData.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   // ========== STATISTICS ==========
   const stats = {
@@ -453,403 +357,776 @@ export function VulnerabilitiesPage({ company }) {
     resolved: vulnerabilities.filter((v) => v.status === "resolved").length,
   };
 
+  // ========== SUB-COMPONENTS ==========
+
+  const Pill = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${className}`}>
+      {children}
+    </span>
+  );
+
+  const ProgressBar = ({
+    percent,
+    color,
+  }: {
+    percent: number;
+    color: string;
+  }) => (
+    <div className="w-full h-2 rounded-full bg-slate-700/50 overflow-hidden">
+      <div
+        className="h-full rounded-full transition-all duration-500"
+        style={{ width: `${Math.min(100, Math.max(0, percent))}%`, backgroundColor: color }}
+      />
+    </div>
+  );
+
+  const SortHeader = ({ field, label }: { field: string; label: string }) => (
+    <th
+      className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider cursor-pointer hover:text-cyan-400 transition-colors select-none"
+      onClick={() => handleSort(field)}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {sortField === field && (
+          <span className="text-cyan-400">{sortDirection === "asc" ? "▲" : "▼"}</span>
+        )}
+      </span>
+    </th>
+  );
+
+  // ========== TAB DEFINITIONS ==========
+  const tabs = [
+    { key: "vulnerabilities", label: "Vulnerabilities", icon: "🐛", badge: stats.open },
+    { key: "owasp", label: "OWASP Top 10", icon: "🛡" },
+    { key: "timeline", label: "Timeline", icon: "⏱" },
+  ];
+
   // ========== RENDER ==========
   return (
-    <div style={{ padding: "0" }}>
+    <div>
       {/* HEADER */}
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div className="mb-6">
+        <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
-            <Title level={2} style={{ margin: 0, display: "flex", alignItems: "center", gap: "12px" }}>
-              <BugOutlined style={{ color: "#fa8c16" }} />
+            <h2 className="text-2xl font-bold text-white flex items-center gap-3">
+              <span className="text-orange-400 text-2xl">🐛</span>
               Vulnerability Scanner
-            </Title>
-            <Paragraph style={{ margin: "8px 0 0 0", color: "#8c8c8c" }}>
+            </h2>
+            <p className="mt-2 text-slate-400 text-sm">
               Comprehensive vulnerability management and remediation tracking
-            </Paragraph>
+            </p>
           </div>
-          <Space>
-            <Select defaultValue="pdf" style={{ width: 120 }} onChange={handleExport}>
-              <Option value="pdf">
-                <DownloadOutlined /> PDF
-              </Option>
-              <Option value="json">
-                <DownloadOutlined /> JSON
-              </Option>
-              <Option value="csv">
-                <DownloadOutlined /> CSV
-              </Option>
-            </Select>
-            <Button icon={<ReloadOutlined />} loading={loading} onClick={fetchVulnerabilities}>
+          <div className="flex items-center gap-3">
+            <select
+              className="bg-slate-800/60 border border-white/10 text-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500/50"
+              defaultValue=""
+              onChange={(e) => {
+                if (e.target.value) handleExport(e.target.value as "pdf" | "json" | "csv");
+                e.target.value = "";
+              }}
+            >
+              <option value="" disabled>Export...</option>
+              <option value="pdf">PDF</option>
+              <option value="json">JSON</option>
+              <option value="csv">CSV</option>
+            </select>
+            <button
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800/60 border border-white/10 text-slate-300 hover:bg-slate-700/60 hover:border-cyan-500/30 transition-all text-sm"
+              onClick={fetchVulnerabilities}
+              disabled={loading}
+            >
+              {loading ? (
+                <span className="animate-spin inline-block w-4 h-4 border-2 border-slate-500 border-t-cyan-400 rounded-full" />
+              ) : (
+                <span>↻</span>
+              )}
               Refresh
-            </Button>
-          </Space>
+            </button>
+          </div>
         </div>
       </div>
 
       {/* KEY METRICS */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col xs={12} sm={6}>
-          <Card>
-            <Statistic
-              title="Total Vulnerabilities"
-              value={stats.total}
-              prefix={<BugOutlined />}
-              valueStyle={{ color: "#1890ff" }}
-            />
-          </Card>
-        </Col>
-        <Col xs={12} sm={6}>
-          <Card>
-            <Statistic
-              title="Critical"
-              value={stats.critical}
-              prefix={<ExclamationCircleOutlined />}
-              valueStyle={{ color: "#ff4d4f" }}
-            />
-          </Card>
-        </Col>
-        <Col xs={12} sm={6}>
-          <Card>
-            <Statistic
-              title="High"
-              value={stats.high}
-              prefix={<WarningOutlined />}
-              valueStyle={{ color: "#fa8c16" }}
-            />
-          </Card>
-        </Col>
-        <Col xs={12} sm={6}>
-          <Card>
-            <Statistic
-              title="Open"
-              value={stats.open}
-              prefix={<ClockCircleOutlined />}
-              valueStyle={{ color: "#faad14" }}
-            />
-          </Card>
-        </Col>
-      </Row>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+        {[
+          { label: "Total Vulnerabilities", value: stats.total, icon: "🐛", color: "text-cyan-400" },
+          { label: "Critical", value: stats.critical, icon: "‼", color: "text-red-400" },
+          { label: "High", value: stats.high, icon: "⚠", color: "text-orange-400" },
+          { label: "Open", value: stats.open, icon: "⏳", color: "text-yellow-400" },
+        ].map((stat) => (
+          <motion.div
+            key={stat.label}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-slate-800/30 backdrop-blur border border-white/10 rounded-xl p-5"
+          >
+            <p className="text-xs text-slate-400 mb-1">{stat.label}</p>
+            <div className={`text-2xl font-bold ${stat.color} flex items-center gap-2`}>
+              <span className="text-lg">{stat.icon}</span>
+              {stat.value}
+            </div>
+          </motion.div>
+        ))}
+      </div>
 
       {/* TABS */}
-      <Tabs activeKey={activeTab} onChange={setActiveTab} size="large">
-        {/* ==================== VULNERABILITIES TAB ==================== */}
-        <TabPane
-          tab={
-            <span>
-              <BugOutlined />
-              Vulnerabilities
-              <Badge count={stats.open} offset={[10, 0]} />
-            </span>
-          }
-          key="vulnerabilities"
-        >
+      <div className="flex items-center gap-1 mb-6 border-b border-white/10 pb-0">
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`relative px-5 py-3 text-sm font-medium rounded-t-lg transition-all flex items-center gap-2 ${
+              activeTab === tab.key
+                ? "text-cyan-400 bg-slate-800/40 border border-white/10 border-b-transparent -mb-px"
+                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/20"
+            }`}
+          >
+            <span>{tab.icon}</span>
+            {tab.label}
+            {tab.badge !== undefined && tab.badge > 0 && (
+              <span className="ml-1.5 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold bg-red-500/80 text-white">
+                {tab.badge}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* ==================== VULNERABILITIES TAB ==================== */}
+      {activeTab === "vulnerabilities" && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}>
           {/* FILTERS */}
-          <Card style={{ marginBottom: 16 }}>
-            <Space size="middle" wrap>
-              <Input
-                placeholder="Search vulnerabilities..."
-                prefix={<SearchOutlined />}
-                value={searchText}
-                onChange={(e) => setSearchText(e.target.value)}
-                style={{ width: 300 }}
-                allowClear
-              />
-              <Select
+          <div className="bg-slate-800/30 backdrop-blur border border-white/10 rounded-xl p-4 mb-4">
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="relative flex-1 min-w-[200px] max-w-[300px]">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">🔍</span>
+                <input
+                  type="text"
+                  placeholder="Search vulnerabilities..."
+                  value={searchText}
+                  onChange={(e) => setSearchText(e.target.value)}
+                  className="w-full bg-slate-900/60 border border-white/10 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50"
+                />
+                {searchText && (
+                  <button
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 text-sm"
+                    onClick={() => setSearchText("")}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+              <select
                 value={severityFilter}
-                onChange={setSeverityFilter}
-                style={{ width: 150 }}
-                placeholder="Severity"
+                onChange={(e) => setSeverityFilter(e.target.value)}
+                className="bg-slate-900/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-cyan-500/50"
               >
-                <Option value="all">All Severities</Option>
-                <Option value="critical">Critical</Option>
-                <Option value="high">High</Option>
-                <Option value="medium">Medium</Option>
-                <Option value="low">Low</Option>
-              </Select>
-              <Select value={statusFilter} onChange={setStatusFilter} style={{ width: 150 }} placeholder="Status">
-                <Option value="all">All Status</Option>
-                <Option value="open">Open</Option>
-                <Option value="acknowledged">Acknowledged</Option>
-                <Option value="in_progress">In Progress</Option>
-                <Option value="resolved">Resolved</Option>
-                <Option value="false_positive">False Positive</Option>
-              </Select>
-              <Text type="secondary">
+                <option value="all">All Severities</option>
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="bg-slate-900/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-cyan-500/50"
+              >
+                <option value="all">All Status</option>
+                <option value="open">Open</option>
+                <option value="acknowledged">Acknowledged</option>
+                <option value="in_progress">In Progress</option>
+                <option value="resolved">Resolved</option>
+                <option value="false_positive">False Positive</option>
+              </select>
+              <span className="text-xs text-slate-500">
                 Showing {filteredVulnerabilities.length} of {vulnerabilities.length} vulnerabilities
-              </Text>
-            </Space>
-          </Card>
+              </span>
+            </div>
+          </div>
 
           {/* TABLE */}
-          <Card>
-            <Table
-              columns={columns}
-              dataSource={filteredVulnerabilities}
-              rowKey="id"
-              loading={loading}
-              pagination={{ pageSize: 20, showSizeChanger: true }}
-            />
-          </Card>
-        </TabPane>
+          <div className="bg-slate-800/30 backdrop-blur border border-white/10 rounded-xl overflow-hidden">
+            {loading ? (
+              <div className="flex items-center justify-center py-20">
+                <span className="animate-spin inline-block w-8 h-8 border-3 border-slate-600 border-t-cyan-400 rounded-full" />
+              </div>
+            ) : paginatedData.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-slate-500">
+                <span className="text-4xl mb-3">📭</span>
+                <p>No vulnerabilities found</p>
+              </div>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-white/10 bg-slate-900/40">
+                        <SortHeader field="severity" label="Severity" />
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Title</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Type</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Affected</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Status</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider w-[100px]">SLA</th>
+                        <SortHeader field="created_at" label="Discovered" />
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {paginatedData.map((vuln) => {
+                        const sla = calculateSLA(vuln.created_at, vuln.severity);
+                        return (
+                          <tr
+                            key={vuln.id}
+                            className="hover:bg-slate-700/20 transition-colors"
+                          >
+                            <td className="px-4 py-3">
+                              <Pill className={getSeverityClasses(vuln.severity)}>
+                                {vuln.severity.toUpperCase()}
+                              </Pill>
+                            </td>
+                            <td className="px-4 py-3 max-w-[280px]">
+                              <div className="flex flex-col gap-1">
+                                <span className="text-sm font-medium text-slate-200 truncate">{vuln.title}</span>
+                                <div className="flex gap-1.5 flex-wrap">
+                                  {vuln.cwe_id && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400 border border-white/5">
+                                      CWE-{vuln.cwe_id}
+                                    </span>
+                                  )}
+                                  {vuln.cvss_score !== undefined && vuln.cvss_score !== null && (
+                                    <span
+                                      className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                                        vuln.cvss_score >= 7
+                                          ? "bg-red-500/20 text-red-400 border-red-500/30"
+                                          : "bg-orange-500/20 text-orange-400 border-orange-500/30"
+                                      }`}
+                                    >
+                                      CVSS: {vuln.cvss_score}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <Pill className="bg-blue-500/20 text-blue-400 border-blue-500/30">
+                                {vuln.vulnerability_type}
+                              </Pill>
+                            </td>
+                            <td className="px-4 py-3 max-w-[200px]">
+                              <div className="flex flex-col gap-0.5">
+                                {vuln.affected_url && (
+                                  <code className="text-[11px] text-cyan-400/80 bg-slate-900/50 px-1.5 py-0.5 rounded truncate block">
+                                    {vuln.affected_url}
+                                  </code>
+                                )}
+                                {vuln.affected_parameter && (
+                                  <span className="text-[11px] text-slate-500">Param: {vuln.affected_parameter}</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <Pill className={getStatusClasses(vuln.status)}>
+                                {getStatusIcon(vuln.status)} {vuln.status.replace("_", " ").toUpperCase()}
+                              </Pill>
+                            </td>
+                            <td className="px-4 py-3 w-[100px]">
+                              <div
+                                title={`${Math.abs(sla.remaining).toFixed(0)}h ${sla.breached ? "overdue" : "remaining"}`}
+                              >
+                                <ProgressBar
+                                  percent={sla.percent}
+                                  color={sla.breached ? "#ff4d4f" : sla.percent < 20 ? "#fa8c16" : "#52c41a"}
+                                />
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-sm text-slate-400">
+                              {new Date(vuln.created_at).toLocaleDateString()}
+                            </td>
+                            <td className="px-4 py-3">
+                              <button
+                                className="text-sm text-cyan-400 hover:text-cyan-300 transition-colors"
+                                onClick={() => {
+                                  setSelectedVulnerability(vuln);
+                                  setDrawerVisible(true);
+                                }}
+                              >
+                                Details
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
 
-        {/* ==================== OWASP TOP 10 TAB ==================== */}
-        <TabPane
-          tab={
-            <span>
-              <SafetyCertificateOutlined />
-              OWASP Top 10
-            </span>
-          }
-          key="owasp"
-        >
-          <Card>
-            <Space direction="vertical" style={{ width: "100%" }} size="large">
+                {/* PAGINATION */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between px-4 py-3 border-t border-white/10">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-500">Rows per page:</span>
+                      <select
+                        value={pageSize}
+                        onChange={(e) => {
+                          setPageSize(Number(e.target.value));
+                          setCurrentPage(1);
+                        }}
+                        className="bg-slate-900/60 border border-white/10 rounded px-2 py-1 text-xs text-slate-300 focus:outline-none"
+                      >
+                        {[10, 20, 50, 100].map((s) => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        className="px-3 py-1 rounded text-xs text-slate-400 hover:text-white hover:bg-slate-700/50 disabled:opacity-30 disabled:pointer-events-none transition-all"
+                        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                      >
+                        Previous
+                      </button>
+                      <span className="text-xs text-slate-500 px-3">
+                        {currentPage} / {totalPages}
+                      </span>
+                      <button
+                        className="px-3 py-1 rounded text-xs text-slate-400 hover:text-white hover:bg-slate-700/50 disabled:opacity-30 disabled:pointer-events-none transition-all"
+                        onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </motion.div>
+      )}
+
+      {/* ==================== OWASP TOP 10 TAB ==================== */}
+      {activeTab === "owasp" && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}>
+          <div className="bg-slate-800/30 backdrop-blur border border-white/10 rounded-xl p-6">
+            <div className="flex flex-col gap-4">
               {owaspData.length > 0 ? (
                 owaspData.map((category) => (
-                  <Card key={category.id} size="small">
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <Space>
-                        <Tag color={getSeverityColor(category.severity)}>{category.id}</Tag>
-                        <Text strong>{category.name}</Text>
-                      </Space>
-                      <Badge count={category.count} showZero style={{ backgroundColor: getSeverityColor(category.severity) }} />
+                  <div
+                    key={category.id}
+                    className="bg-slate-900/40 border border-white/5 rounded-lg p-4 flex items-center justify-between hover:border-white/10 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Pill className={getSeverityClasses(category.severity)}>
+                        {category.id}
+                      </Pill>
+                      <span className="text-sm font-medium text-slate-200">{category.name}</span>
                     </div>
-                  </Card>
+                    <span
+                      className="inline-flex items-center justify-center min-w-[28px] h-6 px-2 rounded-full text-xs font-bold text-white"
+                      style={{ backgroundColor: getSeverityColor(category.severity) }}
+                    >
+                      {category.count}
+                    </span>
+                  </div>
                 ))
               ) : (
-                <Empty description="No OWASP vulnerabilities found" />
+                <div className="flex flex-col items-center justify-center py-16 text-slate-500">
+                  <span className="text-4xl mb-3">📭</span>
+                  <p>No OWASP vulnerabilities found</p>
+                </div>
               )}
-            </Space>
-          </Card>
-        </TabPane>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
-        {/* ==================== TIMELINE TAB ==================== */}
-        <TabPane
-          tab={
-            <span>
-              <ClockCircleOutlined />
-              Timeline
-            </span>
-          }
-          key="timeline"
-        >
-          <Card>
-            <Timeline mode="left">
+      {/* ==================== TIMELINE TAB ==================== */}
+      {activeTab === "timeline" && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}>
+          <div className="bg-slate-800/30 backdrop-blur border border-white/10 rounded-xl p-6">
+            <div className="relative">
               {vulnerabilities
                 .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
                 .slice(0, 20)
-                .map((vuln) => (
-                  <Timeline.Item
-                    key={vuln.id}
-                    color={getSeverityColor(vuln.severity)}
-                    label={new Date(vuln.created_at).toLocaleDateString()}
-                  >
-                    <Space direction="vertical">
-                      <Space>
-                        <Tag color={getSeverityColor(vuln.severity)}>{vuln.severity.toUpperCase()}</Tag>
-                        <Text strong>{vuln.title}</Text>
-                      </Space>
-                      <Tag color={getStatusColor(vuln.status)}>{vuln.status.replace("_", " ").toUpperCase()}</Tag>
-                    </Space>
-                  </Timeline.Item>
+                .map((vuln, idx, arr) => (
+                  <div key={vuln.id} className="relative flex gap-6 pb-8 last:pb-0">
+                    {/* Vertical line */}
+                    {idx < arr.length - 1 && (
+                      <div
+                        className="absolute left-[7px] top-[20px] w-0.5 h-full"
+                        style={{ backgroundColor: `${getSeverityColor(vuln.severity)}33` }}
+                      />
+                    )}
+                    {/* Dot */}
+                    <div className="relative flex-shrink-0 mt-1">
+                      <div
+                        className="w-4 h-4 rounded-full border-2"
+                        style={{
+                          borderColor: getSeverityColor(vuln.severity),
+                          backgroundColor: `${getSeverityColor(vuln.severity)}40`,
+                        }}
+                      />
+                    </div>
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <span className="text-xs text-slate-500 mb-1 block">
+                        {new Date(vuln.created_at).toLocaleDateString()}
+                      </span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Pill className={getSeverityClasses(vuln.severity)}>
+                          {vuln.severity.toUpperCase()}
+                        </Pill>
+                        <span className="text-sm font-medium text-slate-200">{vuln.title}</span>
+                      </div>
+                      <div className="mt-1">
+                        <Pill className={getStatusClasses(vuln.status)}>
+                          {vuln.status.replace("_", " ").toUpperCase()}
+                        </Pill>
+                      </div>
+                    </div>
+                  </div>
                 ))}
-            </Timeline>
-          </Card>
-        </TabPane>
-      </Tabs>
-
-      {/* VULNERABILITY DETAILS DRAWER */}
-      <Drawer
-        title={
-          <Space>
-            <BugOutlined />
-            <span>Vulnerability Details</span>
-          </Space>
-        }
-        width={720}
-        onClose={() => setDrawerVisible(false)}
-        open={drawerVisible}
-        extra={
-          <Space>
-            <Button onClick={() => setWorkflowModalVisible(true)}>Change Status</Button>
-            <Button type="primary" onClick={() => setJiraModalVisible(true)}>
-              Create JIRA Ticket
-            </Button>
-          </Space>
-        }
-      >
-        {selectedVulnerability && (
-          <Space direction="vertical" style={{ width: "100%" }} size="large">
-            {/* Header */}
-            <div>
-              <Title level={4}>{selectedVulnerability.title}</Title>
-              <Space>
-                <Tag color={getSeverityColor(selectedVulnerability.severity)}>
-                  {selectedVulnerability.severity.toUpperCase()}
-                </Tag>
-                <Tag color={getStatusColor(selectedVulnerability.status)}>
-                  {selectedVulnerability.status.replace("_", " ").toUpperCase()}
-                </Tag>
-                {selectedVulnerability.cvss_score && <Tag color="red">CVSS: {selectedVulnerability.cvss_score}</Tag>}
-                {selectedVulnerability.cwe_id && <Tag>CWE-{selectedVulnerability.cwe_id}</Tag>}
-              </Space>
-            </div>
-
-            <Divider />
-
-            {/* Details */}
-            <Descriptions column={1} bordered size="small">
-              <Descriptions.Item label="Type">{selectedVulnerability.vulnerability_type}</Descriptions.Item>
-              <Descriptions.Item label="Affected URL">
-                <Text code>{selectedVulnerability.affected_url}</Text>
-              </Descriptions.Item>
-              {selectedVulnerability.affected_parameter && (
-                <Descriptions.Item label="Parameter">{selectedVulnerability.affected_parameter}</Descriptions.Item>
+              {vulnerabilities.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-16 text-slate-500">
+                  <span className="text-4xl mb-3">📭</span>
+                  <p>No vulnerabilities to display</p>
+                </div>
               )}
-              <Descriptions.Item label="Discovered">
-                {new Date(selectedVulnerability.created_at).toLocaleString()}
-              </Descriptions.Item>
-              <Descriptions.Item label="Last Updated">
-                {new Date(selectedVulnerability.updated_at).toLocaleString()}
-              </Descriptions.Item>
-            </Descriptions>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
-            {/* Description */}
-            {selectedVulnerability.description && (
-              <Card title="Description" size="small">
-                <Paragraph>{selectedVulnerability.description}</Paragraph>
-              </Card>
-            )}
-
-            {/* Evidence */}
-            {selectedVulnerability.evidence && (
-              <Card title="Evidence" size="small">
-                <pre
-                  style={{
-                    background: "#f5f5f5",
-                    padding: "12px",
-                    borderRadius: "4px",
-                    overflow: "auto",
-                    fontSize: "12px",
-                  }}
-                >
-                  {selectedVulnerability.evidence}
-                </pre>
-              </Card>
-            )}
-
-            {/* Remediation */}
-            {selectedVulnerability.remediation && (
-              <Card title="Remediation Steps" size="small">
-                <Paragraph>{selectedVulnerability.remediation}</Paragraph>
-              </Card>
-            )}
-
-            {/* SLA Status */}
-            <Card title="SLA Status" size="small">
-              {(() => {
-                const sla = calculateSLA(selectedVulnerability.created_at, selectedVulnerability.severity);
-                return (
-                  <Space direction="vertical" style={{ width: "100%" }}>
-                    <Progress
-                      percent={sla.percent}
-                      strokeColor={sla.breached ? "#ff4d4f" : sla.percent < 20 ? "#fa8c16" : "#52c41a"}
-                      status={sla.breached ? "exception" : "active"}
-                    />
-                    <Text type={sla.breached ? "danger" : "secondary"}>
-                      {sla.breached
-                        ? `SLA breached by ${Math.abs(sla.remaining).toFixed(0)} hours`
-                        : `${sla.remaining.toFixed(0)} hours remaining`}
-                    </Text>
-                  </Space>
-                );
-              })()}
-            </Card>
-          </Space>
-        )}
-      </Drawer>
-
-      {/* WORKFLOW MODAL */}
-      <Modal
-        title="Change Vulnerability Status"
-        open={workflowModalVisible}
-        onCancel={() => setWorkflowModalVisible(false)}
-        footer={null}
-      >
-        {selectedVulnerability && (
-          <Space direction="vertical" style={{ width: "100%" }} size="large">
-            <Alert
-              message={`Current Status: ${selectedVulnerability.status.replace("_", " ").toUpperCase()}`}
-              type="info"
+      {/* ==================== VULNERABILITY DETAILS DRAWER ==================== */}
+      <AnimatePresence>
+        {drawerVisible && (
+          <>
+            {/* Overlay */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 z-[100]"
+              onClick={() => setDrawerVisible(false)}
             />
-            <Space wrap>
-              <Button
-                type={selectedVulnerability.status === "acknowledged" ? "primary" : "default"}
-                onClick={() => handleStatusChange(selectedVulnerability.id, "acknowledged")}
-              >
-                Acknowledge
-              </Button>
-              <Button
-                type={selectedVulnerability.status === "in_progress" ? "primary" : "default"}
-                onClick={() => handleStatusChange(selectedVulnerability.id, "in_progress")}
-              >
-                Mark In Progress
-              </Button>
-              <Button
-                type={selectedVulnerability.status === "resolved" ? "primary" : "default"}
-                onClick={() => handleStatusChange(selectedVulnerability.id, "resolved")}
-              >
-                Mark Resolved
-              </Button>
-              <Button
-                type={selectedVulnerability.status === "false_positive" ? "primary" : "default"}
-                danger
-                onClick={() => handleStatusChange(selectedVulnerability.id, "false_positive")}
-              >
-                Mark False Positive
-              </Button>
-            </Space>
-          </Space>
-        )}
-      </Modal>
+            {/* Panel */}
+            <motion.div
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", damping: 30, stiffness: 300 }}
+              className="fixed top-0 right-0 h-full w-full max-w-[720px] bg-slate-900 border-l border-white/10 z-[101] flex flex-col shadow-2xl"
+            >
+              {/* Drawer Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                  <span className="text-orange-400">🐛</span>
+                  Vulnerability Details
+                </h3>
+                <div className="flex items-center gap-3">
+                  <button
+                    className="px-3 py-1.5 rounded-lg text-sm bg-slate-800 border border-white/10 text-slate-300 hover:bg-slate-700 transition-colors"
+                    onClick={() => setWorkflowModalVisible(true)}
+                  >
+                    Change Status
+                  </button>
+                  <button
+                    className="px-3 py-1.5 rounded-lg text-sm bg-cyan-600 hover:bg-cyan-500 text-white transition-colors"
+                    onClick={() => setJiraModalVisible(true)}
+                  >
+                    Create JIRA Ticket
+                  </button>
+                  <button
+                    className="text-slate-400 hover:text-white text-xl px-2 transition-colors"
+                    onClick={() => setDrawerVisible(false)}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
 
-      {/* JIRA MODAL */}
-      <Modal
-        title="Create JIRA Ticket"
-        open={jiraModalVisible}
-        onCancel={() => setJiraModalVisible(false)}
-        footer={null}
-      >
-        <Form form={form} layout="vertical" onFinish={handleCreateJiraTicket}>
-          <Form.Item label="Project" name="project" rules={[{ required: true }]}>
-            <Input placeholder="PROJECT-KEY" />
-          </Form.Item>
-          <Form.Item label="Issue Type" name="issueType" initialValue="Bug">
-            <Select>
-              <Option value="Bug">Bug</Option>
-              <Option value="Task">Task</Option>
-              <Option value="Story">Story</Option>
-            </Select>
-          </Form.Item>
-          <Form.Item label="Priority" name="priority" initialValue="High">
-            <Select>
-              <Option value="Highest">Highest</Option>
-              <Option value="High">High</Option>
-              <Option value="Medium">Medium</Option>
-              <Option value="Low">Low</Option>
-            </Select>
-          </Form.Item>
-          <Form.Item>
-            <Space>
-              <Button type="primary" htmlType="submit">
-                Create Ticket
-              </Button>
-              <Button onClick={() => setJiraModalVisible(false)}>Cancel</Button>
-            </Space>
-          </Form.Item>
-        </Form>
-      </Modal>
+              {/* Drawer Body */}
+              <div className="flex-1 overflow-y-auto px-6 py-6">
+                {selectedVulnerability && (
+                  <div className="flex flex-col gap-6">
+                    {/* Header */}
+                    <div>
+                      <h4 className="text-xl font-semibold text-white mb-3">{selectedVulnerability.title}</h4>
+                      <div className="flex gap-2 flex-wrap">
+                        <Pill className={getSeverityClasses(selectedVulnerability.severity)}>
+                          {selectedVulnerability.severity.toUpperCase()}
+                        </Pill>
+                        <Pill className={getStatusClasses(selectedVulnerability.status)}>
+                          {selectedVulnerability.status.replace("_", " ").toUpperCase()}
+                        </Pill>
+                        {selectedVulnerability.cvss_score !== undefined && selectedVulnerability.cvss_score !== null && (
+                          <Pill className="bg-red-500/20 text-red-400 border-red-500/30">
+                            CVSS: {selectedVulnerability.cvss_score}
+                          </Pill>
+                        )}
+                        {selectedVulnerability.cwe_id && (
+                          <Pill className="bg-slate-700/50 text-slate-300 border-white/10">
+                            CWE-{selectedVulnerability.cwe_id}
+                          </Pill>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="border-t border-white/10 my-0" />
+
+                    {/* Details Key-Value Grid */}
+                    <div className="grid grid-cols-1 gap-px bg-white/5 rounded-lg overflow-hidden border border-white/10">
+                      {[
+                        { label: "Type", value: selectedVulnerability.vulnerability_type },
+                        {
+                          label: "Affected URL",
+                          value: selectedVulnerability.affected_url ? (
+                            <code className="text-xs text-cyan-400/80 bg-slate-900/50 px-2 py-1 rounded">
+                              {selectedVulnerability.affected_url}
+                            </code>
+                          ) : (
+                            "N/A"
+                          ),
+                        },
+                        ...(selectedVulnerability.affected_parameter
+                          ? [{ label: "Parameter", value: selectedVulnerability.affected_parameter }]
+                          : []),
+                        {
+                          label: "Discovered",
+                          value: new Date(selectedVulnerability.created_at).toLocaleString(),
+                        },
+                        {
+                          label: "Last Updated",
+                          value: new Date(selectedVulnerability.updated_at).toLocaleString(),
+                        },
+                      ].map((item, i) => (
+                        <div key={i} className="flex bg-slate-900/40">
+                          <div className="w-40 flex-shrink-0 px-4 py-3 text-xs font-medium text-slate-400 bg-slate-800/30">
+                            {item.label}
+                          </div>
+                          <div className="flex-1 px-4 py-3 text-sm text-slate-200">
+                            {item.value}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Description */}
+                    {selectedVulnerability.description && (
+                      <div className="bg-slate-800/30 border border-white/10 rounded-xl p-4">
+                        <h5 className="text-sm font-semibold text-slate-300 mb-2">Description</h5>
+                        <p className="text-sm text-slate-400 leading-relaxed">{selectedVulnerability.description}</p>
+                      </div>
+                    )}
+
+                    {/* Evidence */}
+                    {selectedVulnerability.evidence && (
+                      <div className="bg-slate-800/30 border border-white/10 rounded-xl p-4">
+                        <h5 className="text-sm font-semibold text-slate-300 mb-2">Evidence</h5>
+                        <pre className="bg-slate-900/60 border border-white/5 rounded-lg p-3 overflow-auto text-xs text-slate-400 font-mono">
+                          {selectedVulnerability.evidence}
+                        </pre>
+                      </div>
+                    )}
+
+                    {/* Remediation */}
+                    {selectedVulnerability.remediation && (
+                      <div className="bg-slate-800/30 border border-white/10 rounded-xl p-4">
+                        <h5 className="text-sm font-semibold text-slate-300 mb-2">Remediation Steps</h5>
+                        <p className="text-sm text-slate-400 leading-relaxed">{selectedVulnerability.remediation}</p>
+                      </div>
+                    )}
+
+                    {/* SLA Status */}
+                    <div className="bg-slate-800/30 border border-white/10 rounded-xl p-4">
+                      <h5 className="text-sm font-semibold text-slate-300 mb-3">SLA Status</h5>
+                      {(() => {
+                        const sla = calculateSLA(selectedVulnerability.created_at, selectedVulnerability.severity);
+                        return (
+                          <div className="flex flex-col gap-2">
+                            <ProgressBar
+                              percent={sla.percent}
+                              color={sla.breached ? "#ff4d4f" : sla.percent < 20 ? "#fa8c16" : "#52c41a"}
+                            />
+                            <span className={`text-sm ${sla.breached ? "text-red-400" : "text-slate-500"}`}>
+                              {sla.breached
+                                ? `SLA breached by ${Math.abs(sla.remaining).toFixed(0)} hours`
+                                : `${sla.remaining.toFixed(0)} hours remaining`}
+                            </span>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* ==================== WORKFLOW MODAL ==================== */}
+      <AnimatePresence>
+        {workflowModalVisible && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 z-[200]"
+              onClick={() => setWorkflowModalVisible(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="fixed inset-0 z-[201] flex items-center justify-center p-4"
+            >
+              <div className="bg-slate-900 border border-white/10 rounded-xl shadow-2xl w-full max-w-md p-6">
+                <div className="flex items-center justify-between mb-5">
+                  <h3 className="text-lg font-semibold text-white">Change Vulnerability Status</h3>
+                  <button
+                    className="text-slate-400 hover:text-white text-lg transition-colors"
+                    onClick={() => setWorkflowModalVisible(false)}
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {selectedVulnerability && (
+                  <div className="flex flex-col gap-5">
+                    {/* Alert */}
+                    <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg px-4 py-3 text-sm text-blue-400">
+                      Current Status: {selectedVulnerability.status.replace("_", " ").toUpperCase()}
+                    </div>
+
+                    <div className="flex flex-wrap gap-3">
+                      {[
+                        { status: "acknowledged", label: "Acknowledge" },
+                        { status: "in_progress", label: "Mark In Progress" },
+                        { status: "resolved", label: "Mark Resolved" },
+                      ].map((action) => (
+                        <button
+                          key={action.status}
+                          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                            selectedVulnerability.status === action.status
+                              ? "bg-cyan-600 text-white"
+                              : "bg-slate-800 border border-white/10 text-slate-300 hover:bg-slate-700"
+                          }`}
+                          onClick={() => handleStatusChange(selectedVulnerability.id, action.status)}
+                        >
+                          {action.label}
+                        </button>
+                      ))}
+                      <button
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                          selectedVulnerability.status === "false_positive"
+                            ? "bg-red-600 text-white"
+                            : "bg-slate-800 border border-red-500/30 text-red-400 hover:bg-red-900/30"
+                        }`}
+                        onClick={() => handleStatusChange(selectedVulnerability.id, "false_positive")}
+                      >
+                        Mark False Positive
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* ==================== JIRA MODAL ==================== */}
+      <AnimatePresence>
+        {jiraModalVisible && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 z-[200]"
+              onClick={() => setJiraModalVisible(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="fixed inset-0 z-[201] flex items-center justify-center p-4"
+            >
+              <div className="bg-slate-900 border border-white/10 rounded-xl shadow-2xl w-full max-w-md p-6">
+                <div className="flex items-center justify-between mb-5">
+                  <h3 className="text-lg font-semibold text-white">Create JIRA Ticket</h3>
+                  <button
+                    className="text-slate-400 hover:text-white text-lg transition-colors"
+                    onClick={() => setJiraModalVisible(false)}
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <form onSubmit={handleCreateJiraTicket} className="flex flex-col gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-400 mb-1.5">
+                      Project <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="PROJECT-KEY"
+                      value={jiraProject}
+                      onChange={(e) => setJiraProject(e.target.value)}
+                      required
+                      className="w-full bg-slate-800/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-400 mb-1.5">Issue Type</label>
+                    <select
+                      value={jiraIssueType}
+                      onChange={(e) => setJiraIssueType(e.target.value)}
+                      className="w-full bg-slate-800/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-cyan-500/50"
+                    >
+                      <option value="Bug">Bug</option>
+                      <option value="Task">Task</option>
+                      <option value="Story">Story</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-400 mb-1.5">Priority</label>
+                    <select
+                      value={jiraPriority}
+                      onChange={(e) => setJiraPriority(e.target.value)}
+                      className="w-full bg-slate-800/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-cyan-500/50"
+                    >
+                      <option value="Highest">Highest</option>
+                      <option value="High">High</option>
+                      <option value="Medium">Medium</option>
+                      <option value="Low">Low</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-3 mt-2">
+                    <button
+                      type="submit"
+                      className="px-4 py-2 rounded-lg text-sm font-medium bg-cyan-600 hover:bg-cyan-500 text-white transition-colors"
+                    >
+                      Create Ticket
+                    </button>
+                    <button
+                      type="button"
+                      className="px-4 py-2 rounded-lg text-sm font-medium bg-slate-800 border border-white/10 text-slate-300 hover:bg-slate-700 transition-colors"
+                      onClick={() => setJiraModalVisible(false)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

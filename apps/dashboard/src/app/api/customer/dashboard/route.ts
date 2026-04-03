@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
         `SELECT
            COUNT(*) as total_apis,
            COUNT(CASE WHEN status = 'active' THEN 1 END) as active_apis,
-           COUNT(CASE WHEN last_scanned IS NOT NULL THEN 1 END) as monitored_apis
+           COUNT(*) as monitored_apis
          FROM apis WHERE tenant_id = $1`,
         [tenantId]
       ),
@@ -103,7 +103,7 @@ export async function GET(request: NextRequest) {
       database.queryOne(
         `SELECT
            COUNT(*) as total_threats,
-           COUNT(CASE WHEN status = 'blocked' THEN 1 END) as blocked_threats,
+           COUNT(CASE WHEN blocked = true THEN 1 END) as blocked_threats,
            COUNT(CASE WHEN severity = 'CRITICAL' THEN 1 END) as critical_threats,
            COUNT(CASE WHEN created_at >= NOW() - INTERVAL '24 hours' THEN 1 END) as threats_24h,
            COUNT(CASE WHEN created_at >= NOW() - INTERVAL '7 days' AND severity = 'CRITICAL' THEN 1 END) as critical_incidents_7d
@@ -116,7 +116,8 @@ export async function GET(request: NextRequest) {
         `SELECT 'scan' as activity_type, url as subject, status, created_at
          FROM security_scans WHERE tenant_id = $1
          UNION ALL
-         SELECT 'threat' as activity_type, CAST(source_ip AS TEXT) as subject, status, created_at
+         SELECT 'threat' as activity_type, CAST(source_ip AS TEXT) as subject,
+                CASE WHEN blocked THEN 'blocked' ELSE 'detected' END as status, created_at
          FROM threat_events WHERE tenant_id = $1
          ORDER BY created_at DESC LIMIT 10`,
         [tenantId]

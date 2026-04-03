@@ -65,7 +65,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   // Show loading while checking auth
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0a0e1a] flex items-center justify-center">
+      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400" />
       </div>
     )
@@ -83,14 +83,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   ]
 
   return (
-    <div className="min-h-screen bg-[#0a0e1a]">
+    <div className="min-h-screen bg-[#0a0a0f]">
       {/* Sidebar */}
-      <div className="fixed inset-y-0 left-0 w-64 bg-slate-900/50 backdrop-blur-xl border-r border-white/10">
+      <div className="fixed inset-y-0 left-0 w-64 backdrop-blur-xl bg-white/[0.02] border-r border-white/[0.06]">
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="p-6 border-b border-white/10">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-violet-500 rounded-lg flex items-center justify-center">
+              <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-emerald-500 rounded-lg flex items-center justify-center">
                 <ShieldExclamationIcon className="w-6 h-6 text-white" />
               </div>
               <div>

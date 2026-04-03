@@ -23,18 +23,15 @@ export async function DELETE(request: NextRequest) {
 }
 
 async function processRequest(request: NextRequest) {
-  console.log("Security processor running for:", request.url);
   const { searchParams } = new URL(request.url);
   const target = searchParams.get("target") || request.nextUrl.pathname;
   const requiresAuth = request.headers.get("x-requires-auth") === "true";
-  console.log("DEBUG security-processor received auth header:", request.headers.get("x-requires-auth"), "requiresAuth:", requiresAuth);
   const requiresRateLimit = request.headers.get("x-requires-rate-limit") === "true";
   const requestId = searchParams.get("rid") || crypto.randomUUID();
   const ip = request.headers.get("x-client-ip") || "127.0.0.1";
 
   try {
     // IP blocking check
-    console.log("RequiresAuth check:", requiresAuth, "IP:", ip);
     if (requiresAuth) {
       const blocked = await isIPBlocked(1, ip);
       if (blocked) {
@@ -46,7 +43,6 @@ async function processRequest(request: NextRequest) {
     const authHeaders: Record<string, string> = {};
 
     // Authentication validation
-    console.log("RequiresAuth check:", requiresAuth, "IP:", ip);
     if (requiresAuth) {
       const authCheck = await validateApiRequest(request);
       if (!authCheck.valid) {
@@ -59,7 +55,6 @@ async function processRequest(request: NextRequest) {
 
       // Rate limiting
       if (requiresRateLimit && authCheck.tenantId) {
-        console.log("DEBUG: Checking rate limit for tenant", authCheck.tenantId, "apiKey", authCheck.company?.apiKey);
         const rateLimit = await checkRateLimit(authCheck.company?.apiKey || "", ip);
         if (!rateLimit.allowed) {
           logger.securityEvent("Rate limit exceeded", { target, ip });
@@ -98,9 +93,7 @@ async function processRequest(request: NextRequest) {
       }
     }
 
-    // Forward authenticated request
-    console.log("Debug - target:", target);
-    console.log("Debug - request.url:", request.url);
+    // Forward authenticated request to target route
     const targetUrl = `http://localhost:3000${target}`;
     // Read body if present
     let bodyContent: string | undefined;

@@ -1,6 +1,5 @@
 "use client";
 
-import { Card, Row, Col, Statistic, Table, Tag } from "antd";
 import { useState, useEffect } from "react";
 
 export function BotDetection() {
@@ -9,7 +8,7 @@ export function BotDetection() {
     bot_requests_detected: 0,
     bots_blocked: 0,
     success_rate: 0,
-    recent_bots: [],
+    recent_bots: [] as any[],
   });
 
   useEffect(() => {
@@ -28,86 +27,68 @@ export function BotDetection() {
     return () => clearInterval(interval);
   }, []);
 
-  const columns = [
-    {
-      title: "Time",
-      dataIndex: "timestamp",
-      render: (timestamp: string) => new Date(timestamp).toLocaleTimeString(),
-    },
-    { title: "IP", dataIndex: "ip" },
-    {
-      title: "User Agent",
-      dataIndex: "user_agent",
-      render: (ua: string) => (ua ? ua.substring(0, 50) + "..." : "N/A"),
-    },
-    {
-      title: "Confidence",
-      dataIndex: "confidence",
-      render: (confidence: number) => `${confidence}%`,
-    },
-    {
-      title: "Status",
-      dataIndex: "blocked",
-      render: (blocked: boolean) => (
-        <Tag color={blocked ? "red" : "green"}>
-          {blocked ? "BLOCKED" : "ALLOWED"}
-        </Tag>
-      ),
-    },
-  ];
-
   return (
-    <Card title="Bot Detection Analytics">
-      <Row gutter={16} style={{ marginBottom: 24 }}>
-        <Col span={6}>
-          <Statistic
-            title="Total Requests"
-            value={botData.total_requests}
-            valueStyle={{ color: "#1890ff" }}
-          />
-        </Col>
-        <Col span={6}>
-          <Statistic
-            title="Bot Requests Detected"
-            value={botData.bot_requests_detected}
-            valueStyle={{ color: "#fa8c16" }}
-          />
-        </Col>
-        <Col span={6}>
-          <Statistic
-            title="Bots Blocked"
-            value={botData.bots_blocked}
-            valueStyle={{ color: "#f5222d" }}
-          />
-        </Col>
-        <Col span={6}>
-          <Statistic
-            title="Success Rate"
-            value={botData.success_rate}
-            suffix="%"
-            valueStyle={{
-              color: botData.success_rate > 90 ? "#52c41a" : "#fa8c16",
-            }}
-          />
-        </Col>
-      </Row>
+    <div className="rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-6">
+      <h3 className="text-lg font-semibold text-white mb-6">Bot Detection Analytics</h3>
 
-      <div style={{ marginTop: 24 }}>
-        <h4>Recent Bot Activity</h4>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="rounded-xl bg-white/5 border border-white/10 p-4">
+          <div className="text-sm text-gray-400 mb-1">Total Requests</div>
+          <div className="text-2xl font-bold text-cyan-400">{botData.total_requests}</div>
+        </div>
+        <div className="rounded-xl bg-white/5 border border-white/10 p-4">
+          <div className="text-sm text-gray-400 mb-1">Bot Requests Detected</div>
+          <div className="text-2xl font-bold text-amber-400">{botData.bot_requests_detected}</div>
+        </div>
+        <div className="rounded-xl bg-white/5 border border-white/10 p-4">
+          <div className="text-sm text-gray-400 mb-1">Bots Blocked</div>
+          <div className="text-2xl font-bold text-red-400">{botData.bots_blocked}</div>
+        </div>
+        <div className="rounded-xl bg-white/5 border border-white/10 p-4">
+          <div className="text-sm text-gray-400 mb-1">Success Rate</div>
+          <div className={`text-2xl font-bold ${botData.success_rate > 90 ? "text-emerald-400" : "text-amber-400"}`}>
+            {botData.success_rate}%
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <h4 className="text-white font-medium mb-3">Recent Bot Activity</h4>
         {botData.recent_bots.length > 0 ? (
-          <Table
-            dataSource={botData.recent_bots}
-            columns={columns}
-            pagination={false}
-            size="small"
-          />
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-white/10">
+                  <th className="text-left text-gray-400 py-2 px-3 font-medium">Time</th>
+                  <th className="text-left text-gray-400 py-2 px-3 font-medium">IP</th>
+                  <th className="text-left text-gray-400 py-2 px-3 font-medium">User Agent</th>
+                  <th className="text-left text-gray-400 py-2 px-3 font-medium">Confidence</th>
+                  <th className="text-left text-gray-400 py-2 px-3 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {botData.recent_bots.map((bot: any, idx: number) => (
+                  <tr key={idx} className="border-b border-white/5 hover:bg-white/5">
+                    <td className="py-2 px-3 text-gray-300">{new Date(bot.timestamp).toLocaleTimeString()}</td>
+                    <td className="py-2 px-3 text-gray-300">{bot.ip}</td>
+                    <td className="py-2 px-3 text-gray-300">{bot.user_agent ? bot.user_agent.substring(0, 50) + "..." : "N/A"}</td>
+                    <td className="py-2 px-3 text-gray-300">{bot.confidence}%</td>
+                    <td className="py-2 px-3">
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${bot.blocked ? "bg-red-500/20 text-red-400" : "bg-emerald-500/20 text-emerald-400"}`}>
+                        {bot.blocked ? "BLOCKED" : "ALLOWED"}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : (
-          <div style={{ textAlign: "center", padding: "20px", color: "#999" }}>
-            No bot activity detected. Route API traffic through /api/proxy to
-            see real data.
+          <div className="text-center py-5 text-gray-500">
+            No bot activity detected. Route API traffic through /api/proxy to see real data.
           </div>
         )}
       </div>
-    </Card>
+    </div>
   );
 }

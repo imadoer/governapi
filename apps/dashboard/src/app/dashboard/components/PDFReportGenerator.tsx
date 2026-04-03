@@ -1,6 +1,5 @@
 "use client";
 
-import { Card, Select, Button, message, Spin } from "antd";
 import { useState } from "react";
 
 export function PDFReportGenerator() {
@@ -21,7 +20,6 @@ export function PDFReportGenerator() {
       if (result.success) {
         const reportData = result.report_data;
 
-        // Generate and display PDF using browser's print functionality
         const printWindow = window.open("", "_blank");
         printWindow?.document.write(`
           <html>
@@ -46,7 +44,7 @@ export function PDFReportGenerator() {
                 <p>Generated on ${new Date(reportData.generated_at).toLocaleDateString()}</p>
                 <div class="data-source">Report contains real data from your security scans, API discovery, and monitoring systems</div>
               </div>
-              
+
               <div class="metrics">
                 <div class="metric-box">
                   <div class="metric-value">${reportData.metrics.total_apis}</div>
@@ -65,7 +63,7 @@ export function PDFReportGenerator() {
                   <div class="metric-label">Bots Blocked</div>
                 </div>
               </div>
-              
+
               ${
                 reportData.scan_summary
                   ? `
@@ -87,21 +85,21 @@ export function PDFReportGenerator() {
                 </div>
               `
               }
-              
+
               <div class="section">
                 <h3>Traffic Analysis</h3>
                 <p><strong>Total Traffic Analyzed:</strong> ${reportData.metrics.total_traffic} requests</p>
                 <p><strong>Bot Detection Rate:</strong> ${reportData.metrics.bot_detection_rate}%</p>
                 <p><strong>Automated Threats Blocked:</strong> ${reportData.metrics.bots_blocked}</p>
               </div>
-              
+
               <div class="section recommendations">
                 <h3>Security Recommendations</h3>
                 <ul>
                   ${reportData.recommendations.map((rec: string) => `<li>${rec}</li>`).join("")}
                 </ul>
               </div>
-              
+
               <div class="section">
                 <h3>Report Methodology</h3>
                 <p>This report is generated from live data collected by your GovernAPI platform including:</p>
@@ -115,51 +113,52 @@ export function PDFReportGenerator() {
             </body>
           </html>
         `);
-        printWindow.document.close();
+        printWindow?.document.close();
         setTimeout(() => {
           printWindow?.print();
           printWindow?.close();
         }, 500);
 
-        message.success("Report generated with real platform data");
+        console.log("Report generated with real platform data");
       } else {
-        message.error("Failed to generate report: " + result.error);
+        console.log("Failed to generate report: " + result.error);
       }
     } catch (error) {
-      message.error("Error generating report: " + (error as Error)?.message);
+      console.log("Error generating report: " + (error as Error)?.message);
     }
     setLoading(false);
   };
 
   return (
-    <Card title="Generate Reports">
-      <div style={{ marginBottom: 16 }}>
-        <Select
+    <div className="rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-6">
+      <h3 className="text-lg font-semibold text-white mb-4">Generate Reports</h3>
+
+      <div className="mb-4">
+        <select
           value={selectedReportType}
-          onChange={setSelectedReportType}
-          style={{ width: "100%" }}
+          onChange={(e) => setSelectedReportType(e.target.value)}
+          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-cyan-500 appearance-none cursor-pointer"
         >
-          <Select.Option value="security">Security Assessment</Select.Option>
-          <Select.Option value="compliance">Compliance Report</Select.Option>
-          <Select.Option value="executive">Executive Summary</Select.Option>
-        </Select>
+          <option value="security" className="bg-[#0a0a0f]">Security Assessment</option>
+          <option value="compliance" className="bg-[#0a0a0f]">Compliance Report</option>
+          <option value="executive" className="bg-[#0a0a0f]">Executive Summary</option>
+        </select>
       </div>
 
-      <Button
-        type="primary"
+      <button
         onClick={handleGenerateReport}
-        loading={loading}
-        block
-        icon={loading ? <Spin /> : null}
+        disabled={loading}
+        className="w-full px-4 py-2.5 bg-cyan-500 hover:bg-cyan-600 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
       >
+        {loading && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />}
         {loading ? "Generating Report..." : "Generate Report"}
-      </Button>
+      </button>
 
-      <div style={{ marginTop: 16, fontSize: "12px", color: "#666" }}>
+      <div className="mt-4 text-xs text-gray-500">
         Reports contain real data from your security scans, API discovery, bot
         detection, and monitoring systems. Run security scans first for
         comprehensive vulnerability data.
       </div>
-    </Card>
+    </div>
   );
 }

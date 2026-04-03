@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   PlusIcon,
@@ -14,8 +14,8 @@ import {
   ShieldCheckIcon,
   SignalIcon,
   ClockIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
-import { Modal, Input, Select, message, Spin, Tooltip, Button } from "antd";
 
 interface Integration {
   id: string;
@@ -26,14 +26,20 @@ interface Integration {
   createdAt: string;
 }
 
+interface ToastState {
+  id: number;
+  message: string;
+  type: "success" | "error";
+}
+
 /**
  * V1 NOTIFICATION INTEGRATIONS
- * 
+ *
  * Architecture Promise Compliant:
  * - Outbound notifications only (we push TO their systems)
  * - No credential storage for reading customer data
  * - No sync/pull functionality
- * 
+ *
  * Enabled: Slack (webhook), PagerDuty (Events API), Custom Webhook (HMAC signed)
  * Disabled for v1: Jira, GitHub, Datadog (require stored credentials with read access)
  */
@@ -42,49 +48,79 @@ const INTEGRATION_TYPES = [
   {
     id: "slack",
     name: "Slack",
-    icon: "💬",
+    icon: "\u{1F4AC}",
     color: "#4A154B",
     gradient: "from-purple-600/20 to-purple-900/10",
     borderColor: "border-purple-500/30",
     description: "Send security alerts to Slack channels",
     fields: ["webhook_url"],
-    fieldLabels: { webhook_url: "Webhook URL" },
-    fieldPlaceholders: { webhook_url: "https://hooks.slack.com/services/..." },
+    fieldLabels: { webhook_url: "Webhook URL" } as Record<string, string>,
+    fieldPlaceholders: { webhook_url: "https://hooks.slack.com/services/..." } as Record<string, string>,
     testEndpoint: "/api/integrations/slack",
     docsUrl: "https://api.slack.com/messaging/webhooks",
   },
   {
     id: "pagerduty",
     name: "PagerDuty",
-    icon: "🚨",
+    icon: "\u{1F6A8}",
     color: "#06AC38",
     gradient: "from-green-600/20 to-green-900/10",
     borderColor: "border-green-500/30",
     description: "Critical alerts to on-call teams",
     fields: ["integration_key"],
-    fieldLabels: { integration_key: "Integration Key" },
-    fieldPlaceholders: { integration_key: "Events API v2 integration key" },
+    fieldLabels: { integration_key: "Integration Key" } as Record<string, string>,
+    fieldPlaceholders: { integration_key: "Events API v2 integration key" } as Record<string, string>,
     testEndpoint: "/api/integrations/pagerduty",
     docsUrl: "https://support.pagerduty.com/docs/services-and-integrations",
   },
   {
     id: "webhook",
     name: "Custom Webhook",
-    icon: "🔗",
+    icon: "\u{1F517}",
     color: "#6366f1",
     gradient: "from-indigo-600/20 to-indigo-900/10",
     borderColor: "border-indigo-500/30",
     description: "HMAC-signed webhooks to any endpoint",
     fields: ["webhook_url", "secret"],
-    fieldLabels: { webhook_url: "Webhook URL", secret: "Signing Secret (optional)" },
-    fieldPlaceholders: { 
+    fieldLabels: { webhook_url: "Webhook URL", secret: "Signing Secret (optional)" } as Record<string, string>,
+    fieldPlaceholders: {
       webhook_url: "https://your-api.com/webhook",
       secret: "Used for HMAC-SHA256 signature verification"
-    },
+    } as Record<string, string>,
     testEndpoint: "/api/webhooks/trigger",
-    docsUrl: null,
+    docsUrl: null as string | null,
   },
 ];
+
+function Toast({ toast, onDismiss }: { toast: ToastState; onDismiss: (id: number) => void }) {
+  useEffect(() => {
+    const timer = setTimeout(() => onDismiss(toast.id), 3500);
+    return () => clearTimeout(timer);
+  }, [toast.id, onDismiss]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -10, scale: 0.95 }}
+      className={`flex items-center gap-3 px-5 py-3 rounded-xl border backdrop-blur-xl shadow-2xl ${
+        toast.type === "success"
+          ? "bg-emerald-900/80 border-emerald-500/30 text-emerald-200"
+          : "bg-red-900/80 border-red-500/30 text-red-200"
+      }`}
+    >
+      {toast.type === "success" ? (
+        <CheckCircleIcon className="w-5 h-5 text-emerald-400 shrink-0" />
+      ) : (
+        <XCircleIcon className="w-5 h-5 text-red-400 shrink-0" />
+      )}
+      <span className="text-sm font-medium">{toast.message}</span>
+      <button onClick={() => onDismiss(toast.id)} className="ml-2 text-white/50 hover:text-white/80 transition-colors">
+        <XMarkIcon className="w-4 h-4" />
+      </button>
+    </motion.div>
+  );
+}
 
 export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
   const [integrations, setIntegrations] = useState<Integration[]>([]);
@@ -97,6 +133,20 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
   const [testingId, setTestingId] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<any>(null);
   const [showTestResult, setShowTestResult] = useState(false);
+  const [toasts, setToasts] = useState<ToastState[]>([]);
+  const [toastCounter, setToastCounter] = useState(0);
+
+  const showToast = useCallback((message: string, type: "success" | "error") => {
+    setToastCounter((prev) => {
+      const id = prev + 1;
+      setToasts((t) => [...t, { id, message, type }]);
+      return id;
+    });
+  }, []);
+
+  const dismissToast = useCallback((id: number) => {
+    setToasts((t) => t.filter((toast) => toast.id !== id));
+  }, []);
 
   const fetchIntegrations = async () => {
     setLoading(true);
@@ -108,7 +158,7 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
 
       if (data.success) {
         const v1Types = INTEGRATION_TYPES.map(t => t.id);
-        const filtered = (data.integrations || []).filter((i: Integration) => 
+        const filtered = (data.integrations || []).filter((i: Integration) =>
           v1Types.includes(i.type)
         );
         setIntegrations(filtered);
@@ -128,16 +178,16 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
 
   const handleAddIntegration = async () => {
     if (!selectedType || !integrationName) {
-      message.error("Please fill in all required fields");
+      showToast("Please fill in all required fields", "error");
       return;
     }
 
     const integrationType = INTEGRATION_TYPES.find(t => t.id === selectedType);
     const requiredFields = integrationType?.fields.filter(f => f !== 'secret') || [];
-    
+
     for (const field of requiredFields) {
       if (!credentials[field]) {
-        message.error(`Please fill in ${integrationType?.fieldLabels?.[field] || field}`);
+        showToast(`Please fill in ${integrationType?.fieldLabels?.[field] || field}`, "error");
         return;
       }
     }
@@ -160,17 +210,17 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
       const data = await response.json();
 
       if (data.success) {
-        message.success("Integration added successfully!");
+        showToast("Integration added successfully!", "success");
         setIsModalOpen(false);
         setSelectedType("");
         setIntegrationName("");
         setCredentials({});
         fetchIntegrations();
       } else {
-        message.error(data.error || "Failed to add integration");
+        showToast(data.error || "Failed to add integration", "error");
       }
     } catch (error) {
-      message.error("Failed to add integration");
+      showToast("Failed to add integration", "error");
     } finally {
       setSubmitting(false);
     }
@@ -184,7 +234,7 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
       );
 
       if (!integrationType?.testEndpoint) {
-        message.error("Test endpoint not configured for this integration type");
+        showToast("Test endpoint not configured for this integration type", "error");
         return;
       }
 
@@ -197,7 +247,7 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
         body: JSON.stringify({
           integrationId: integration.id,
           event: "test",
-          message: "🧪 Test alert from GovernAPI - Integration verified!",
+          message: "Test alert from GovernAPI - Integration verified!",
           timestamp: new Date().toISOString(),
         }),
       });
@@ -224,9 +274,9 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
       setShowTestResult(true);
 
       if (response.ok && result.success) {
-        message.success(result.message || `${integration.name} test successful! ✅`);
+        showToast(result.message || `${integration.name} test successful!`, "success");
       } else {
-        message.error(result.message || `Test failed: ${result.error || "Unknown error"}`);
+        showToast(result.message || `Test failed: ${result.error || "Unknown error"}`, "error");
       }
     } catch (error) {
       setTestResult({
@@ -236,7 +286,7 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
         error: error instanceof Error ? error.message : String(error),
       });
       setShowTestResult(true);
-      message.error("Failed to test integration");
+      showToast("Failed to test integration", "error");
     } finally {
       setTestingId(null);
     }
@@ -253,13 +303,13 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
       );
 
       if (response.ok) {
-        message.success("Integration deleted");
+        showToast("Integration deleted", "success");
         fetchIntegrations();
       } else {
-        message.error("Failed to delete integration");
+        showToast("Failed to delete integration", "error");
       }
     } catch (error) {
-      message.error("Failed to delete integration");
+      showToast("Failed to delete integration", "error");
     }
   };
 
@@ -275,7 +325,7 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
-          <Spin size="large" />
+          <div className="w-10 h-10 border-4 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin mx-auto" />
           <p className="text-slate-400 mt-4">Loading integrations...</p>
         </div>
       </div>
@@ -286,11 +336,20 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
 
   return (
     <div className="space-y-8">
+      {/* Toast notifications */}
+      <div className="fixed top-6 right-6 z-[100] flex flex-col gap-3">
+        <AnimatePresence>
+          {toasts.map((toast) => (
+            <Toast key={toast.id} toast={toast} onDismiss={dismissToast} />
+          ))}
+        </AnimatePresence>
+      </div>
+
       {/* Hero Header with Gradient Background */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-800/80 via-slate-800/60 to-cyan-900/30 border border-slate-700/50 p-8"
+        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-800/80 via-slate-800/60 to-cyan-900/30 border border-white/10 backdrop-blur-xl p-8"
       >
         <div className="absolute inset-0 opacity-5">
           <div className="absolute inset-0" style={{
@@ -298,10 +357,10 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
             backgroundSize: '32px 32px'
           }} />
         </div>
-        
+
         <div className="absolute -top-20 -right-20 w-64 h-64 bg-cyan-500/10 rounded-full blur-3xl" />
         <div className="absolute -bottom-20 -left-20 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl" />
-        
+
         <div className="relative flex items-center justify-between">
           <div className="flex items-center gap-6">
             <div className="p-4 bg-gradient-to-br from-cyan-500/20 to-cyan-600/10 rounded-2xl border border-cyan-500/30">
@@ -316,7 +375,7 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
               </p>
               <div className="flex items-center gap-4 mt-3">
                 <div className="flex items-center gap-2 text-sm">
-                  <ShieldCheckIcon className="w-4 h-4 text-green-400" />
+                  <ShieldCheckIcon className="w-4 h-4 text-emerald-400" />
                   <span className="text-slate-300">Outbound only</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
@@ -326,7 +385,7 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
               </div>
             </div>
           </div>
-          
+
           <motion.button
             whileHover={{ scale: 1.02, boxShadow: "0 0 30px rgba(6, 182, 212, 0.3)" }}
             whileTap={{ scale: 0.98 }}
@@ -345,7 +404,7 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="group relative bg-slate-800/40 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-6 hover:border-cyan-500/30 transition-all duration-300"
+          className="group relative bg-slate-800/40 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:border-cyan-500/30 transition-all duration-300"
         >
           <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
           <div className="relative flex items-center justify-between">
@@ -364,17 +423,17 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="group relative bg-slate-800/40 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-6 hover:border-green-500/30 transition-all duration-300"
+          className="group relative bg-slate-800/40 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:border-emerald-500/30 transition-all duration-300"
         >
-          <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
           <div className="relative flex items-center justify-between">
             <div>
               <p className="text-sm text-slate-400 font-medium">Active</p>
-              <p className="text-4xl font-bold text-green-400 mt-2">{activeCount}</p>
+              <p className="text-4xl font-bold text-emerald-400 mt-2">{activeCount}</p>
               <p className="text-xs text-slate-500 mt-1">Receiving alerts</p>
             </div>
-            <div className="p-3 bg-green-500/10 rounded-xl">
-              <CheckCircleIcon className="w-8 h-8 text-green-400" />
+            <div className="p-3 bg-emerald-500/10 rounded-xl">
+              <CheckCircleIcon className="w-8 h-8 text-emerald-400" />
             </div>
           </div>
         </motion.div>
@@ -383,7 +442,7 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="group relative bg-slate-800/40 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-6 hover:border-purple-500/30 transition-all duration-300"
+          className="group relative bg-slate-800/40 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:border-purple-500/30 transition-all duration-300"
         >
           <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
           <div className="relative flex items-center justify-between">
@@ -405,11 +464,11 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
           <h2 className="text-xl font-bold text-white">Available Integrations</h2>
           <div className="h-px flex-1 bg-gradient-to-r from-slate-700 to-transparent" />
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {INTEGRATION_TYPES.map((type, index) => {
             const isConnected = integrations.some((i) => i.type === type.id);
-            
+
             return (
               <motion.div
                 key={type.id}
@@ -429,7 +488,7 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
                     backgroundSize: '8px 8px'
                   }} />
                 </div>
-                
+
                 <div className="relative">
                   <div className="flex items-start justify-between mb-4">
                     <div
@@ -439,18 +498,18 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
                       {type.icon}
                     </div>
                     {isConnected && (
-                      <div className="flex items-center gap-1.5 px-2.5 py-1 bg-green-500/20 rounded-full border border-green-500/30">
-                        <CheckCircleIcon className="w-3.5 h-3.5 text-green-400" />
-                        <span className="text-xs font-medium text-green-400">Connected</span>
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/20 rounded-full border border-emerald-500/30">
+                        <CheckCircleIcon className="w-3.5 h-3.5 text-emerald-400" />
+                        <span className="text-xs font-medium text-emerald-400">Connected</span>
                       </div>
                     )}
                   </div>
-                  
+
                   <h3 className="text-xl font-bold text-white mb-2">{type.name}</h3>
                   <p className="text-sm text-slate-400 leading-relaxed">{type.description}</p>
-                  
+
                   {type.docsUrl && (
-                    
+                    <a
                       href={type.docsUrl}
                       target="_blank"
                       rel="noopener noreferrer"
@@ -477,7 +536,7 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
             </div>
             <div className="h-px flex-1 bg-gradient-to-r from-slate-700 to-transparent" />
           </div>
-          
+
           <div className="space-y-4">
             <AnimatePresence>
               {integrations.map((integration, index) => {
@@ -491,7 +550,7 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 20 }}
                     transition={{ delay: index * 0.05 }}
-                    className="group relative bg-slate-800/40 backdrop-blur-sm border border-slate-700/50 rounded-xl p-5 hover:border-slate-600 transition-all duration-300"
+                    className="group relative bg-slate-800/40 backdrop-blur-xl border border-white/10 rounded-2xl p-5 hover:border-slate-600 transition-all duration-300"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4 flex-1">
@@ -505,9 +564,9 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
                           <div className="flex items-center gap-3">
                             <h3 className="text-lg font-semibold text-white">{integration.name}</h3>
                             {integration.isActive ? (
-                              <span className="flex items-center gap-1.5 px-2 py-0.5 bg-green-500/20 rounded-full border border-green-500/30">
-                                <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
-                                <span className="text-xs font-medium text-green-400">Active</span>
+                              <span className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-500/20 rounded-full border border-emerald-500/30">
+                                <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
+                                <span className="text-xs font-medium text-emerald-400">Active</span>
                               </span>
                             ) : (
                               <span className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-500/20 rounded-full border border-slate-500/30">
@@ -534,32 +593,34 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        <Tooltip title="Test Integration">
-                          <motion.button
-                            whileHover={{ scale: 1.1 }}
-                            whileTap={{ scale: 0.9 }}
-                            onClick={() => handleTestIntegration(integration)}
-                            disabled={isTesting}
-                            className="p-2.5 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 hover:border-blue-500/40 disabled:opacity-50 transition-all"
-                          >
-                            {isTesting ? <Spin size="small" /> : <BeakerIcon className="w-5 h-5" />}
-                          </motion.button>
-                        </Tooltip>
+                        <motion.button
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                          title="Test Integration"
+                          onClick={() => handleTestIntegration(integration)}
+                          disabled={isTesting}
+                          className="p-2.5 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 hover:border-blue-500/40 disabled:opacity-50 transition-all"
+                        >
+                          {isTesting ? (
+                            <div className="w-5 h-5 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" />
+                          ) : (
+                            <BeakerIcon className="w-5 h-5" />
+                          )}
+                        </motion.button>
 
-                        <Tooltip title="Delete Integration">
-                          <motion.button
-                            whileHover={{ scale: 1.1 }}
-                            whileTap={{ scale: 0.9 }}
-                            onClick={() => {
-                              if (window.confirm(`Are you sure you want to delete ${integration.name}?`)) {
-                                handleDeleteIntegration(integration.id);
-                              }
-                            }}
-                            className="p-2.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/40 transition-all"
-                          >
-                            <TrashIcon className="w-5 h-5" />
-                          </motion.button>
-                        </Tooltip>
+                        <motion.button
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                          title="Delete Integration"
+                          onClick={() => {
+                            if (window.confirm(`Are you sure you want to delete ${integration.name}?`)) {
+                              handleDeleteIntegration(integration.id);
+                            }
+                          }}
+                          className="p-2.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/40 transition-all"
+                        >
+                          <TrashIcon className="w-5 h-5" />
+                        </motion.button>
                       </div>
                     </div>
                   </motion.div>
@@ -597,141 +658,201 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
       )}
 
       {/* Add Integration Modal */}
-      <Modal
-        title={null}
-        open={isModalOpen}
-        onOk={handleAddIntegration}
-        onCancel={() => {
-          setIsModalOpen(false);
-          setSelectedType("");
-          setIntegrationName("");
-          setCredentials({});
-        }}
-        confirmLoading={submitting}
-        okText="Add Integration"
-        width={560}
-        styles={{
-          content: { backgroundColor: '#1e293b', borderRadius: '16px', border: '1px solid #334155' },
-          header: { backgroundColor: 'transparent' },
-          body: { padding: '24px' },
-          footer: { borderTop: '1px solid #334155', padding: '16px 24px' }
-        }}
-      >
-        <div className="space-y-6">
-          <div>
-            <h3 className="text-xl font-bold text-white mb-1">Add New Integration</h3>
-            <p className="text-sm text-slate-400">Configure where to send security alerts</p>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Integration Type</label>
-            <Select
-              value={selectedType}
-              onChange={(value) => { setSelectedType(value); setCredentials({}); }}
-              className="w-full"
-              placeholder="Select integration type"
-              size="large"
-            >
-              {INTEGRATION_TYPES.map((type) => (
-                <Select.Option key={type.id} value={type.id}>
-                  <div className="flex items-center gap-3 py-1">
-                    <span className="text-xl">{type.icon}</span>
-                    <div>
-                      <div className="font-medium">{type.name}</div>
-                      <div className="text-xs text-slate-400">{type.description}</div>
-                    </div>
-                  </div>
-                </Select.Option>
-              ))}
-            </Select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Integration Name</label>
-            <Input
-              placeholder="e.g., Production Alerts, Security Team"
-              value={integrationName}
-              onChange={(e) => setIntegrationName(e.target.value)}
-              size="large"
+      <AnimatePresence>
+        {isModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => {
+                setIsModalOpen(false);
+                setSelectedType("");
+                setIntegrationName("");
+                setCredentials({});
+              }}
             />
-          </div>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: "spring", duration: 0.4, bounce: 0.15 }}
+              className="relative w-full max-w-[560px] mx-4 bg-slate-800/95 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl shadow-black/50"
+            >
+              <div className="p-6 space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xl font-bold text-white mb-1">Add New Integration</h3>
+                    <p className="text-sm text-slate-400">Configure where to send security alerts</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setIsModalOpen(false);
+                      setSelectedType("");
+                      setIntegrationName("");
+                      setCredentials({});
+                    }}
+                    className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-all"
+                  >
+                    <XMarkIcon className="w-5 h-5" />
+                  </button>
+                </div>
 
-          {selectedIntegrationType && (
-            <div className="space-y-4 pt-2 border-t border-slate-700">
-              <div className="text-sm font-medium text-slate-300">Configuration</div>
-              {selectedIntegrationType.fields.map((field) => (
-                <div key={field}>
-                  <label className="block text-sm text-slate-400 mb-1.5">
-                    {selectedIntegrationType.fieldLabels?.[field] || field.replace("_", " ")}
-                    {field !== 'secret' && <span className="text-red-400 ml-1">*</span>}
-                  </label>
-                  <Input
-                    placeholder={selectedIntegrationType.fieldPlaceholders?.[field] || `Enter ${field.replace("_", " ")}`}
-                    value={credentials[field] || ""}
-                    onChange={(e) => setCredentials({ ...credentials, [field]: e.target.value })}
-                    type={field.includes("token") || field.includes("key") || field.includes("secret") ? "password" : "text"}
-                    size="large"
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Integration Type</label>
+                  <select
+                    value={selectedType}
+                    onChange={(e) => { setSelectedType(e.target.value); setCredentials({}); }}
+                    className="w-full px-4 py-3 bg-slate-900/80 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 appearance-none cursor-pointer transition-all"
+                    style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E")`, backgroundPosition: 'right 12px center', backgroundRepeat: 'no-repeat', backgroundSize: '20px' }}
+                  >
+                    <option value="" disabled className="bg-slate-900 text-slate-400">Select integration type</option>
+                    {INTEGRATION_TYPES.map((type) => (
+                      <option key={type.id} value={type.id} className="bg-slate-900 text-white py-2">
+                        {type.icon} {type.name} - {type.description}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Integration Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g., Production Alerts, Security Team"
+                    value={integrationName}
+                    onChange={(e) => setIntegrationName(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-900/80 border border-white/10 rounded-xl text-white text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-all"
                   />
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </Modal>
 
-      {/* Test Results Modal */}
-      <Modal
-        title={null}
-        open={showTestResult}
-        onCancel={() => setShowTestResult(false)}
-        footer={[
-          <Button key="close" type="primary" onClick={() => setShowTestResult(false)} className="bg-cyan-500 hover:bg-cyan-600">
-            Close
-          </Button>,
-        ]}
-        width={500}
-        styles={{
-          content: { backgroundColor: '#1e293b', borderRadius: '16px', border: '1px solid #334155' },
-          body: { padding: '24px' },
-          footer: { borderTop: '1px solid #334155', padding: '16px 24px' }
-        }}
-      >
-        {testResult && (
-          <div>
-            <div className={`flex items-center gap-3 mb-6 p-4 rounded-xl ${testResult.success ? 'bg-green-500/10 border border-green-500/30' : 'bg-red-500/10 border border-red-500/30'}`}>
-              {testResult.success ? (
-                <CheckCircleIcon className="w-8 h-8 text-green-400" />
-              ) : (
-                <XCircleIcon className="w-8 h-8 text-red-400" />
-              )}
-              <div>
-                <h4 className={`font-semibold ${testResult.success ? 'text-green-400' : 'text-red-400'}`}>
-                  {testResult.success ? 'Test Successful' : 'Test Failed'}
-                </h4>
-                <p className="text-sm text-slate-400">{testResult.integration}</p>
+                {selectedIntegrationType && (
+                  <div className="space-y-4 pt-2 border-t border-white/10">
+                    <div className="text-sm font-medium text-slate-300">Configuration</div>
+                    {selectedIntegrationType.fields.map((field) => (
+                      <div key={field}>
+                        <label className="block text-sm text-slate-400 mb-1.5">
+                          {selectedIntegrationType.fieldLabels?.[field] || field.replace("_", " ")}
+                          {field !== 'secret' && <span className="text-red-400 ml-1">*</span>}
+                        </label>
+                        <input
+                          type={field.includes("token") || field.includes("key") || field.includes("secret") ? "password" : "text"}
+                          placeholder={selectedIntegrationType.fieldPlaceholders?.[field] || `Enter ${field.replace("_", " ")}`}
+                          value={credentials[field] || ""}
+                          onChange={(e) => setCredentials({ ...credentials, [field]: e.target.value })}
+                          className="w-full px-4 py-3 bg-slate-900/80 border border-white/10 rounded-xl text-white text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-all"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            </div>
 
-            <div className="space-y-3 text-sm">
-              <div className="flex justify-between py-2 border-b border-slate-700">
-                <span className="text-slate-400">Status</span>
-                <span className={testResult.success ? 'text-green-400' : 'text-red-400'}>
-                  {testResult.success ? 'Success' : 'Failed'}
-                </span>
+              <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-white/10">
+                <button
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    setSelectedType("");
+                    setIntegrationName("");
+                    setCredentials({});
+                  }}
+                  className="px-5 py-2.5 rounded-xl text-sm font-medium text-slate-300 hover:text-white bg-slate-700/50 hover:bg-slate-700 border border-white/10 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddIntegration}
+                  disabled={submitting}
+                  className="px-5 py-2.5 rounded-xl text-sm font-medium text-white bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-400 hover:to-cyan-500 shadow-lg shadow-cyan-500/25 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all"
+                >
+                  {submitting && (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  )}
+                  Add Integration
+                </button>
               </div>
-              <div className="flex justify-between py-2 border-b border-slate-700">
-                <span className="text-slate-400">Message</span>
-                <span className="text-slate-300">{testResult.message}</span>
-              </div>
-              {testResult.error && (
-                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg mt-4">
-                  <span className="text-red-400 text-sm">{testResult.error}</span>
-                </div>
-              )}
-            </div>
+            </motion.div>
           </div>
         )}
-      </Modal>
+      </AnimatePresence>
+
+      {/* Test Results Modal */}
+      <AnimatePresence>
+        {showTestResult && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setShowTestResult(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: "spring", duration: 0.4, bounce: 0.15 }}
+              className="relative w-full max-w-[500px] mx-4 bg-slate-800/95 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl shadow-black/50"
+            >
+              {testResult && (
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-lg font-bold text-white">Test Result</h3>
+                    <button
+                      onClick={() => setShowTestResult(false)}
+                      className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-all"
+                    >
+                      <XMarkIcon className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <div className={`flex items-center gap-3 mb-6 p-4 rounded-xl ${testResult.success ? 'bg-emerald-500/10 border border-emerald-500/30' : 'bg-red-500/10 border border-red-500/30'}`}>
+                    {testResult.success ? (
+                      <CheckCircleIcon className="w-8 h-8 text-emerald-400" />
+                    ) : (
+                      <XCircleIcon className="w-8 h-8 text-red-400" />
+                    )}
+                    <div>
+                      <h4 className={`font-semibold ${testResult.success ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {testResult.success ? 'Test Successful' : 'Test Failed'}
+                      </h4>
+                      <p className="text-sm text-slate-400">{testResult.integration}</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 text-sm">
+                    <div className="flex justify-between py-2 border-b border-white/10">
+                      <span className="text-slate-400">Status</span>
+                      <span className={testResult.success ? 'text-emerald-400' : 'text-red-400'}>
+                        {testResult.success ? 'Success' : 'Failed'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-2 border-b border-white/10">
+                      <span className="text-slate-400">Message</span>
+                      <span className="text-slate-300">{testResult.message}</span>
+                    </div>
+                    {testResult.error && (
+                      <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg mt-4">
+                        <span className="text-red-400 text-sm">{testResult.error}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end px-6 py-4 border-t border-white/10">
+                <button
+                  onClick={() => setShowTestResult(false)}
+                  className="px-5 py-2.5 rounded-xl text-sm font-medium text-white bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-400 hover:to-cyan-500 shadow-lg shadow-cyan-500/25 transition-all"
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

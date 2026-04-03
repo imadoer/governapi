@@ -153,7 +153,6 @@ export class UserAuthService {
 
   static async validateSession(sessionToken: string): Promise<AuthResult> {
     try {
-      console.log("Validating session token:", sessionToken);
       const session = await database.queryOne(
         `SELECT s.*, u.*, c.company_name, c.subscription_plan, c.subscription_status, c.api_key, c.created_at as company_created_at
          FROM user_sessions s

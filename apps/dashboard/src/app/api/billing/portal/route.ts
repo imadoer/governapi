@@ -6,7 +6,7 @@ import { database } from '@/infrastructure/database';
 export async function POST(request: NextRequest) {
   try {
     // Initialize Stripe inside handler to avoid build-time errors
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder', {
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
       apiVersion: '2025-08-27.basil',
     });
 

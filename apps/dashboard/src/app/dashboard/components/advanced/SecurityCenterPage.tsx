@@ -1,49 +1,32 @@
 "use client";
 import React, { useState } from "react";
 import useSWR from "swr";
-import { motion, useReducedMotion } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { ComposedChart, Line, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, Area, Legend } from "recharts";
 import {
-  Progress,
-  Tooltip,
-  Badge,
-  Modal,
-  Form,
-  Input,
-  Select,
-  message,
-  Button,
-  Switch,
-  Space,
-  Skeleton,
-  Tag,
-} from "antd";
+  ArrowPathIcon,
+  PlayCircleIcon,
+  ArrowDownTrayIcon,
+  ShieldCheckIcon,
+  FireIcon,
+  BugAntIcon,
+  ShieldExclamationIcon,
+  ChartBarIcon,
+  CheckCircleIcon,
+  ClockIcon,
+} from "@heroicons/react/24/outline";
 import {
-  ReloadOutlined,
-  PlayCircleOutlined,
-  DownloadOutlined,
-  SecurityScanOutlined,
-  FireOutlined,
-  BugOutlined,
-  SafetyCertificateOutlined,
-  LineChartOutlined,
-  CheckCircleOutlined,
-  ClockCircleOutlined,
-} from "@ant-design/icons";
-import { 
-  fadeSlideDown, 
-  fadeLift, 
+  fadeSlideDown,
+  fadeLift,
   scaleInPulse,
   cardLift,
-  hoverGlow, 
+  hoverGlow,
   pulseLoop,
   staggerContainer,
   depthReveal,
   springIn,
   closingDepth
 } from "../../../../motion/variants";
-
-const { Option } = Select;
 
 interface SecurityMetrics {
   securityScore: number;
@@ -65,11 +48,19 @@ const fetcher = (url: string, tenantId: string) =>
 export function SecurityCenterPage({ company, onNavigate }) {
   const [scanModalVisible, setScanModalVisible] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [form] = Form.useForm();
   const [submitting, setSubmitting] = useState(false);
+  const [formUrl, setFormUrl] = useState("");
+  const [formScanType, setFormScanType] = useState("comprehensive");
+  const [formError, setFormError] = useState("");
+  const [toastMessage, setToastMessage] = useState<{ text: string; type: "success" | "error" | "info" } | null>(null);
   const shouldReduceMotion = useReducedMotion();
 
   const tenantId = company?.id || "1";
+
+  const showToast = (text: string, type: "success" | "error" | "info" = "success") => {
+    setToastMessage({ text, type });
+    setTimeout(() => setToastMessage(null), 3000);
+  };
 
   const { data: metricsData, mutate: refreshMetrics, isLoading: metricsLoading } = useSWR(
     [`/api/customer/security-metrics`, tenantId],
@@ -94,7 +85,7 @@ export function SecurityCenterPage({ company, onNavigate }) {
     ([url, id]: [string, string]) => fetcher(url, id),
     { refreshInterval: autoRefresh ? 10000 : 0 }
   );
-  // ✅ Fetch 30-day security trends
+  // Fetch 30-day security trends
   const { data: trendsData, isLoading: trendsLoading } = useSWR(
     [`/api/customer/security-metrics/trends`, tenantId],
     ([url, id]: [string, string]) => fetcher(url, id),
@@ -109,10 +100,16 @@ export function SecurityCenterPage({ company, onNavigate }) {
 
   const handleRefresh = () => {
     refreshMetrics();
-    message.success("Dashboard refreshed");
+    showToast("Dashboard refreshed");
   };
 
-  const handleStartScan = async (values: any) => {
+  const handleStartScan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formUrl.trim()) {
+      setFormError("Please enter target URL");
+      return;
+    }
+    setFormError("");
     setSubmitting(true);
     try {
       const response = await fetch("/api/customer/security-scans", {
@@ -121,20 +118,21 @@ export function SecurityCenterPage({ company, onNavigate }) {
           "Content-Type": "application/json",
           "x-tenant-id": tenantId,
         },
-        body: JSON.stringify(values),
+        body: JSON.stringify({ url: formUrl, scanType: formScanType }),
       });
 
       const data = await response.json();
 
       if (data.success) {
-        message.success("Security scan initiated");
+        showToast("Security scan initiated");
         setScanModalVisible(false);
-        form.resetFields();
+        setFormUrl("");
+        setFormScanType("comprehensive");
       } else {
-        message.error(data.error || "Failed to start scan");
+        showToast(data.error || "Failed to start scan", "error");
       }
     } catch (error) {
-      message.error("Failed to start scan");
+      showToast("Failed to start scan", "error");
     } finally {
       setSubmitting(false);
     }
@@ -142,14 +140,14 @@ export function SecurityCenterPage({ company, onNavigate }) {
 
   const handleExportPDF = async () => {
     try {
-      message.loading({ content: 'Generating PDF report...', key: 'pdf' });
-      
+      showToast("Generating PDF report...", "info");
+
       // Fetch report data
       const response = await fetch('/api/customer/security-report/pdf', {
         headers: { 'x-tenant-id': tenantId }
       });
       const data = await response.json();
-      
+
       if (!data.success) {
         throw new Error('Failed to fetch report data');
       }
@@ -157,24 +155,24 @@ export function SecurityCenterPage({ company, onNavigate }) {
       // Dynamic import jsPDF to avoid SSR issues
       const { default: jsPDF } = await import('jspdf');
       const { default: autoTable } = await import('jspdf-autotable');
-      
+
       const doc = new jsPDF();
       const reportData = data.reportData;
-      
+
       // Header
       doc.setFontSize(20);
       doc.setTextColor(6, 182, 212);
       doc.text('GovernAPI Security Report', 14, 20);
-      
+
       doc.setFontSize(10);
       doc.setTextColor(100);
       doc.text(`Generated: ${new Date(reportData.generatedAt).toLocaleString()}`, 14, 28);
-      
+
       // Executive Summary
       doc.setFontSize(14);
       doc.setTextColor(0);
       doc.text('Executive Summary', 14, 40);
-      
+
       doc.setFontSize(10);
       const summaryY = 48;
       doc.text(`Overall Security Score: ${reportData.metrics.securityScore}/100`, 14, summaryY);
@@ -182,11 +180,11 @@ export function SecurityCenterPage({ company, onNavigate }) {
       doc.text(`• Threat Activity Score: ${reportData.metrics.threatScore}/100`, 20, summaryY + 14);
       doc.text(`• Compliance Score: ${reportData.metrics.complianceScore}/100`, 20, summaryY + 21);
       doc.text(`• Scan Hygiene Score: ${reportData.metrics.scanHygieneScore}/100`, 20, summaryY + 28);
-      
+
       // Vulnerabilities Table
       doc.setFontSize(14);
       doc.text('Vulnerability Breakdown', 14, summaryY + 42);
-      
+
       (autoTable as any)(doc, {
         startY: summaryY + 48,
         head: [['Severity', 'Count']],
@@ -200,16 +198,16 @@ export function SecurityCenterPage({ company, onNavigate }) {
         theme: 'grid',
         headStyles: { fillColor: [6, 182, 212] },
       });
-      
+
       // Threat Activity
       let finalY = (doc as any).lastAutoTable.finalY + 10;
       doc.setFontSize(14);
       doc.text('Threat Activity (Last 7 Days)', 14, finalY);
-      
+
       doc.setFontSize(10);
       doc.text(`Active Threats: ${reportData.threats.active}`, 14, finalY + 8);
       doc.text(`Threats Blocked Today: ${reportData.threats.blockedToday}`, 14, finalY + 15);
-      
+
       if (reportData.threats.recentTypes.length > 0) {
         (autoTable as any)(doc, {
           startY: finalY + 22,
@@ -220,12 +218,12 @@ export function SecurityCenterPage({ company, onNavigate }) {
         });
         finalY = (doc as any).lastAutoTable.finalY + 10;
       }
-      
+
       // Recent Scans
       if (reportData.scans.recent.length > 0) {
         doc.setFontSize(14);
         doc.text('Recent Security Scans', 14, finalY);
-        
+
         (autoTable as any)(doc, {
           startY: finalY + 6,
           head: [['Scan Type', 'Status', 'Date']],
@@ -238,7 +236,7 @@ export function SecurityCenterPage({ company, onNavigate }) {
           headStyles: { fillColor: [6, 182, 212] },
         });
       }
-      
+
       // Footer
       const pageCount = doc.getNumberOfPages();
       for (let i = 1; i <= pageCount; i++) {
@@ -252,15 +250,21 @@ export function SecurityCenterPage({ company, onNavigate }) {
           { align: 'center' }
         );
       }
-      
+
       // Save the PDF
       doc.save(`GovernAPI-Security-Report-${new Date().toISOString().split('T')[0]}.pdf`);
-      
-      message.success({ content: 'PDF report downloaded!', key: 'pdf' });
+
+      showToast("PDF report downloaded!");
     } catch (error) {
       console.error('PDF export error:', error);
-      message.error({ content: 'Failed to generate PDF report', key: 'pdf' });
+      showToast("Failed to generate PDF report", "error");
     }
+  };
+
+  const scoreColor = (score: number) => {
+    if (score >= 80) return "#10b981";
+    if (score >= 60) return "#f97316";
+    return "#ef4444";
   };
 
   return (
@@ -430,21 +434,39 @@ export function SecurityCenterPage({ company, onNavigate }) {
         }
       `}</style>
 
+      {/* Toast notification */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="fixed top-6 right-6 z-[100] px-5 py-3 rounded-xl text-sm font-medium shadow-2xl border border-white/10 backdrop-blur-xl"
+            style={{
+              background: toastMessage.type === "error" ? "rgba(239,68,68,0.9)" : toastMessage.type === "info" ? "rgba(59,130,246,0.9)" : "rgba(16,185,129,0.9)",
+              color: "#fff",
+            }}
+          >
+            {toastMessage.text}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="relative z-10">
-        <motion.div 
-          initial="hidden" 
-          animate="visible" 
+        <motion.div
+          initial="hidden"
+          animate="visible"
           variants={shouldReduceMotion ? undefined : fadeSlideDown}
           className="flex items-center justify-between mb-8"
         >
           <div>
             <h1 className="text-4xl font-bold text-white mb-2 flex items-center gap-3">
-              <SecurityScanOutlined className="text-cyan-400 icon-float" style={{ fontSize: 40 }} />
+              <ShieldCheckIcon className="w-10 h-10 text-cyan-400 icon-float" />
               Security Center
             </h1>
             <p className="text-slate-400">Real-time security operations and threat intelligence</p>
           </div>
-          <motion.div 
+          <motion.div
             className="flex items-center gap-3"
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -452,12 +474,12 @@ export function SecurityCenterPage({ company, onNavigate }) {
           >
             <div className="flex items-center gap-2 text-sm text-slate-400">
               <span>Auto-refresh</span>
-              <Switch 
-                checked={autoRefresh} 
-                onChange={setAutoRefresh} 
-                size="small" 
-                className={autoRefresh ? "heartbeat-switch" : ""}
-              />
+              <button
+                onClick={() => setAutoRefresh(!autoRefresh)}
+                className={`relative w-11 h-6 rounded-full transition-colors ${autoRefresh ? 'bg-cyan-500' : 'bg-slate-600'} ${autoRefresh ? 'heartbeat-switch' : ''}`}
+              >
+                <span className={`block w-5 h-5 rounded-full bg-white shadow transform transition-transform ${autoRefresh ? 'translate-x-5' : 'translate-x-0.5'}`} />
+              </button>
             </div>
             <motion.button
               whileHover={shouldReduceMotion ? undefined : { scale: 1.05, y: -2 }}
@@ -465,7 +487,7 @@ export function SecurityCenterPage({ company, onNavigate }) {
               onClick={handleRefresh}
               className="glass-card px-4 py-2 text-white flex items-center gap-2"
             >
-              <ReloadOutlined spin={metricsLoading} />
+              <ArrowPathIcon className={`w-5 h-5 ${metricsLoading ? 'animate-spin' : ''}`} />
               Refresh
             </motion.button>
             <motion.button
@@ -474,7 +496,7 @@ export function SecurityCenterPage({ company, onNavigate }) {
               onClick={handleExportPDF}
               className="glass-card px-4 py-2 text-white flex items-center gap-2 hover:bg-slate-700"
             >
-              <DownloadOutlined />
+              <ArrowDownTrayIcon className="w-5 h-5" />
               Export PDF
             </motion.button>
             <motion.button
@@ -483,7 +505,7 @@ export function SecurityCenterPage({ company, onNavigate }) {
               onClick={() => setScanModalVisible(true)}
               className="scan-button px-6 py-3 bg-cyan-500 hover:bg-cyan-600 text-white rounded-xl font-semibold flex items-center gap-2"
             >
-              <PlayCircleOutlined />
+              <PlayCircleIcon className="w-5 h-5" />
               Start Scan
             </motion.button>
           </motion.div>
@@ -533,58 +555,48 @@ export function SecurityCenterPage({ company, onNavigate }) {
           >
             <div className="text-center">
               {metricsLoading ? (
-                <Skeleton.Avatar active size={180} />
+                <div className="flex items-center justify-center">
+                  <div className="animate-pulse bg-slate-700/50 rounded-full w-[180px] h-[180px]" />
+                </div>
               ) : (
                 <>
-                  <Tooltip
-                    title={
-                      <div style={{ padding: '8px' }}>
-                        <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', color: '#fff' }}>
-                          Security Score Breakdown
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ color: '#94a3b8' }}>• Vulnerabilities:</span>
-                            <span style={{ color: '#06b6d4', fontWeight: 'bold', marginLeft: '16px' }}>{metrics?.vulnScore ?? 0}</span>
-                          </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ color: '#94a3b8' }}>• Threat Activity:</span>
-                            <span style={{ color: '#06b6d4', fontWeight: 'bold', marginLeft: '16px' }}>{metrics?.threatScore ?? 0}</span>
-                          </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ color: '#94a3b8' }}>• Compliance:</span>
-                            <span style={{ color: '#06b6d4', fontWeight: 'bold', marginLeft: '16px' }}>{metrics?.complianceScore ?? 0}</span>
-                          </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ color: '#94a3b8' }}>• Scan Hygiene:</span>
-                            <span style={{ color: '#06b6d4', fontWeight: 'bold', marginLeft: '16px' }}>{metrics?.scanHygieneScore ?? 0}</span>
-                          </div>
-                          <div style={{ borderTop: '1px solid #334155', marginTop: '8px', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ color: '#fff', fontWeight: 'bold' }}>• Final Weighted Score:</span>
-                            <span style={{ color: '#10b981', fontWeight: 'bold', fontSize: '16px', marginLeft: '16px' }}>{metrics?.securityScore ?? 0}</span>
-                          </div>
-                        </div>
-                      </div>
-                    }
-                    overlayStyle={{ maxWidth: '320px' }}
-                    color="#1e293b"
+                  <div
+                    className="relative inline-flex items-center justify-center"
+                    style={{ width: 200, height: 200, cursor: 'help' }}
+                    title={`Security Score Breakdown -- Vulnerabilities: ${metrics?.vulnScore ?? 0} | Threat Activity: ${metrics?.threatScore ?? 0} | Compliance: ${metrics?.complianceScore ?? 0} | Scan Hygiene: ${metrics?.scanHygieneScore ?? 0} | Final Weighted Score: ${metrics?.securityScore ?? 0}`}
                   >
-                    <div style={{ cursor: 'help' }}>
-                      <Progress
-                        type="circle"
-                        percent={metrics?.securityScore || 0}
-                        strokeWidth={10}
-                        size={200}
-                        strokeColor={{ "0%": "#10b981", "100%": "#06b6d4" }}
-                        format={(percent) => (
-                          <div>
-                            <div className="text-5xl font-bold text-white">{percent}</div>
-                            <div className="text-sm text-slate-400 mt-2">Security Score</div>
-                          </div>
-                        )}
+                    {/* SVG circular progress */}
+                    <svg width="200" height="200" viewBox="0 0 200 200" className="transform -rotate-90">
+                      <circle
+                        cx="100"
+                        cy="100"
+                        r="85"
+                        fill="none"
+                        stroke="rgba(255,255,255,0.05)"
+                        strokeWidth="10"
                       />
+                      <circle
+                        cx="100"
+                        cy="100"
+                        r="85"
+                        fill="none"
+                        stroke="url(#scoreGradient)"
+                        strokeWidth="10"
+                        strokeLinecap="round"
+                        strokeDasharray={`${(metrics?.securityScore || 0) * 5.34} ${534 - (metrics?.securityScore || 0) * 5.34}`}
+                      />
+                      <defs>
+                        <linearGradient id="scoreGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                          <stop offset="0%" stopColor="#10b981" />
+                          <stop offset="100%" stopColor="#06b6d4" />
+                        </linearGradient>
+                      </defs>
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <div className="text-5xl font-bold text-white">{metrics?.securityScore || 0}</div>
+                      <div className="text-sm text-slate-400 mt-2">Security Score</div>
                     </div>
-                  </Tooltip>
+                  </div>
                   {metrics?.securityScoreTrend !== undefined && (
                     <motion.div
                       className="mt-4 text-sm"
@@ -593,7 +605,7 @@ export function SecurityCenterPage({ company, onNavigate }) {
                       transition={{ delay: 1.2 }}
                     >
                       <span className={metrics.securityScoreTrend >= 0 ? "text-green-400" : "text-red-400"}>
-                        {metrics.securityScoreTrend >= 0 ? "↑" : "↓"} {Math.abs(metrics.securityScoreTrend)}%
+                        {metrics.securityScoreTrend >= 0 ? "\u2191" : "\u2193"} {Math.abs(metrics.securityScoreTrend)}%
                       </span>
                       <span className="text-slate-500"> vs last week</span>
                     </motion.div>
@@ -603,45 +615,50 @@ export function SecurityCenterPage({ company, onNavigate }) {
             </div>
           </motion.div>
           {/* 30-Day Security Trend Chart */}
-          <motion.div 
-            initial="hidden" 
-            animate="visible" 
+          <motion.div
+            initial="hidden"
+            animate="visible"
             variants={shouldReduceMotion ? undefined : fadeLift}
             className="glass-card p-6 lg:col-span-2"
           >
             <h3 className="text-lg font-semibold text-white mb-4">30-Day Security Trend</h3>
             {trendsLoading ? (
-              <Skeleton active paragraph={{ rows: 4 }} />
+              <div className="space-y-3">
+                <div className="animate-pulse bg-slate-700/50 rounded-xl h-6 w-3/4" />
+                <div className="animate-pulse bg-slate-700/50 rounded-xl h-6 w-1/2" />
+                <div className="animate-pulse bg-slate-700/50 rounded-xl h-6 w-5/6" />
+                <div className="animate-pulse bg-slate-700/50 rounded-xl h-6 w-2/3" />
+              </div>
             ) : trendsData?.success && trendsData.trends?.length > 0 ? (
               <ResponsiveContainer width="100%" height={250}>
                 <ComposedChart data={trendsData.trends}>
-                  <XAxis 
-                    dataKey="date" 
+                  <XAxis
+                    dataKey="date"
                     tick={{ fill: '#94a3b8', fontSize: 11 }}
                     stroke="#475569"
                   />
-                  <YAxis 
-                    yAxisId="left" 
+                  <YAxis
+                    yAxisId="left"
                     tick={{ fill: '#94a3b8', fontSize: 11 }}
                     stroke="#475569"
                     label={{ value: 'Security Score', angle: -90, position: 'insideLeft', fill: '#94a3b8' }}
                   />
-                  <YAxis 
-                    yAxisId="right" 
+                  <YAxis
+                    yAxisId="right"
                     orientation="right"
                     tick={{ fill: '#94a3b8', fontSize: 11 }}
                     stroke="#475569"
                     label={{ value: 'Active Threats', angle: 90, position: 'insideRight', fill: '#94a3b8' }}
                   />
-                  <RechartsTooltip 
-                    contentStyle={{ 
-                      backgroundColor: '#1e293b', 
+                  <RechartsTooltip
+                    contentStyle={{
+                      backgroundColor: '#1e293b',
                       border: '1px solid #475569',
                       borderRadius: '8px',
                       color: '#fff'
                     }}
                   />
-                  <Legend 
+                  <Legend
                     wrapperStyle={{ color: '#94a3b8' }}
                   />
                   <Area
@@ -666,7 +683,7 @@ export function SecurityCenterPage({ company, onNavigate }) {
               </ResponsiveContainer>
             ) : (
               <div className="text-center py-12 text-slate-400">
-                <LineChartOutlined className="text-4xl mb-2" />
+                <ChartBarIcon className="w-10 h-10 mx-auto mb-2" />
                 <p>No trend data available</p>
               </div>
             )}
@@ -680,7 +697,7 @@ export function SecurityCenterPage({ company, onNavigate }) {
               <div className="flex items-center justify-between mb-3">
                 <div className="text-sm text-slate-400 font-medium">Active Threats</div>
                 <motion.div className="p-2 rounded-lg icon-float" style={{ background: "rgba(239,68,68,0.1)" }}>
-                  <FireOutlined className="text-xl" style={{ color: "#f87171" }} />
+                  <FireIcon className="w-5 h-5 text-red-400" />
                 </motion.div>
               </div>
               <div className="text-3xl font-bold text-white">{metrics?.activeThreats || 0}</div>
@@ -696,7 +713,7 @@ export function SecurityCenterPage({ company, onNavigate }) {
               <div className="flex items-center justify-between mb-3">
                 <div className="text-sm text-slate-400 font-medium">Critical Vulns</div>
                 <motion.div className="p-2 rounded-lg icon-float" style={{ background: "rgba(251,146,60,0.1)" }}>
-                  <BugOutlined className="text-xl" style={{ color: "#fb923c" }} />
+                  <BugAntIcon className="w-5 h-5 text-orange-400" />
                 </motion.div>
               </div>
               <div className="text-3xl font-bold text-white">{metrics?.criticalVulns || 0}</div>
@@ -707,7 +724,7 @@ export function SecurityCenterPage({ company, onNavigate }) {
               <div className="flex items-center justify-between mb-3">
                 <div className="text-sm text-slate-400 font-medium">Scans Running</div>
                 <motion.div className="p-2 rounded-lg icon-float" style={{ background: "rgba(6,182,212,0.1)" }}>
-                  <LineChartOutlined className="text-xl" style={{ color: "#22d3ee" }} />
+                  <ChartBarIcon className="w-5 h-5 text-cyan-300" />
                 </motion.div>
               </div>
               <div className="text-3xl font-bold text-white">{metrics?.scansRunning || 0}</div>
@@ -718,7 +735,7 @@ export function SecurityCenterPage({ company, onNavigate }) {
               <div className="flex items-center justify-between mb-3">
                 <div className="text-sm text-slate-400 font-medium">Compliance</div>
                 <motion.div className="p-2 rounded-lg icon-float" style={{ background: "rgba(168,85,247,0.1)" }}>
-                  <SafetyCertificateOutlined className="text-xl" style={{ color: "#c084fc" }} />
+                  <ShieldExclamationIcon className="w-5 h-5 text-purple-400" />
                 </motion.div>
               </div>
               <div className="text-3xl font-bold text-white">
@@ -732,16 +749,22 @@ export function SecurityCenterPage({ company, onNavigate }) {
         <motion.div variants={shouldReduceMotion ? undefined : depthReveal} whileHover={shouldReduceMotion ? undefined : hoverGlow} className="glass-card p-6">
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2 section-title">
-              <BugOutlined className="text-xl" style={{ color: "#fb923c" }} />
+              <BugAntIcon className="w-5 h-5 text-orange-400" />
               <h3 className="text-lg font-semibold text-white">Critical Vulnerabilities</h3>
               {metrics?.criticalVulns > 0 && (
-                <Badge count={metrics.criticalVulns} style={{ backgroundColor: "#f97316" }} />
+                <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-bold rounded-full bg-orange-500 text-white">
+                  {metrics.criticalVulns}
+                </span>
               )}
             </div>
-            <button onClick={() => onNavigate?.("vulnerability-scanner")} className="text-cyan-400 hover:text-cyan-300 text-sm transition-colors">View All →</button>
+            <button onClick={() => onNavigate?.("vulnerability-scanner")} className="text-cyan-400 hover:text-cyan-300 text-sm transition-colors">View All &rarr;</button>
           </div>
           {vulnsLoading ? (
-            <Skeleton active paragraph={{ rows: 3 }} />
+            <div className="space-y-3">
+              <div className="animate-pulse bg-slate-700/50 rounded-xl h-16 w-full" />
+              <div className="animate-pulse bg-slate-700/50 rounded-xl h-16 w-full" />
+              <div className="animate-pulse bg-slate-700/50 rounded-xl h-16 w-full" />
+            </div>
           ) : vulns.length > 0 ? (
             <div className="space-y-3">
               {vulns.slice(0, 5).map((vuln: any, idx: number) => (
@@ -761,7 +784,7 @@ export function SecurityCenterPage({ company, onNavigate }) {
             </div>
           ) : (
             <motion.div className="text-center py-12" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 1.2, duration: 0.4 }}>
-              <CheckCircleOutlined className="text-5xl text-green-500 mb-3" />
+              <CheckCircleIcon className="w-12 h-12 text-green-500 mx-auto mb-3" />
               <p className="text-white font-medium">No critical vulnerabilities</p>
               <p className="text-sm text-slate-400 mt-1">Your systems are secure</p>
             </motion.div>
@@ -771,22 +794,45 @@ export function SecurityCenterPage({ company, onNavigate }) {
         <motion.div variants={shouldReduceMotion ? undefined : depthReveal} animate={shouldReduceMotion ? undefined : (metrics?.activeThreats > 0 ? "animate" : undefined)} {...(shouldReduceMotion ? {} : (metrics?.activeThreats > 0 ? pulseLoop : {}))} whileHover={shouldReduceMotion ? undefined : hoverGlow} className="glass-card p-6">
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2 section-title">
-              <FireOutlined className="text-xl" style={{ color: "#f87171" }} />
+              <FireIcon className="w-5 h-5 text-red-400" />
               <h3 className="text-lg font-semibold text-white">Live Threat Monitor</h3>
               <div className="live-indicator ml-1" />
             </div>
-            <button onClick={() => onNavigate?.("threat-intelligence")} className="text-cyan-400 hover:text-cyan-300 text-sm transition-colors">Details →</button>
+            <button onClick={() => onNavigate?.("threat-intelligence")} className="text-cyan-400 hover:text-cyan-300 text-sm transition-colors">Details &rarr;</button>
           </div>
           {threatsLoading ? (
-            <Skeleton active paragraph={{ rows: 2 }} />
+            <div className="space-y-3">
+              <div className="animate-pulse bg-slate-700/50 rounded-xl h-24 w-full" />
+              <div className="animate-pulse bg-slate-700/50 rounded-xl h-24 w-full" />
+            </div>
           ) : (
             <div className="grid grid-cols-2 gap-4">
               <motion.div className="glass-card p-6 text-center threat-pulse" style={{ background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.2)" }} whileHover={shouldReduceMotion ? undefined : { scale: 1.05 }}>
-                <Progress type="circle" percent={100} format={() => (<div><div className="text-3xl font-bold text-red-400">{threats?.recentBlocked?.length || 0}</div><div className="text-xs text-slate-400 mt-1">BLOCKED</div></div>)} strokeColor="#ef4444" size={100} strokeWidth={8} />
+                {/* Custom circular indicator for blocked threats */}
+                <div className="relative inline-flex items-center justify-center" style={{ width: 100, height: 100 }}>
+                  <svg width="100" height="100" viewBox="0 0 100 100" className="transform -rotate-90">
+                    <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="8" />
+                    <circle cx="50" cy="50" r="42" fill="none" stroke="#ef4444" strokeWidth="8" strokeLinecap="round" strokeDasharray="264 264" />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <div className="text-3xl font-bold text-red-400">{threats?.recentBlocked?.length || 0}</div>
+                    <div className="text-xs text-slate-400 mt-1">BLOCKED</div>
+                  </div>
+                </div>
                 <div className="text-xs text-slate-500 mt-3">Today</div>
               </motion.div>
               <motion.div className="glass-card p-6 text-center" style={{ background: "rgba(251,146,60,0.05)", border: "1px solid rgba(251,146,60,0.2)" }} whileHover={shouldReduceMotion ? undefined : { scale: 1.05 }}>
-                <Progress type="circle" percent={100} format={() => (<div><div className="text-3xl font-bold text-orange-400">{metrics?.activeThreats || 0}</div><div className="text-xs text-slate-400 mt-1">ACTIVE</div></div>)} strokeColor="#f97316" size={100} strokeWidth={8} />
+                {/* Custom circular indicator for active threats */}
+                <div className="relative inline-flex items-center justify-center" style={{ width: 100, height: 100 }}>
+                  <svg width="100" height="100" viewBox="0 0 100 100" className="transform -rotate-90">
+                    <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="8" />
+                    <circle cx="50" cy="50" r="42" fill="none" stroke="#f97316" strokeWidth="8" strokeLinecap="round" strokeDasharray="264 264" />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <div className="text-3xl font-bold text-orange-400">{metrics?.activeThreats || 0}</div>
+                    <div className="text-xs text-slate-400 mt-1">ACTIVE</div>
+                  </div>
+                </div>
                 <div className="text-xs text-slate-500 mt-3">Right now</div>
               </motion.div>
             </div>
@@ -796,31 +842,43 @@ export function SecurityCenterPage({ company, onNavigate }) {
         <motion.div variants={shouldReduceMotion ? undefined : closingDepth} whileHover={shouldReduceMotion ? undefined : hoverGlow} className="lg:col-span-2 glass-card p-6">
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2 section-title">
-              <LineChartOutlined className="text-xl" style={{ color: "#22d3ee" }} />
+              <ChartBarIcon className="w-5 h-5 text-cyan-300" />
               <h3 className="text-lg font-semibold text-white">Recent Security Scans</h3>
             </div>
             <motion.button whileHover={shouldReduceMotion ? undefined : { scale: 1.05 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.95 }} onClick={() => setScanModalVisible(true)} className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg text-sm font-medium transition-colors">New Scan</motion.button>
           </div>
           {scansLoading ? (
-            <Skeleton active />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="animate-pulse bg-slate-700/50 rounded-xl h-24 w-full" />
+              ))}
+            </div>
           ) : scans.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {scans.slice(0, 6).map((scan: any, idx: number) => (
                 <motion.div key={idx} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 1.5 + (idx * 0.04), duration: 0.3, ease: "easeOut" }} whileHover={shouldReduceMotion ? undefined : { scale: 1.05, y: -5 }} className="glass-card p-4 cursor-pointer" style={{ border: "1px solid rgba(6,182,212,0.1)" }}>
                   <div className="text-xs text-cyan-400 font-mono mb-2 truncate">{scan.target}</div>
                   <div className="flex items-center gap-2 mb-3">
-                    <Tag style={{ background: "rgba(6, 182, 212, 0.1)", border: "none", borderRadius: 4, color: "#06b6d4", fontSize: 10 }}>{scan.scan_type}</Tag>
-                    <Tag style={{ background: scan.status === "completed" ? "rgba(16, 185, 129, 0.1)" : "rgba(251, 146, 60, 0.1)", border: "none", borderRadius: 4, color: scan.status === "completed" ? "#10b981" : "#fb923c", fontSize: 10 }}>{scan.status}</Tag>
+                    <span className="px-2.5 py-0.5 text-[10px] font-medium rounded-full bg-cyan-500/15 text-cyan-400">{scan.scan_type}</span>
+                    <span className={`px-2.5 py-0.5 text-[10px] font-medium rounded-full ${scan.status === "completed" ? "bg-emerald-500/15 text-emerald-400" : "bg-orange-500/15 text-orange-400"}`}>{scan.status}</span>
                   </div>
                   {scan.security_score && (
-                    <Progress percent={scan.security_score} strokeColor={scan.security_score >= 80 ? "#10b981" : "#f97316"} size="small" showInfo={false} />
+                    <div className="w-full h-1.5 bg-slate-700/50 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{
+                          width: `${scan.security_score}%`,
+                          background: scan.security_score >= 80 ? "#10b981" : "#f97316",
+                        }}
+                      />
+                    </div>
                   )}
                 </motion.div>
               ))}
             </div>
           ) : (
             <motion.div className="text-center py-12" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 1.5, duration: 0.4 }}>
-              <ClockCircleOutlined className="text-5xl text-slate-600 mb-3" />
+              <ClockIcon className="w-12 h-12 text-slate-600 mx-auto mb-3" />
               <p className="text-white font-medium mb-3">No recent scans</p>
               <motion.button whileHover={shouldReduceMotion ? undefined : { scale: 1.05 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.95 }} onClick={() => setScanModalVisible(true)} className="px-6 py-2 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg font-medium transition-colors">Start First Scan</motion.button>
             </motion.div>
@@ -828,27 +886,75 @@ export function SecurityCenterPage({ company, onNavigate }) {
         </motion.div>
       </motion.div>
 
-      <Modal title={<span style={{ color: "#fff" }}>Start New Security Scan</span>} open={scanModalVisible} onCancel={() => setScanModalVisible(false)} footer={null} width={480}>
-        <Form form={form} onFinish={handleStartScan} layout="vertical" style={{ marginTop: 20 }}>
-          <Form.Item label={<span style={{ color: "#e2e8f0" }}>Target URL</span>} name="url" rules={[{ required: true, message: "Please enter target URL" }]}>
-            <Input placeholder="https://api.example.com" size="large" />
-          </Form.Item>
-          <Form.Item label={<span style={{ color: "#e2e8f0" }}>Scan Type</span>} name="scanType" initialValue="comprehensive">
-            <Select size="large">
-              <Option value="quick">Quick (5-10 min)</Option>
-              <Option value="comprehensive">Comprehensive (15-30 min)</Option>
-              <Option value="deep">Deep (30-60 min)</Option>
-              <Option value="owasp_top10">OWASP Top 10 (20-40 min)</Option>
-            </Select>
-          </Form.Item>
-          <Form.Item style={{ marginBottom: 0, marginTop: 24 }}>
-            <Space style={{ width: "100%", justifyContent: "flex-end" }}>
-              <Button onClick={() => setScanModalVisible(false)}>Cancel</Button>
-              <Button type="primary" htmlType="submit" loading={submitting}>Start Scan</Button>
-            </Space>
-          </Form.Item>
-        </Form>
-      </Modal>
+      {/* Scan Modal */}
+      <AnimatePresence>
+        {scanModalVisible && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center"
+            onClick={() => setScanModalVisible(false)}
+          >
+            {/* Backdrop */}
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+            {/* Modal card */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative w-full max-w-md mx-4 bg-slate-800/90 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl"
+            >
+              <h2 className="text-lg font-semibold text-white mb-5">Start New Security Scan</h2>
+              <form onSubmit={handleStartScan} className="space-y-5">
+                <div>
+                  <label className="block text-sm text-slate-300 mb-2">Target URL</label>
+                  <input
+                    type="text"
+                    value={formUrl}
+                    onChange={(e) => { setFormUrl(e.target.value); setFormError(""); }}
+                    placeholder="https://api.example.com"
+                    className="w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-colors"
+                  />
+                  {formError && <p className="text-red-400 text-xs mt-1">{formError}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-300 mb-2">Scan Type</label>
+                  <select
+                    value={formScanType}
+                    onChange={(e) => setFormScanType(e.target.value)}
+                    className="w-full bg-slate-800/50 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-cyan-500/50 appearance-none cursor-pointer"
+                  >
+                    <option value="quick" className="bg-slate-800">Quick (5-10 min)</option>
+                    <option value="comprehensive" className="bg-slate-800">Comprehensive (15-30 min)</option>
+                    <option value="deep" className="bg-slate-800">Deep (30-60 min)</option>
+                    <option value="owasp_top10" className="bg-slate-800">OWASP Top 10 (20-40 min)</option>
+                  </select>
+                </div>
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setScanModalVisible(false)}
+                    className="px-5 py-2.5 bg-white/5 border border-white/10 text-white rounded-xl font-semibold hover:bg-white/10 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-violet-500 text-white rounded-xl font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {submitting && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />}
+                    Start Scan
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

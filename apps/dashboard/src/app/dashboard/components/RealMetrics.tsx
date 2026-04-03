@@ -1,11 +1,6 @@
+"use client";
+
 import { useEffect, useState } from "react";
-import { Card, Statistic, Progress, Row, Col } from "antd";
-import {
-  RobotOutlined,
-  SecurityScanOutlined,
-  DollarOutlined,
-  SafetyCertificateOutlined,
-} from "@ant-design/icons";
 
 export function RealMetrics() {
   const [metrics, setMetrics] = useState({
@@ -16,7 +11,6 @@ export function RealMetrics() {
   });
 
   useEffect(() => {
-    // Fetch real metrics from your analytics
     Promise.all([
       fetch("/api/analytics/costs").then((r) => r.json()),
       fetch("/api/analytics/threats").then((r) => r.json()),
@@ -32,48 +26,26 @@ export function RealMetrics() {
   }, []);
 
   return (
-    <Row gutter={[16, 16]}>
-      <Col xs={24} sm={12} lg={6}>
-        <Card>
-          <Statistic
-            title="Bots Blocked"
-            value={metrics.botsBlocked}
-            prefix={<RobotOutlined />}
-            valueStyle={{ color: "#cf1322" }}
-          />
-        </Card>
-      </Col>
-      <Col xs={24} sm={12} lg={6}>
-        <Card>
-          <Statistic
-            title="Threats Detected"
-            value={metrics.threatsDetected}
-            prefix={<SecurityScanOutlined />}
-            valueStyle={{ color: "#fa8c16" }}
-          />
-        </Card>
-      </Col>
-      <Col xs={24} sm={12} lg={6}>
-        <Card>
-          <Statistic
-            title="Cost Savings"
-            value={metrics.costSavings}
-            prefix="$"
-            valueStyle={{ color: "#52c41a" }}
-          />
-        </Card>
-      </Col>
-      <Col xs={24} sm={12} lg={6}>
-        <Card>
-          <Statistic
-            title="Compliance Score"
-            value={metrics.complianceScore}
-            suffix="%"
-            prefix={<SafetyCertificateOutlined />}
-          />
-          <Progress percent={metrics.complianceScore} showInfo={false} />
-        </Card>
-      </Col>
-    </Row>
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-5">
+        <div className="text-sm text-gray-400 mb-1">Bots Blocked</div>
+        <div className="text-2xl font-bold text-red-400">{metrics.botsBlocked}</div>
+      </div>
+      <div className="rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-5">
+        <div className="text-sm text-gray-400 mb-1">Threats Detected</div>
+        <div className="text-2xl font-bold text-amber-400">{metrics.threatsDetected}</div>
+      </div>
+      <div className="rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-5">
+        <div className="text-sm text-gray-400 mb-1">Cost Savings</div>
+        <div className="text-2xl font-bold text-emerald-400">${metrics.costSavings}</div>
+      </div>
+      <div className="rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-5">
+        <div className="text-sm text-gray-400 mb-1">Compliance Score</div>
+        <div className="text-2xl font-bold text-white">{metrics.complianceScore}%</div>
+        <div className="w-full bg-white/10 rounded-full h-1.5 mt-2">
+          <div className="h-1.5 rounded-full bg-cyan-400" style={{ width: `${metrics.complianceScore}%` }} />
+        </div>
+      </div>
+    </div>
   );
 }

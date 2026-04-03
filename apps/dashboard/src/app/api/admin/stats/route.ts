@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { database } from '@/infrastructure/database'
+import { requireAdmin, isAuthError } from '@/lib/auth/require-admin'
 
 export async function GET(request: NextRequest) {
+  const authResult = await requireAdmin(request);
+  if (isAuthError(authResult)) return authResult;
+
   try {
-    // Check admin auth (simple version)
-    const adminAuth = request.headers.get('x-admin-auth')
-    // In production, validate this properly
-    
     // Get total customers
     const customersResult = await database.queryOne(
       'SELECT COUNT(*) as total FROM companies'

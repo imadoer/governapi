@@ -1,16 +1,23 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Button, Layout, Typography, Card, Row, Col, Collapse, Table } from "antd";
-import { ArrowLeftOutlined, CheckOutlined, CloseOutlined } from "@ant-design/icons";
 import { useState } from "react";
-
-const { Header, Content } = Layout;
-const { Title, Paragraph } = Typography;
+import { motion } from "framer-motion";
+import {
+  ArrowLeftIcon,
+  CheckIcon,
+  XMarkIcon,
+  ChevronDownIcon,
+  ShieldCheckIcon,
+  GlobeAltIcon,
+  BoltIcon,
+  LockClosedIcon,
+} from "@heroicons/react/24/outline";
 
 export default function PricingPage() {
   const router = useRouter();
   const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
+  const [openFaq, setOpenFaq] = useState<string | null>(null);
 
   const handleCTAClick = (planName: string) => {
     if (planName === "Enterprise") {
@@ -23,37 +30,56 @@ export default function PricingPage() {
 
   const plans = [
     {
-      name: "Developer",
+      name: "Starter",
       price: "Free",
       period: "",
       annualPrice: "Free",
       description: "Perfect for testing and small projects",
       features: {
         "Security & Monitoring": [
-          "3 endpoints monitored",
+          "10 endpoints monitored",
           "Threat alerts",
-          "Basic monitoring",
+          "Weekly security scans",
           "7-day data retention",
         ],
         "API Discovery": ["Manual API catalog"],
         "Compliance": ["Basic compliance checks"],
-        "Support": ["Community support"],
+        "Support": ["Community support", "1 user seat"],
       },
       cta: "Get Started",
       popular: false,
     },
     {
-      name: "Professional",
-      price: "$149",
+      name: "Growth",
+      price: "$49",
       period: "/month",
-      annualPrice: "$129",
-      description: "Ideal for growing teams and mid-market companies",
+      annualPrice: "$39",
+      description: "For growing teams that need daily monitoring",
       features: {
         "Security & Monitoring": [
-          "25 endpoints monitored",
-          "AI-powered insights",
-          "Advanced threat detection",
-          "Bot protection",
+          "100 endpoints monitored",
+          "Daily security scans",
+          "Basic AI insights",
+          "30-day data retention",
+        ],
+        "API Discovery": ["Automated API discovery", "OpenAPI import"],
+        "Compliance": ["Compliance dashboards", "Email + Slack alerts"],
+        "Support": ["Email support (48h response)", "3 user seats"],
+      },
+      cta: "Start Free Trial",
+      popular: false,
+    },
+    {
+      name: "Professional",
+      price: "$199",
+      period: "/month",
+      annualPrice: "$169",
+      description: "Ideal for mid-market companies with real-time needs",
+      features: {
+        "Security & Monitoring": [
+          "1,000 endpoints monitored",
+          "Real-time threat detection",
+          "Advanced bot protection",
           "90-day data retention",
         ],
         "API Discovery": [
@@ -62,8 +88,8 @@ export default function PricingPage() {
           "API catalog management",
         ],
         "Compliance": [
-          "SOC2, GDPR, HIPAA, PCI-DSS reporting",
-          "Automated compliance checks",
+          "SOC2, GDPR, HIPAA, PCI-DSS tracking",
+          "Automated compliance scoring",
           "Compliance dashboards",
         ],
         "Analytics & Monitoring": [
@@ -76,7 +102,7 @@ export default function PricingPage() {
           "Webhooks",
           "Email notifications",
         ],
-        "Support": ["Priority support (12x5)", "Email & chat support"],
+        "Support": ["Priority support (24h response)", "10 user seats"],
       },
       cta: "Start Free Trial",
       popular: true,
@@ -140,36 +166,36 @@ export default function PricingPage() {
     {
       category: "Security & Monitoring",
       features: [
-        { key: "endpoints", name: "Endpoints Monitored", dev: "3", pro: "25", ent: "Unlimited" },
-        { key: "threat", name: "Threat Detection", dev: "Basic", pro: "Advanced", ent: "AI-Powered" },
-        { key: "bot", name: "Bot Protection", dev: false, pro: true, ent: true },
-        { key: "rules", name: "Custom Security Rules", dev: false, pro: false, ent: true },
-        { key: "retention", name: "Data Retention", dev: "7 days", pro: "90 days", ent: "2+ years" },
+        { name: "Endpoints Monitored", dev: "3", pro: "25", ent: "Unlimited" },
+        { name: "Threat Detection", dev: "Basic", pro: "Advanced", ent: "AI-Powered" },
+        { name: "Bot Protection", dev: false, pro: true, ent: true },
+        { name: "Custom Security Rules", dev: false, pro: false, ent: true },
+        { name: "Data Retention", dev: "7 days", pro: "90 days", ent: "2+ years" },
       ],
     },
     {
       category: "API Discovery",
       features: [
-        { key: "auto-discovery", name: "Automated Discovery", dev: false, pro: true, ent: true },
-        { key: "shadow", name: "Shadow API Detection", dev: false, pro: false, ent: true },
-        { key: "openapi", name: "OpenAPI Import", dev: false, pro: true, ent: true },
+        { name: "Automated Discovery", dev: false, pro: true, ent: true },
+        { name: "Shadow API Detection", dev: false, pro: false, ent: true },
+        { name: "OpenAPI Import", dev: false, pro: true, ent: true },
       ],
     },
     {
       category: "Compliance",
       features: [
-        { key: "frameworks", name: "Compliance Frameworks", dev: "Basic", pro: "4 major", ent: "25+" },
-        { key: "reporting", name: "Automated Reporting", dev: false, pro: true, ent: true },
-        { key: "policies", name: "Custom Policies", dev: false, pro: false, ent: true },
-        { key: "audit", name: "Audit Logging", dev: false, pro: false, ent: true },
+        { name: "Compliance Frameworks", dev: "Basic", pro: "4 major", ent: "25+" },
+        { name: "Automated Reporting", dev: false, pro: true, ent: true },
+        { name: "Custom Policies", dev: false, pro: false, ent: true },
+        { name: "Audit Logging", dev: false, pro: false, ent: true },
       ],
     },
     {
       category: "Support",
       features: [
-        { key: "hours", name: "Support Hours", dev: "Community", pro: "12x5", ent: "24x7" },
-        { key: "response", name: "Response Time", dev: "Best effort", pro: "4 hours", ent: "1 hour" },
-        { key: "csm", name: "Dedicated CSM", dev: false, pro: false, ent: true },
+        { name: "Support Hours", dev: "Community", pro: "12x5", ent: "24x7" },
+        { name: "Response Time", dev: "Best effort", pro: "4 hours", ent: "1 hour" },
+        { name: "Dedicated CSM", dev: false, pro: false, ent: true },
       ],
     },
   ];
@@ -225,280 +251,363 @@ export default function PricingPage() {
     },
   ];
 
-  const renderFeatureValue = (value: any) => {
+  const renderFeatureValue = (value: boolean | string) => {
     if (typeof value === "boolean") {
       return value ? (
-        <CheckOutlined className="text-green-500 text-lg" />
+        <CheckIcon className="w-5 h-5 text-emerald-400 mx-auto" />
       ) : (
-        <CloseOutlined className="text-gray-400 text-lg" />
+        <XMarkIcon className="w-5 h-5 text-slate-600 mx-auto" />
       );
     }
-    return <span className="text-gray-700">{value}</span>;
+    return <span className="text-slate-300 text-sm">{value}</span>;
   };
 
+  const trustBadges = [
+    { icon: LockClosedIcon, label: "SOC 2 Type II", sub: "Certified" },
+    { icon: ShieldCheckIcon, label: "GDPR", sub: "Compliant" },
+    { icon: BoltIcon, label: "99.9%", sub: "Uptime SLA" },
+    { icon: GlobeAltIcon, label: "Global", sub: "Infrastructure" },
+  ];
+
   return (
-    <Layout className="min-h-screen bg-gray-50">
-      <Header className="bg-slate-900 px-8">
-        <div className="max-w-7xl mx-auto flex items-center justify-between h-full">
+    <div className="min-h-screen bg-[#0a0a0f]">
+      {/* Ambient glow */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-cyan-500/5 rounded-full blur-[120px]" />
+        <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-violet-500/5 rounded-full blur-[120px]" />
+      </div>
+
+      {/* Header */}
+      <div className="relative border-b border-white/5">
+        <div className="max-w-7xl mx-auto px-8 py-4">
           <button
             onClick={() => router.push("/")}
-            className="text-white hover:text-blue-400 flex items-center gap-2"
+            className="text-slate-400 hover:text-white flex items-center gap-2 transition-colors"
           >
-            <ArrowLeftOutlined />
+            <ArrowLeftIcon className="w-4 h-4" />
             Back to Home
           </button>
         </div>
-      </Header>
+      </div>
 
-      <Content className="max-w-7xl mx-auto px-8 py-16">
+      <div className="relative max-w-7xl mx-auto px-8 py-20">
         {/* Header Section */}
-        <div className="text-center mb-16">
-          <Title level={1} className="text-5xl font-bold mb-4">
-            Simple, Transparent Pricing
-          </Title>
-          <Paragraph className="text-xl text-gray-600 mb-8">
-            Choose the plan that fits your organization's API security needs
-          </Paragraph>
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className="text-center mb-16"
+        >
+          <h1 className="text-5xl md:text-6xl font-bold text-white mb-4 tracking-tight">
+            Simple, Transparent{" "}
+            <span className="bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent">
+              Pricing
+            </span>
+          </h1>
+          <p className="text-xl text-slate-400 mb-10 max-w-2xl mx-auto">
+            Choose the plan that fits your organization&apos;s API security needs
+          </p>
 
           {/* Billing Toggle */}
-          <div className="flex items-center justify-center gap-4 mb-8">
-            <span className={billingCycle === "monthly" ? "font-semibold" : "text-gray-600"}>
-              Monthly
-            </span>
+          <div className="inline-flex items-center gap-3 bg-slate-800/50 backdrop-blur-sm border border-white/10 rounded-full p-1.5">
             <button
-              onClick={() =>
-                setBillingCycle(billingCycle === "monthly" ? "annual" : "monthly")
-              }
-              className="px-4 py-2 border rounded hover:bg-gray-100"
+              onClick={() => setBillingCycle("monthly")}
+              className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all ${
+                billingCycle === "monthly"
+                  ? "bg-white/10 text-white shadow-lg"
+                  : "text-slate-400 hover:text-white"
+              }`}
             >
-              {billingCycle === "monthly" ? "→" : "←"}
+              Monthly
             </button>
-            <span className={billingCycle === "annual" ? "font-semibold" : "text-gray-600"}>
+            <button
+              onClick={() => setBillingCycle("annual")}
+              className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all flex items-center gap-2 ${
+                billingCycle === "annual"
+                  ? "bg-white/10 text-white shadow-lg"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
               Annual
-              <span className="ml-2 text-green-600 text-sm">(Save 15%)</span>
-            </span>
+              <span className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full">
+                Save 15%
+              </span>
+            </button>
           </div>
-        </div>
+        </motion.div>
 
         {/* Pricing Cards */}
-        <Row gutter={[32, 32]} justify="center" className="mb-20">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-24">
           {plans.map((plan, index) => (
-            <Col xs={24} lg={8} key={index}>
-              <Card
-                className={`h-full shadow-lg transition-all hover:shadow-xl ${
-                  plan.popular ? "border-2 border-blue-500 transform scale-105" : ""
-                }`}
-                style={{ position: "relative" }}
-              >
-                {plan.popular && (
-                  <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white px-6 py-2 rounded-full text-sm font-medium shadow-lg">
-                    Most Popular
-                  </div>
-                )}
-
-                <div className="text-center mb-6 pt-2">
-                  <Title level={2} className="mb-2">
-                    {plan.name}
-                  </Title>
-                  <div className="mb-2">
-                    <span className="text-4xl font-bold">
-                      {billingCycle === "annual" && plan.annualPrice !== plan.price
-                        ? plan.annualPrice
-                        : plan.price}
-                    </span>
-                    {plan.period && (
-                      <span className="text-gray-500">
-                        {plan.period}
-                        {billingCycle === "annual" && " (billed annually)"}
-                      </span>
-                    )}
-                  </div>
-                  <Paragraph className="text-gray-600">{plan.description}</Paragraph>
+            <motion.div
+              key={plan.name}
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1, duration: 0.5 }}
+              className={`relative rounded-2xl p-6 flex flex-col ${
+                plan.popular
+                  ? "bg-gradient-to-b from-cyan-500/10 to-violet-500/10 border-2 border-cyan-500/30 shadow-[0_0_40px_rgba(6,182,212,0.15)]"
+                  : "bg-slate-800/30 backdrop-blur-sm border border-white/10 hover:border-white/20"
+              } transition-all`}
+            >
+              {plan.popular && (
+                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-cyan-500 to-violet-500 text-white px-4 py-1 rounded-full text-xs font-semibold tracking-wide">
+                  MOST POPULAR
                 </div>
+              )}
 
-                <div className="mb-8 space-y-6">
-                  {Object.entries(plan.features).map(([category, features]) => (
-                    <div key={category}>
-                      <div className="font-semibold text-sm text-gray-700 mb-2 uppercase tracking-wide">
-                        {category}
-                      </div>
+              <div className="mb-6 pt-2">
+                <h2 className="text-xl font-bold text-white mb-2">{plan.name}</h2>
+                <div className="mb-2">
+                  <span className="text-4xl font-bold text-white">
+                    {billingCycle === "annual" && plan.annualPrice !== plan.price
+                      ? plan.annualPrice
+                      : plan.price}
+                  </span>
+                  {plan.period && (
+                    <span className="text-slate-500 ml-1">
+                      {plan.period}
+                      {billingCycle === "annual" && (
+                        <span className="block text-xs text-slate-600 mt-1">billed annually</span>
+                      )}
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-slate-400">{plan.description}</p>
+              </div>
+
+              <div className="flex-1 space-y-5 mb-8">
+                {Object.entries(plan.features).map(([category, features]) => (
+                  <div key={category}>
+                    <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                      {category}
+                    </div>
+                    <div className="space-y-2">
                       {(features as string[]).map((feature, idx) => (
-                        <div key={idx} className="flex items-start mb-2 ml-2">
-                          <CheckOutlined className="text-green-500 mr-3 mt-1 flex-shrink-0" />
-                          <span className="text-sm">{feature}</span>
+                        <div key={idx} className="flex items-start gap-2">
+                          <CheckIcon className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+                          <span className="text-sm text-slate-300">{feature}</span>
                         </div>
                       ))}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
+              </div>
 
-                <Button
-                  type={plan.popular ? "primary" : "default"}
-                  size="large"
-                  block
-                  onClick={() => handleCTAClick(plan.name)}
-                  className={plan.popular ? "bg-blue-500 hover:bg-blue-600" : ""}
-                >
-                  {plan.cta}
-                </Button>
-              </Card>
-            </Col>
+              <button
+                onClick={() => handleCTAClick(plan.name)}
+                className={`w-full py-3 rounded-xl font-semibold text-sm transition-all ${
+                  plan.popular
+                    ? "bg-gradient-to-r from-cyan-500 to-violet-500 text-white hover:shadow-[0_0_20px_rgba(6,182,212,0.4)] hover:scale-[1.02]"
+                    : "bg-white/5 border border-white/10 text-white hover:bg-white/10"
+                }`}
+              >
+                {plan.cta}
+              </button>
+            </motion.div>
           ))}
-        </Row>
+        </div>
 
         {/* Feature Comparison Table */}
-        <div className="mb-20">
-          <Title level={2} className="text-center mb-8">
-            Detailed Feature Comparison
-          </Title>
-          <Card className="shadow-lg">
-            {comparisonFeatures.map((section, idx) => (
-              <div key={idx} className="mb-8 last:mb-0">
-                <Title level={4} className="mb-4 text-blue-600">
-                  {section.category}
-                </Title>
-                <Table
-                  dataSource={section.features}
-                  pagination={false}
-                  size="middle"
-                  rowKey="key"
-                  columns={[
-                    {
-                      title: "Feature",
-                      dataIndex: "name",
-                      key: "name",
-                      width: "40%",
-                      className: "font-medium",
-                    },
-                    {
-                      title: "Developer",
-                      dataIndex: "dev",
-                      key: "dev",
-                      align: "center",
-                      render: renderFeatureValue,
-                    },
-                    {
-                      title: "Professional",
-                      dataIndex: "pro",
-                      key: "pro",
-                      align: "center",
-                      render: renderFeatureValue,
-                    },
-                    {
-                      title: "Enterprise",
-                      dataIndex: "ent",
-                      key: "ent",
-                      align: "center",
-                      render: renderFeatureValue,
-                    },
-                  ]}
-                />
-              </div>
-            ))}
-          </Card>
-        </div>
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+          className="mb-24"
+        >
+          <h2 className="text-3xl font-bold text-white text-center mb-10">
+            Detailed Feature{" "}
+            <span className="bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent">
+              Comparison
+            </span>
+          </h2>
+          <div className="bg-slate-800/30 backdrop-blur-sm border border-white/10 rounded-2xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-white/10">
+                    <th className="text-left px-6 py-4 text-sm font-semibold text-slate-400 w-[40%]">
+                      Feature
+                    </th>
+                    <th className="text-center px-6 py-4 text-sm font-semibold text-slate-400">
+                      Developer
+                    </th>
+                    <th className="text-center px-6 py-4 text-sm font-semibold text-cyan-400">
+                      Professional
+                    </th>
+                    <th className="text-center px-6 py-4 text-sm font-semibold text-slate-400">
+                      Enterprise
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {comparisonFeatures.map((section) => (
+                    <>
+                      <tr key={section.category}>
+                        <td
+                          colSpan={4}
+                          className="px-6 py-3 text-xs font-bold text-cyan-400 uppercase tracking-wider bg-white/[0.02]"
+                        >
+                          {section.category}
+                        </td>
+                      </tr>
+                      {section.features.map((feature) => (
+                        <tr
+                          key={feature.name}
+                          className="border-b border-white/5 hover:bg-white/[0.02] transition-colors"
+                        >
+                          <td className="px-6 py-3.5 text-sm text-slate-300 font-medium">
+                            {feature.name}
+                          </td>
+                          <td className="px-6 py-3.5 text-center">
+                            {renderFeatureValue(feature.dev)}
+                          </td>
+                          <td className="px-6 py-3.5 text-center">
+                            {renderFeatureValue(feature.pro)}
+                          </td>
+                          <td className="px-6 py-3.5 text-center">
+                            {renderFeatureValue(feature.ent)}
+                          </td>
+                        </tr>
+                      ))}
+                    </>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </motion.div>
 
         {/* Trust Indicators */}
-        <div className="text-center mb-20">
-          <Title level={2} className="mb-8">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+          className="mb-24"
+        >
+          <h2 className="text-3xl font-bold text-white text-center mb-10">
             Enterprise-Grade Security & Compliance
-          </Title>
-          <Row gutter={[32, 32]} justify="center">
-            <Col xs={12} md={6}>
-              <Card className="text-center shadow-md hover:shadow-lg transition-shadow">
-                <div className="text-3xl mb-2">🔒</div>
-                <div className="font-semibold">SOC 2 Type II</div>
-                <div className="text-sm text-gray-600">Certified</div>
-              </Card>
-            </Col>
-            <Col xs={12} md={6}>
-              <Card className="text-center shadow-md hover:shadow-lg transition-shadow">
-                <div className="text-3xl mb-2">✓</div>
-                <div className="font-semibold">GDPR</div>
-                <div className="text-sm text-gray-600">Compliant</div>
-              </Card>
-            </Col>
-            <Col xs={12} md={6}>
-              <Card className="text-center shadow-md hover:shadow-lg transition-shadow">
-                <div className="text-3xl mb-2">⚡</div>
-                <div className="font-semibold">99.9%</div>
-                <div className="text-sm text-gray-600">Uptime SLA</div>
-              </Card>
-            </Col>
-            <Col xs={12} md={6}>
-              <Card className="text-center shadow-md hover:shadow-lg transition-shadow">
-                <div className="text-3xl mb-2">🌍</div>
-                <div className="font-semibold">Global</div>
-                <div className="text-sm text-gray-600">Infrastructure</div>
-              </Card>
-            </Col>
-          </Row>
-        </div>
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {trustBadges.map((badge, index) => {
+              const Icon = badge.icon;
+              return (
+                <motion.div
+                  key={badge.label}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: index * 0.1 }}
+                  className="bg-slate-800/30 backdrop-blur-sm border border-white/10 rounded-2xl p-6 text-center hover:border-cyan-500/30 transition-all group"
+                >
+                  <div className="w-12 h-12 mx-auto mb-3 bg-cyan-500/10 rounded-xl flex items-center justify-center group-hover:bg-cyan-500/20 transition-colors">
+                    <Icon className="w-6 h-6 text-cyan-400" />
+                  </div>
+                  <div className="text-lg font-bold text-white">{badge.label}</div>
+                  <div className="text-sm text-slate-400">{badge.sub}</div>
+                </motion.div>
+              );
+            })}
+          </div>
+        </motion.div>
 
         {/* FAQ Section */}
-        <div className="mb-20">
-          <Title level={2} className="text-center mb-8">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+          className="mb-24"
+        >
+          <h2 className="text-3xl font-bold text-white text-center mb-10">
             Frequently Asked Questions
-          </Title>
-          <Card className="shadow-lg">
-            <Collapse
-              accordion
-              bordered={false}
-              className="bg-transparent"
-              items={faqs.map((faq) => ({
-                key: faq.key,
-                label: <span className="font-semibold text-base">{faq.question}</span>,
-                children: <p className="text-gray-700 pl-6">{faq.answer}</p>,
-              }))}
-            />
-          </Card>
-        </div>
+          </h2>
+          <div className="max-w-3xl mx-auto space-y-3">
+            {faqs.map((faq) => (
+              <div
+                key={faq.key}
+                className="bg-slate-800/30 backdrop-blur-sm border border-white/10 rounded-xl overflow-hidden"
+              >
+                <button
+                  onClick={() => setOpenFaq(openFaq === faq.key ? null : faq.key)}
+                  className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-white/[0.02] transition-colors"
+                >
+                  <span className="font-medium text-white">{faq.question}</span>
+                  <ChevronDownIcon
+                    className={`w-5 h-5 text-slate-400 transition-transform ${
+                      openFaq === faq.key ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+                {openFaq === faq.key && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    transition={{ duration: 0.2 }}
+                    className="px-6 pb-4"
+                  >
+                    <p className="text-slate-400 text-sm leading-relaxed">{faq.answer}</p>
+                  </motion.div>
+                )}
+              </div>
+            ))}
+          </div>
+        </motion.div>
 
-        {/* ROI Calculator CTA */}
-        <div className="text-center mb-20 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-12">
-          <Title level={2} className="mb-4">
-            Calculate Your ROI
-          </Title>
-          <Paragraph className="text-lg text-gray-700 mb-6 max-w-2xl mx-auto">
-            The average data breach costs $4.45M and takes 277 days to identify and contain.
-            Our customers see 800%+ ROI annually by preventing breaches before they happen.
-          </Paragraph>
-          <Button
-            size="large"
-            type="primary"
-            onClick={() => router.push("/customer/dashboard")}
-            className="bg-blue-500 hover:bg-blue-600"
-          >
-            See ROI Calculator
-          </Button>
-        </div>
+        {/* ROI Section */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+          className="mb-24"
+        >
+          <div className="bg-gradient-to-r from-cyan-500/10 via-violet-500/10 to-emerald-500/10 border border-white/10 rounded-2xl p-12 text-center backdrop-blur-sm">
+            <h2 className="text-3xl font-bold text-white mb-4">Calculate Your ROI</h2>
+            <p className="text-lg text-slate-400 mb-8 max-w-2xl mx-auto">
+              The average data breach costs $4.45M and takes 277 days to identify and contain.
+              Our customers see 800%+ ROI annually by preventing breaches before they happen.
+            </p>
+            <button
+              onClick={() => router.push("/customer/dashboard")}
+              className="px-8 py-3.5 bg-gradient-to-r from-cyan-500 to-violet-500 text-white rounded-xl font-semibold hover:shadow-[0_0_20px_rgba(6,182,212,0.4)] transition-all hover:scale-[1.02]"
+            >
+              See ROI Calculator
+            </button>
+          </div>
+        </motion.div>
 
         {/* Contact Sales CTA */}
-        <Card className="text-center shadow-lg bg-slate-900 text-white">
-          <Title level={2} className="text-white mb-4">
-            Still have questions?
-          </Title>
-          <Paragraph className="text-gray-300 text-lg mb-6">
-            Our team is here to help you find the perfect plan for your organization.
-          </Paragraph>
-          <div className="flex gap-4 justify-center flex-wrap">
-            <Button
-              size="large"
-              onClick={() => (window.location.href = "mailto:sales@governapi.com")}
-            >
-              Contact Sales
-            </Button>
-            <Button
-              size="large"
-              type="primary"
-              onClick={() => router.push("/login?mode=register&plan=professional")}
-              className="bg-blue-500 hover:bg-blue-600"
-            >
-              Start Free Trial
-            </Button>
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+        >
+          <div className="bg-slate-800/30 backdrop-blur-sm border border-white/10 rounded-2xl p-12 text-center">
+            <h2 className="text-3xl font-bold text-white mb-4">Still have questions?</h2>
+            <p className="text-lg text-slate-400 mb-8">
+              Our team is here to help you find the perfect plan for your organization.
+            </p>
+            <div className="flex gap-4 justify-center flex-wrap">
+              <button
+                onClick={() => (window.location.href = "mailto:sales@governapi.com")}
+                className="px-8 py-3.5 bg-white/5 border border-white/10 text-white rounded-xl font-semibold hover:bg-white/10 transition-all"
+              >
+                Contact Sales
+              </button>
+              <button
+                onClick={() => router.push("/login?mode=register&plan=professional")}
+                className="px-8 py-3.5 bg-gradient-to-r from-cyan-500 to-violet-500 text-white rounded-xl font-semibold hover:shadow-[0_0_20px_rgba(6,182,212,0.4)] transition-all hover:scale-[1.02]"
+              >
+                Start Free Trial
+              </button>
+            </div>
           </div>
-        </Card>
-      </Content>
-    </Layout>
+        </motion.div>
+      </div>
+    </div>
   );
 }

@@ -1,63 +1,30 @@
 "use client";
-import React, { useState, useEffect } from "react";
-import { Row, Col, Typography, Tag, Table, Empty, Button, Tooltip, Dropdown, Menu, Switch } from "antd";
-import { 
-  SafetyCertificateOutlined, 
-  AlertOutlined, 
-  ExclamationCircleOutlined, 
-  FileDoneOutlined, 
-  CalendarOutlined, 
-  ScheduleOutlined, 
-  HistoryOutlined, 
-  DownloadOutlined, 
-  PlayCircleOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  WarningOutlined,
-  AuditOutlined,
-  FileSearchOutlined,
-  RiseOutlined,
-  FallOutlined,
-  MinusOutlined,
-  ThunderboltOutlined,
-  SyncOutlined,
-  UploadOutlined,
-  EditOutlined,
-  BugOutlined,
-  EyeOutlined
-} from "@ant-design/icons";
+import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { DashboardData, Violation, formatDate, formatDateTime } from "./types";
 
-const { Text } = Typography;
-
 // ============================================================================
-// PREMIUM COLOR PALETTE - Expensive & Sophisticated
+// PREMIUM COLOR PALETTE
 // ============================================================================
 const palette = {
   success: "#06b6d4",
   successMuted: "#0891b2",
   successBg: "rgba(6, 182, 212, 0.1)",
   successBorder: "rgba(6, 182, 212, 0.25)",
-  
   warning: "#8b5cf6",
   warningMuted: "#7c3aed",
   warningBg: "rgba(139, 92, 246, 0.1)",
   warningBorder: "rgba(139, 92, 246, 0.25)",
-  
   danger: "#e11d48",
   dangerMuted: "#be123c",
   dangerBg: "rgba(225, 29, 72, 0.1)",
   dangerBorder: "rgba(225, 29, 72, 0.25)",
-  
   gold: "#d97706",
   goldLight: "#f59e0b",
   goldBg: "rgba(217, 119, 6, 0.12)",
   goldBorder: "rgba(217, 119, 6, 0.3)",
-  
   neutral: "#64748b",
   neutralBg: "rgba(100, 116, 139, 0.1)",
-  
   text: "rgba(255, 255, 255, 0.9)",
   textMuted: "rgba(255, 255, 255, 0.55)",
   textFaint: "rgba(255, 255, 255, 0.35)",
@@ -92,153 +59,98 @@ interface Props {
   onAutoRefreshChange?: (checked: boolean) => void;
 }
 
-// Trend Indicator - shows improvement/decline
 const TrendIndicator = ({ value }: { value: number }) => {
   if (value === 0) {
     return (
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: palette.textFaint }}>
-        <MinusOutlined style={{ fontSize: 8 }} /> No change
+      <span className="inline-flex items-center gap-1 text-[11px]" style={{ color: palette.textFaint }}>
+        <svg className="w-2 h-2" fill="currentColor" viewBox="0 0 8 2"><rect width="8" height="2" rx="1" /></svg>
+        No change
       </span>
     );
   }
   const isPositive = value > 0;
   const color = isPositive ? palette.success : palette.danger;
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color }}>
-      {isPositive ? <RiseOutlined style={{ fontSize: 9 }} /> : <FallOutlined style={{ fontSize: 9 }} />}
+    <span className="inline-flex items-center gap-1 text-[11px]" style={{ color }}>
+      {isPositive ? (
+        <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 15l7-7 7 7" /></svg>
+      ) : (
+        <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
+      )}
       {isPositive ? "+" : ""}{value}% this month
     </span>
   );
 };
 
-// Micro Progress Blocks - visual representation of passed/gaps
 const MicroBlocks = ({ passed, total }: { passed: number; total: number }) => {
   const maxBlocks = 10;
   const passedBlocks = Math.round((passed / total) * maxBlocks);
-  
   return (
-    <Tooltip title={`${passed} passed · ${total - passed} gaps · ${total} total`}>
-      <div style={{ display: "flex", gap: 3, cursor: "help" }}>
-        {Array.from({ length: maxBlocks }).map((_, i) => (
-          <div
-            key={i}
-            style={{
-              width: 10,
-              height: 16,
-              borderRadius: 2,
-              background: i < passedBlocks ? palette.success : "rgba(255,255,255,0.12)",
-              boxShadow: i < passedBlocks ? `0 0 6px ${palette.success}40` : "none",
-              transition: "all 0.3s ease"
-            }}
-          />
-        ))}
-      </div>
-    </Tooltip>
+    <div className="flex gap-[3px] cursor-help" title={`${passed} passed / ${total - passed} gaps / ${total} total`}>
+      {Array.from({ length: maxBlocks }).map((_, i) => (
+        <div
+          key={i}
+          className="w-2.5 h-4 rounded-sm transition-all duration-300"
+          style={{
+            background: i < passedBlocks ? palette.success : "rgba(255,255,255,0.12)",
+            boxShadow: i < passedBlocks ? `0 0 6px ${palette.success}40` : "none",
+          }}
+        />
+      ))}
+    </div>
   );
 };
 
-// Framework Card - the hero element
-const FrameworkCard = ({ 
-  name, score, passed, total, status, trend, index 
-}: { 
-  name: string; 
-  score: number; 
-  passed: number; 
-  total: number; 
-  status: string;
-  trend: number;
-  index: number;
+const FrameworkCard = ({
+  name, score, passed, total, status, trend, index
+}: {
+  name: string; score: number; passed: number; total: number; status: string; trend: number; index: number;
 }) => {
   const numScore = Number(score) || 0;
   const gaps = total - passed;
-  
+
   const getConfig = (s: string, sc: number) => {
-    if (s === "compliant" || sc >= 90) return { 
-      color: palette.success, 
-      bg: palette.successBg, 
-      border: palette.successBorder,
-      icon: <CheckCircleOutlined /> 
-    };
-    if (s === "partial" || sc >= 60) return { 
-      color: palette.warning, 
-      bg: palette.warningBg, 
-      border: palette.warningBorder,
-      icon: <WarningOutlined /> 
-    };
-    return { 
-      color: palette.danger, 
-      bg: palette.dangerBg, 
-      border: palette.dangerBorder,
-      icon: <CloseCircleOutlined /> 
-    };
+    if (s === "compliant" || sc >= 90) return { color: palette.success, bg: palette.successBg, border: palette.successBorder, icon: "check" };
+    if (s === "partial" || sc >= 60) return { color: palette.warning, bg: palette.warningBg, border: palette.warningBorder, icon: "warning" };
+    return { color: palette.danger, bg: palette.dangerBg, border: palette.dangerBorder, icon: "close" };
   };
-  
+
   const config = getConfig(status, numScore);
-  
+
+  const statusIcon = config.icon === "check" ? (
+    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+  ) : config.icon === "warning" ? (
+    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+  ) : (
+    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+  );
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: index * 0.08 }}
-      whileHover={{ y: -6, boxShadow: `0 20px 40px rgba(0,0,0,0.4)` }}
+      whileHover={{ y: -6, boxShadow: "0 20px 40px rgba(0,0,0,0.4)" }}
+      className="rounded-2xl cursor-pointer h-full flex flex-col relative overflow-hidden"
       style={{
         background: `linear-gradient(145deg, ${config.bg} 0%, rgba(255,255,255,0.02) 100%)`,
-        borderRadius: 16,
         padding: "24px 22px",
         border: `1px solid ${config.border}`,
         boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
-        cursor: "pointer",
-        height: "100%",
-        display: "flex",
-        flexDirection: "column",
-        position: "relative",
-        overflow: "hidden"
       }}
     >
-      {/* Subtle glow */}
-      <div style={{
-        position: "absolute",
-        top: -40,
-        right: -40,
-        width: 100,
-        height: 100,
-        background: `radial-gradient(circle, ${config.color}15 0%, transparent 70%)`,
-        borderRadius: "50%"
-      }} />
-      
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-        <span style={{ fontSize: 14, fontWeight: 600, color: palette.text, letterSpacing: 0.3 }}>{name}</span>
-        <span style={{ color: config.color, fontSize: 14 }}>{config.icon}</span>
+      <div className="absolute -top-10 -right-10 w-[100px] h-[100px] rounded-full" style={{ background: `radial-gradient(circle, ${config.color}15 0%, transparent 70%)` }} />
+      <div className="flex justify-between items-start mb-5">
+        <span className="text-sm font-semibold text-white/90 tracking-wide">{name}</span>
+        <span style={{ color: config.color }} className="text-sm">{statusIcon}</span>
       </div>
-      
-      {/* Score */}
-      <div style={{ marginBottom: 8 }}>
-        <span style={{ fontSize: 44, fontWeight: 700, color: config.color, lineHeight: 1 }}>
-          {numScore.toFixed(0)}
-        </span>
-        <span style={{ fontSize: 20, color: palette.textFaint, marginLeft: 2 }}>%</span>
+      <div className="mb-2">
+        <span className="text-[44px] font-bold leading-none" style={{ color: config.color }}>{numScore.toFixed(0)}</span>
+        <span className="text-xl ml-0.5" style={{ color: palette.textFaint }}>%</span>
       </div>
-      
-      {/* Trend */}
-      <div style={{ marginBottom: 18 }}>
-        <TrendIndicator value={trend} />
-      </div>
-      
-      {/* Micro Blocks */}
-      <div style={{ marginBottom: 18 }}>
-        <MicroBlocks passed={passed} total={total} />
-      </div>
-      
-      {/* Footer Stats */}
-      <div style={{ 
-        display: "flex", 
-        justifyContent: "space-between",
-        marginTop: "auto",
-        paddingTop: 16,
-        borderTop: `1px solid ${palette.border}`,
-        fontSize: 12
-      }}>
+      <div className="mb-[18px]"><TrendIndicator value={trend} /></div>
+      <div className="mb-[18px]"><MicroBlocks passed={passed} total={total} /></div>
+      <div className="flex justify-between mt-auto pt-4 text-xs" style={{ borderTop: `1px solid ${palette.border}` }}>
         <span style={{ color: palette.success }}>{passed} passed</span>
         <span style={{ color: gaps > 0 ? palette.danger : palette.textFaint }}>{gaps} gaps</span>
         <span style={{ color: palette.textFaint }}>{total} total</span>
@@ -247,34 +159,27 @@ const FrameworkCard = ({
   );
 };
 
-// Audit Readiness Shield
-const AuditReadiness = ({ score }: { score: number }) => {
+const AuditReadinessWidget = ({ score }: { score: number }) => {
   const isReady = score >= 80;
   const color = isReady ? palette.success : score >= 60 ? palette.gold : palette.danger;
   const borderColor = isReady ? palette.successBorder : score >= 60 ? palette.goldBorder : palette.dangerBorder;
-  
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.5 }}
+      className="rounded-2xl h-full flex flex-col"
       style={{
-        background: `linear-gradient(145deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)`,
+        background: "linear-gradient(145deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)",
         borderRadius: 20,
         padding: 32,
         border: `1px solid ${borderColor}`,
         boxShadow: "0 12px 40px rgba(0,0,0,0.35)",
-        height: "100%",
-        display: "flex",
-        flexDirection: "column"
       }}
     >
-      <div style={{ fontSize: 11, color: palette.textFaint, textTransform: "uppercase", letterSpacing: 2, marginBottom: 28, fontWeight: 500 }}>
-        Audit Readiness
-      </div>
-      
-      {/* Shield */}
-      <div style={{ position: "relative", width: 140, height: 160, margin: "0 auto 28px" }}>
+      <div className="text-[11px] uppercase tracking-[2px] mb-7 font-medium" style={{ color: palette.textFaint }}>Audit Readiness</div>
+      <div className="relative w-[140px] h-[160px] mx-auto mb-7">
         <svg viewBox="0 0 100 115" width="140" height="160">
           <defs>
             <linearGradient id="shieldFill" x1="0%" y1="0%" x2="0%" y2="100%">
@@ -296,56 +201,46 @@ const AuditReadiness = ({ score }: { score: number }) => {
             transition={{ duration: 0.6, delay: 0.2 }}
           />
         </svg>
-        <div style={{
-          position: "absolute",
-          top: "38%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          textAlign: "center"
-        }}>
+        <div className="absolute top-[38%] left-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
           <motion.div
             initial={{ opacity: 0, scale: 0.5 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.4 }}
-            style={{ fontSize: 42, fontWeight: 700, color, lineHeight: 1 }}
+            className="text-[42px] font-bold leading-none"
+            style={{ color }}
           >
             {score}
           </motion.div>
-          <div style={{ fontSize: 12, color: palette.textFaint, marginTop: 4 }}>/100</div>
+          <div className="text-xs mt-1" style={{ color: palette.textFaint }}>/100</div>
         </div>
       </div>
-      
-      {/* Status */}
-      <div style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 10,
-        padding: "14px 24px",
+
+      <div className="flex items-center justify-center gap-2.5 py-3.5 px-6 rounded-xl mb-7" style={{
         background: isReady ? palette.successBg : palette.goldBg,
-        borderRadius: 12,
         border: `1px solid ${isReady ? palette.successBorder : palette.goldBorder}`,
-        marginBottom: 28
       }}>
-        {isReady ? <CheckCircleOutlined style={{ color }} /> : <WarningOutlined style={{ color }} />}
-        <span style={{ color, fontWeight: 600, fontSize: 13, letterSpacing: 0.5 }}>
+        {isReady ? (
+          <svg className="w-4 h-4" style={{ color }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+        ) : (
+          <svg className="w-4 h-4" style={{ color }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+        )}
+        <span className="font-semibold text-[13px] tracking-wide" style={{ color }}>
           {isReady ? "AUDIT READY" : "NEEDS ATTENTION"}
         </span>
       </div>
-      
-      {/* Timeline */}
-      <div style={{ marginTop: "auto" }}>
-        <div style={{ fontSize: 10, color: palette.textFaint, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 16 }}>
-          Recent Activity
-        </div>
+
+      <div className="mt-auto">
+        <div className="text-[10px] uppercase tracking-[1.5px] mb-4" style={{ color: palette.textFaint }}>Recent Activity</div>
         {[
-          { icon: <AuditOutlined />, label: "Assessment run", time: "2 days ago" },
-          { icon: <UploadOutlined />, label: "Evidence updated", time: "5 hours ago" },
-          { icon: <EditOutlined />, label: "Policy changed", time: "1 week ago" }
+          { label: "Assessment run", time: "2 days ago" },
+          { label: "Evidence updated", time: "5 hours ago" },
+          { label: "Policy changed", time: "1 week ago" }
         ].map((item, i) => (
-          <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12, fontSize: 12 }}>
-            <span style={{ color: palette.textFaint }}>{item.icon}</span>
-            <span style={{ color: palette.textMuted, flex: 1 }}>{item.label}</span>
+          <div key={i} className="flex items-center gap-3 mb-3 text-xs">
+            <span style={{ color: palette.textFaint }}>
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /></svg>
+            </span>
+            <span className="flex-1" style={{ color: palette.textMuted }}>{item.label}</span>
             <span style={{ color: palette.text }}>{item.time}</span>
           </div>
         ))}
@@ -354,99 +249,85 @@ const AuditReadiness = ({ score }: { score: number }) => {
   );
 };
 
-// Attestation Progress
-const AttestationProgress = ({ current, pending, overdue, total }: { 
+const AttestationProgress = ({ current, pending, overdue, total }: {
   current: number; pending: number; overdue: number; total: number;
 }) => {
   const pct = total > 0 ? Math.round((current / total) * 100) : 0;
   const hasData = total > 0;
   const scoreColor = !hasData ? palette.neutral : pct >= 80 ? palette.success : pct >= 50 ? palette.warning : palette.danger;
-  
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.15 }}
+      className="rounded-2xl h-full"
       style={{
-        background: `linear-gradient(145deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)`,
-        borderRadius: 20,
+        background: "linear-gradient(145deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)",
         padding: 32,
         border: `1px solid ${palette.borderLight}`,
         boxShadow: "0 12px 40px rgba(0,0,0,0.35)",
-        height: "100%"
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <FileDoneOutlined style={{ color: palette.success, fontSize: 22 }} />
-          <span style={{ fontSize: 16, fontWeight: 600, color: palette.text }}>Attestation Progress</span>
+      <div className="flex justify-between items-center mb-7">
+        <div className="flex items-center gap-3">
+          <svg className="w-5 h-5 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span className="text-base font-semibold text-white/90">Attestation Progress</span>
         </div>
-        <Tag style={{ 
+        <span className="px-2.5 py-1 rounded-md text-[11px]" style={{
           background: overdue > 0 ? palette.dangerBg : palette.successBg,
-          border: "none",
           color: overdue > 0 ? palette.danger : palette.success,
-          borderRadius: 6,
-          fontSize: 11,
-          padding: "4px 10px"
         }}>
           {overdue > 0 ? `${overdue} overdue` : "On track"}
-        </Tag>
+        </span>
       </div>
-      
-      {/* Big Score */}
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 12 }}>
-        <span style={{ fontSize: 56, fontWeight: 700, color: scoreColor, lineHeight: 1 }}>{pct}</span>
-        <span style={{ fontSize: 24, color: palette.textFaint }}>%</span>
-        <span style={{ fontSize: 14, color: palette.textMuted, marginLeft: 8 }}>complete</span>
+
+      <div className="flex items-baseline gap-2 mb-3">
+        <span className="text-[56px] font-bold leading-none" style={{ color: scoreColor }}>{pct}</span>
+        <span className="text-2xl" style={{ color: palette.textFaint }}>%</span>
+        <span className="text-sm ml-2" style={{ color: palette.textMuted }}>complete</span>
       </div>
-      
-      {/* Context */}
-      <div style={{ fontSize: 14, color: palette.textMuted, marginBottom: 28 }}>
-        <strong style={{ color: palette.text }}>{pending}</strong> controls pending · 
-        <strong style={{ color: overdue > 0 ? palette.danger : palette.text }}> {overdue}</strong> overdue · 
+
+      <div className="text-sm mb-7" style={{ color: palette.textMuted }}>
+        <strong style={{ color: palette.text }}>{pending}</strong> controls pending ·
+        <strong style={{ color: overdue > 0 ? palette.danger : palette.text }}> {overdue}</strong> overdue ·
         Next due in <strong style={{ color: palette.text }}>5 days</strong>
       </div>
-      
+
       {/* Progress Bar */}
-      <div style={{ 
-        height: 12, 
-        background: "rgba(255,255,255,0.08)", 
-        borderRadius: 6,
-        overflow: "hidden",
-        display: "flex",
-        marginBottom: 28
-      }}>
-        <motion.div 
+      <div className="h-3 bg-white/[0.08] rounded-md overflow-hidden flex mb-7">
+        <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${total > 0 ? (current / total) * 100 : 0}%` }}
           transition={{ duration: 1, delay: 0.3 }}
           style={{ background: `linear-gradient(90deg, ${palette.successMuted}, ${palette.success})`, boxShadow: `0 0 12px ${palette.success}40` }}
         />
-        <motion.div 
+        <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${total > 0 ? (pending / total) * 100 : 0}%` }}
           transition={{ duration: 1, delay: 0.4 }}
           style={{ background: `linear-gradient(90deg, ${palette.warningMuted}, ${palette.warning})` }}
         />
-        <motion.div 
+        <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${total > 0 ? (overdue / total) * 100 : 0}%` }}
           transition={{ duration: 1, delay: 0.5 }}
           style={{ background: `linear-gradient(90deg, ${palette.dangerMuted}, ${palette.danger})` }}
         />
       </div>
-      
-      {/* Legend */}
-      <div style={{ display: "flex", gap: 32 }}>
+
+      <div className="flex gap-8">
         {[
           { label: "Current", value: current, color: palette.success },
           { label: "Pending", value: pending, color: palette.warning },
           { label: "Overdue", value: overdue, color: palette.danger }
         ].map((item, i) => (
-          <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 12, height: 12, borderRadius: 3, background: item.color, boxShadow: `0 0 8px ${item.color}40` }} />
-            <span style={{ fontSize: 18, fontWeight: 600, color: item.color }}>{item.value}</span>
-            <span style={{ fontSize: 12, color: palette.textFaint }}>{item.label}</span>
+          <div key={i} className="flex items-center gap-2.5">
+            <div className="w-3 h-3 rounded-sm" style={{ background: item.color, boxShadow: `0 0 8px ${item.color}40` }} />
+            <span className="text-lg font-semibold" style={{ color: item.color }}>{item.value}</span>
+            <span className="text-xs" style={{ color: palette.textFaint }}>{item.label}</span>
           </div>
         ))}
       </div>
@@ -454,7 +335,6 @@ const AttestationProgress = ({ current, pending, overdue, total }: {
   );
 };
 
-// Stat Card
 const StatCard = ({ title, value, icon, status }: { title: string; value: number; icon: React.ReactNode; status: "good" | "warning" | "danger" | "neutral" }) => {
   const colorMap = {
     good: { color: palette.success, bg: palette.successBg, border: palette.successBorder },
@@ -463,73 +343,60 @@ const StatCard = ({ title, value, icon, status }: { title: string; value: number
     neutral: { color: palette.neutral, bg: palette.neutralBg, border: palette.border }
   };
   const c = colorMap[status];
-  
+
   return (
     <motion.div
       variants={itemVariants}
       whileHover={{ y: -4 }}
+      className="rounded-2xl flex items-center gap-4"
       style={{
         background: `linear-gradient(160deg, ${c.bg} 0%, rgba(0,0,0,0.15) 100%)`,
-        borderRadius: 14,
         padding: "22px 20px",
         border: `1px solid ${c.border}`,
         boxShadow: "0 6px 24px rgba(0,0,0,0.25)",
-        display: "flex",
-        alignItems: "center",
-        gap: 16
       }}
     >
-      <div style={{
-        width: 48,
-        height: 48,
-        borderRadius: 12,
-        background: `${c.color}15`,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: 22,
-        color: c.color
-      }}>
+      <div className="w-12 h-12 rounded-xl flex items-center justify-center text-[22px]" style={{ background: `${c.color}15`, color: c.color }}>
         {icon}
       </div>
       <div>
-        <div style={{ fontSize: 28, fontWeight: 700, color: c.color, lineHeight: 1 }}>{value}</div>
-        <div style={{ fontSize: 11, color: palette.textFaint, marginTop: 6, textTransform: "uppercase", letterSpacing: 1 }}>{title}</div>
+        <div className="text-[28px] font-bold leading-none" style={{ color: c.color }}>{value}</div>
+        <div className="text-[11px] mt-1.5 uppercase tracking-wider" style={{ color: palette.textFaint }}>{title}</div>
       </div>
     </motion.div>
   );
 };
 
-// Next Steps Widget
 const NextSteps = () => {
   const items = [
-    { icon: <UploadOutlined />, text: "Upload encryption evidence", due: "3 days", priority: "high" },
-    { icon: <EditOutlined />, text: "Complete Q1 attestation", due: "5 days", priority: "medium" },
-    { icon: <BugOutlined />, text: "Fix CIS-12 Logging control", due: "7 days", priority: "high" },
-    { icon: <EyeOutlined />, text: "Review API anomalies", due: "10 days", priority: "low" }
+    { text: "Upload encryption evidence", due: "3 days", priority: "high" },
+    { text: "Complete Q1 attestation", due: "5 days", priority: "medium" },
+    { text: "Fix CIS-12 Logging control", due: "7 days", priority: "high" },
+    { text: "Review API anomalies", due: "10 days", priority: "low" }
   ];
-  
+
   const priorityColor = (p: string) => p === "high" ? palette.danger : p === "medium" ? palette.warning : palette.success;
-  
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.2 }}
+      className="rounded-2xl h-full"
       style={{
-        background: `linear-gradient(145deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)`,
-        borderRadius: 20,
+        background: "linear-gradient(145deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)",
         padding: 28,
         border: `1px solid ${palette.borderLight}`,
         boxShadow: "0 12px 40px rgba(0,0,0,0.35)",
-        height: "100%"
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
-        <ThunderboltOutlined style={{ color: palette.gold, fontSize: 22 }} />
-        <span style={{ fontSize: 16, fontWeight: 600, color: palette.text }}>Next Required Actions</span>
+      <div className="flex items-center gap-3 mb-6">
+        <svg className="w-5 h-5" style={{ color: palette.gold }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+        <span className="text-base font-semibold text-white/90">Next Required Actions</span>
       </div>
-      
+
       {items.map((item, i) => (
         <motion.div
           key={i}
@@ -537,70 +404,52 @@ const NextSteps = () => {
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.3 + i * 0.1 }}
           whileHover={{ x: 4, background: "rgba(255,255,255,0.03)" }}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 14,
-            padding: "16px 14px",
-            borderRadius: 10,
-            marginBottom: 8,
-            cursor: "pointer",
-            borderLeft: `3px solid ${priorityColor(item.priority)}`
-          }}
+          className="flex items-center gap-3.5 py-4 px-3.5 rounded-xl mb-2 cursor-pointer"
+          style={{ borderLeft: `3px solid ${priorityColor(item.priority)}` }}
         >
-          <span style={{ color: palette.textFaint, fontSize: 16 }}>{item.icon}</span>
-          <span style={{ flex: 1, color: palette.text, fontSize: 13 }}>{item.text}</span>
-          <Tag style={{
+          <svg className="w-4 h-4" style={{ color: palette.textFaint }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+          <span className="flex-1 text-[13px] text-white/90">{item.text}</span>
+          <span className="px-2 py-0.5 rounded text-[10px]" style={{
             background: `${priorityColor(item.priority)}15`,
-            border: "none",
             color: priorityColor(item.priority),
-            borderRadius: 4,
-            fontSize: 10
           }}>
             {item.due}
-          </Tag>
+          </span>
         </motion.div>
       ))}
     </motion.div>
   );
 };
 
-// Section Card wrapper
 const SectionCard = ({ title, icon, extra, children }: { title: string; icon: React.ReactNode; extra?: React.ReactNode; children: React.ReactNode }) => (
   <motion.div
     variants={itemVariants}
+    className="rounded-2xl overflow-hidden h-full"
     style={{
-      background: `linear-gradient(145deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)`,
-      borderRadius: 20,
+      background: "linear-gradient(145deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)",
       border: `1px solid ${palette.borderLight}`,
       boxShadow: "0 12px 40px rgba(0,0,0,0.35)",
-      overflow: "hidden",
-      height: "100%"
     }}
   >
-    <div style={{
-      padding: "20px 28px",
-      borderBottom: `1px solid ${palette.border}`,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between"
-    }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <span style={{ color: palette.success, fontSize: 20 }}>{icon}</span>
-        <span style={{ fontSize: 16, fontWeight: 600, color: palette.text }}>{title}</span>
+    <div className="px-7 py-5 flex items-center justify-between" style={{ borderBottom: `1px solid ${palette.border}` }}>
+      <div className="flex items-center gap-3">
+        <span className="text-xl" style={{ color: palette.success }}>{icon}</span>
+        <span className="text-base font-semibold text-white/90">{title}</span>
       </div>
       {extra}
     </div>
-    <div style={{ padding: 28 }}>{children}</div>
+    <div className="p-7">{children}</div>
   </motion.div>
 );
 
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
-export function ExecutiveDashboardTab({ 
-  dashboardData, 
-  onViewAllLogs, 
+export function ExecutiveDashboardTab({
+  dashboardData,
+  onViewAllLogs,
   onViewViolations,
   onExportPDF,
   onRunAssessment,
@@ -608,13 +457,22 @@ export function ExecutiveDashboardTab({
   onAutoRefreshChange
 }: Props) {
   const [refreshInterval] = useState(60);
-  
-  if (!dashboardData) return <Empty description="Loading dashboard data..." />;
+
+  if (!dashboardData) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-white/40">
+        <svg className="w-12 h-12 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+        </svg>
+        Loading dashboard data...
+      </div>
+    );
+  }
 
   const { kpis, frameworkCoverage, criticalViolations, upcomingDeadlines, recentActivity, attestationStatus } = dashboardData;
-  
+
   const auditScore = Math.round(
-    (Number(kpis.overallComplianceScore) * 0.4) + 
+    (Number(kpis.overallComplianceScore) * 0.4) +
     (attestationStatus.total > 0 ? (attestationStatus.current / attestationStatus.total) * 100 * 0.3 : 0) +
     (kpis.openViolations === 0 ? 30 : Math.max(0, 30 - kpis.openViolations * 5))
   );
@@ -622,206 +480,182 @@ export function ExecutiveDashboardTab({
   return (
     <motion.div variants={containerVariants} initial="hidden" animate="visible">
       {/* Action Bar */}
-      <motion.div variants={itemVariants} style={{ display: "flex", justifyContent: "flex-end", gap: 14, marginBottom: 32 }}>
-        <div style={{ 
-          display: "flex", 
-          alignItems: "center", 
-          gap: 12,
-          padding: "10px 16px",
-          background: "rgba(255,255,255,0.04)",
-          borderRadius: 10,
-          border: `1px solid ${palette.border}`
-        }}>
-          <SyncOutlined spin={autoRefresh} style={{ color: autoRefresh ? palette.success : palette.textFaint }} />
-          <span style={{ fontSize: 12, color: palette.textMuted }}>Auto-refresh</span>
-          <Switch size="small" checked={autoRefresh} onChange={onAutoRefreshChange} />
+      <motion.div variants={itemVariants} className="flex justify-end gap-3.5 mb-8">
+        <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06]">
+          <svg className={`w-4 h-4 ${autoRefresh ? "animate-spin text-cyan-500" : "text-white/30"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          <span className="text-xs text-white/50">Auto-refresh</span>
+          <button
+            onClick={() => onAutoRefreshChange?.(!autoRefresh)}
+            className={`relative w-9 h-5 rounded-full transition-colors ${autoRefresh ? "bg-cyan-500" : "bg-white/10"}`}
+          >
+            <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${autoRefresh ? "translate-x-4" : "translate-x-0.5"}`} />
+          </button>
         </div>
-        <Button 
-          icon={<DownloadOutlined />}
+        <button
           onClick={onExportPDF}
-          style={{ 
-            background: "rgba(255,255,255,0.04)", 
-            borderColor: palette.border,
-            color: palette.text,
-            borderRadius: 10,
-            height: 42
-          }}
+          className="flex items-center gap-2 px-4 h-[42px] rounded-xl bg-white/[0.04] border border-white/[0.06] text-white/90 hover:bg-white/[0.08] transition-all text-sm"
         >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
           Export PDF
-        </Button>
-        <Button 
-          type="primary"
-          icon={<PlayCircleOutlined />}
+        </button>
+        <button
           onClick={onRunAssessment}
-          style={{ 
+          className="flex items-center gap-2 px-5 h-[42px] rounded-xl font-semibold text-white text-sm hover:brightness-110 transition-all"
+          style={{
             background: `linear-gradient(135deg, ${palette.success} 0%, ${palette.successMuted} 100%)`,
-            border: "none",
             boxShadow: `0 4px 20px ${palette.success}40`,
-            borderRadius: 10,
-            height: 42,
-            fontWeight: 600
           }}
         >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+          </svg>
           Run Assessment
-        </Button>
+        </button>
       </motion.div>
 
       {/* Framework Cards */}
-      <motion.div variants={itemVariants} style={{ marginBottom: 32 }}>
-        <div style={{ fontSize: 11, color: palette.textFaint, textTransform: "uppercase", letterSpacing: 2, marginBottom: 20, fontWeight: 500 }}>
-          Framework Compliance
-        </div>
-        <Row gutter={[20, 20]}>
+      <motion.div variants={itemVariants} className="mb-8">
+        <div className="text-[11px] uppercase tracking-[2px] mb-5 font-medium" style={{ color: palette.textFaint }}>Framework Compliance</div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5">
           {frameworkCoverage?.slice(0, 5).map((fw: any, i: number) => {
             const score = Number(fw.score) || 0;
             const total = fw.total_controls || 10;
             const passed = fw.passed_controls || Math.round(score / 100 * total);
-            const trend = Math.floor(Math.random() * 10) - 3; // Demo data
+            const trend = Math.floor(Math.random() * 10) - 3;
             return (
-              <Col xs={24} sm={12} md={8} lg={4} key={i} style={{ minWidth: 200 }}>
-                <FrameworkCard
-                  name={fw.framework_name || fw.name}
-                  score={score}
-                  passed={passed}
-                  total={total}
-                  status={fw.status}
-                  trend={trend}
-                  index={i}
-                />
-              </Col>
+              <FrameworkCard
+                key={i}
+                name={fw.framework_name || fw.name}
+                score={score}
+                passed={passed}
+                total={total}
+                status={fw.status}
+                trend={trend}
+                index={i}
+              />
             );
           })}
-        </Row>
+        </div>
       </motion.div>
 
       {/* Audit Readiness + Attestation */}
-      <Row gutter={[28, 28]} style={{ marginBottom: 32 }}>
-        <Col xs={24} lg={8}>
-          <AuditReadiness score={auditScore} />
-        </Col>
-        <Col xs={24} lg={16}>
-          <AttestationProgress 
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-7 mb-8">
+        <div className="lg:col-span-1">
+          <AuditReadinessWidget score={auditScore} />
+        </div>
+        <div className="lg:col-span-2">
+          <AttestationProgress
             current={attestationStatus.current}
             pending={attestationStatus.pending}
             overdue={attestationStatus.overdue}
             total={attestationStatus.total}
           />
-        </Col>
-      </Row>
+        </div>
+      </div>
 
       {/* Stats Row */}
-      <Row gutter={[20, 20]} style={{ marginBottom: 32 }}>
-        <Col xs={12} sm={6}>
-          <StatCard title="Violations" value={kpis.openViolations} icon={<AlertOutlined />} status={kpis.openViolations > 0 ? "danger" : "good"} />
-        </Col>
-        <Col xs={12} sm={6}>
-          <StatCard title="Critical" value={kpis.criticalFindings} icon={<ExclamationCircleOutlined />} status={kpis.criticalFindings > 0 ? "danger" : "good"} />
-        </Col>
-        <Col xs={12} sm={6}>
-          <StatCard title="Pending" value={kpis.pendingAttestations} icon={<FileSearchOutlined />} status={kpis.pendingAttestations > 5 ? "warning" : "good"} />
-        </Col>
-        <Col xs={12} sm={6}>
-          <StatCard title="Deadlines" value={kpis.upcomingDeadlinesCount} icon={<CalendarOutlined />} status="good" />
-        </Col>
-      </Row>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-5 mb-8">
+        <StatCard title="Violations" value={kpis.openViolations} icon={
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+        } status={kpis.openViolations > 0 ? "danger" : "good"} />
+        <StatCard title="Critical" value={kpis.criticalFindings} icon={
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        } status={kpis.criticalFindings > 0 ? "danger" : "good"} />
+        <StatCard title="Pending" value={kpis.pendingAttestations} icon={
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+        } status={kpis.pendingAttestations > 5 ? "warning" : "good"} />
+        <StatCard title="Deadlines" value={kpis.upcomingDeadlinesCount} icon={
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+        } status="good" />
+      </div>
 
       {/* Next Steps + Critical Gaps */}
-      <Row gutter={[28, 28]} style={{ marginBottom: 32 }}>
-        <Col xs={24} lg={12}>
-          <NextSteps />
-        </Col>
-        <Col xs={24} lg={12}>
-          <SectionCard 
-            title="Critical Gaps" 
-            icon={<AlertOutlined style={{ color: palette.danger }} />}
-            extra={<Button type="link" size="small" onClick={onViewViolations} style={{ color: palette.success }}>View All</Button>}
-          >
-            {criticalViolations?.length > 0 ? (
-              criticalViolations.slice(0, 4).map((item: Violation, i: number) => (
-                <div key={i} style={{ 
-                  display: "flex", 
-                  alignItems: "flex-start", 
-                  gap: 14, 
-                  padding: "16px 0",
-                  borderBottom: i < 3 ? `1px solid ${palette.border}` : "none"
-                }}>
-                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: palette.danger, marginTop: 6, boxShadow: `0 0 8px ${palette.danger}60` }} />
-                  <div>
-                    <div style={{ color: palette.text, fontSize: 13, fontWeight: 500, marginBottom: 4 }}>{item.title}</div>
-                    <div style={{ color: palette.textFaint, fontSize: 11 }}>{item.endpoint_path} · {formatDate(item.detected_at)}</div>
-                  </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-7 mb-8">
+        <NextSteps />
+        <SectionCard
+          title="Critical Gaps"
+          icon={<svg className="w-5 h-5" style={{ color: palette.danger }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>}
+          extra={<button onClick={onViewViolations} className="text-cyan-500 hover:text-cyan-400 text-sm transition-colors">View All</button>}
+        >
+          {criticalViolations?.length > 0 ? (
+            criticalViolations.slice(0, 4).map((item: Violation, i: number) => (
+              <div key={i} className="flex items-start gap-3.5 py-4" style={{ borderBottom: i < 3 ? `1px solid ${palette.border}` : "none" }}>
+                <div className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ background: palette.danger, boxShadow: `0 0 8px ${palette.danger}60` }} />
+                <div>
+                  <div className="text-[13px] font-medium text-white/90 mb-1">{item.title}</div>
+                  <div className="text-[11px]" style={{ color: palette.textFaint }}>{item.endpoint_path} · {formatDate(item.detected_at)}</div>
                 </div>
-              ))
-            ) : (
-              <div style={{ textAlign: "center", padding: "48px 0" }}>
-                <CheckCircleOutlined style={{ fontSize: 48, color: palette.success, marginBottom: 16 }} />
-                <div style={{ color: palette.success, fontSize: 14 }}>No critical gaps</div>
               </div>
-            )}
-          </SectionCard>
-        </Col>
-      </Row>
+            ))
+          ) : (
+            <div className="text-center py-12">
+              <svg className="w-12 h-12 mx-auto mb-4" style={{ color: palette.success }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 13l4 4L19 7" />
+              </svg>
+              <div className="text-sm" style={{ color: palette.success }}>No critical gaps</div>
+            </div>
+          )}
+        </SectionCard>
+      </div>
 
       {/* Deadlines + Activity */}
-      <Row gutter={[28, 28]}>
-        <Col xs={24} lg={12}>
-          <SectionCard title="Upcoming Deadlines" icon={<ScheduleOutlined />}>
-            {upcomingDeadlines?.length > 0 ? (
-              upcomingDeadlines.slice(0, 5).map((item: any, i: number) => {
-                const urgent = new Date(item.deadline) < new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-                return (
-                  <div key={i} style={{ 
-                    display: "flex", 
-                    alignItems: "center", 
-                    justifyContent: "space-between",
-                    padding: "16px 0",
-                    borderBottom: i < 4 ? `1px solid ${palette.border}` : "none"
-                  }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: urgent ? palette.danger : palette.success, boxShadow: `0 0 8px ${urgent ? palette.danger : palette.success}50` }} />
-                      <div>
-                        <div style={{ color: palette.text, fontSize: 13, fontWeight: 500 }}>{item.title}</div>
-                        <div style={{ color: palette.textFaint, fontSize: 11 }}>{item.framework_name}</div>
-                      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-7">
+        <SectionCard title="Upcoming Deadlines" icon={
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+        }>
+          {upcomingDeadlines?.length > 0 ? (
+            upcomingDeadlines.slice(0, 5).map((item: any, i: number) => {
+              const urgent = new Date(item.deadline) < new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+              return (
+                <div key={i} className="flex items-center justify-between py-4" style={{ borderBottom: i < 4 ? `1px solid ${palette.border}` : "none" }}>
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-2 h-2 rounded-full" style={{
+                      background: urgent ? palette.danger : palette.success,
+                      boxShadow: `0 0 8px ${urgent ? palette.danger : palette.success}50`
+                    }} />
+                    <div>
+                      <div className="text-[13px] font-medium text-white/90">{item.title}</div>
+                      <div className="text-[11px]" style={{ color: palette.textFaint }}>{item.framework_name}</div>
                     </div>
-                    <Tag style={{ background: urgent ? palette.dangerBg : palette.successBg, border: "none", color: urgent ? palette.danger : palette.success, borderRadius: 6 }}>
-                      {formatDate(item.deadline)}
-                    </Tag>
                   </div>
-                );
-              })
-            ) : (
-              <div style={{ textAlign: "center", padding: "48px 0" }}>
-                <CalendarOutlined style={{ fontSize: 48, color: palette.textFaint, marginBottom: 16 }} />
-                <div style={{ color: palette.textFaint }}>No upcoming deadlines</div>
-              </div>
-            )}
-          </SectionCard>
-        </Col>
-        <Col xs={24} lg={12}>
-          <SectionCard 
-            title="Recent Activity" 
-            icon={<HistoryOutlined />}
-            extra={<Button type="link" size="small" onClick={onViewAllLogs} style={{ color: palette.success }}>View All</Button>}
-          >
-            {recentActivity?.slice(0, 5).map((item: any, i: number) => (
-              <div key={i} style={{ 
-                display: "flex", 
-                alignItems: "center", 
-                gap: 14,
-                padding: "14px 0",
-                borderBottom: i < 4 ? `1px solid ${palette.border}` : "none"
-              }}>
-                <Tag style={{ background: palette.successBg, border: "none", color: palette.success, borderRadius: 6, fontSize: 10 }}>
-                  {item.event_type}
-                </Tag>
-                <span style={{ flex: 1, color: palette.textMuted, fontSize: 12 }}>{item.action}</span>
-                <span style={{ color: palette.textFaint, fontSize: 11 }}>{formatDateTime(item.created_at)}</span>
-              </div>
-            ))}
-          </SectionCard>
-        </Col>
-      </Row>
+                  <span className="px-2.5 py-1 rounded-md text-xs" style={{
+                    background: urgent ? palette.dangerBg : palette.successBg,
+                    color: urgent ? palette.danger : palette.success,
+                  }}>
+                    {formatDate(item.deadline)}
+                  </span>
+                </div>
+              );
+            })
+          ) : (
+            <div className="text-center py-12">
+              <svg className="w-12 h-12 mx-auto mb-4" style={{ color: palette.textFaint }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <div style={{ color: palette.textFaint }}>No upcoming deadlines</div>
+            </div>
+          )}
+        </SectionCard>
+        <SectionCard
+          title="Recent Activity"
+          icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+          extra={<button onClick={onViewAllLogs} className="text-cyan-500 hover:text-cyan-400 text-sm transition-colors">View All</button>}
+        >
+          {recentActivity?.slice(0, 5).map((item: any, i: number) => (
+            <div key={i} className="flex items-center gap-3.5 py-3.5" style={{ borderBottom: i < 4 ? `1px solid ${palette.border}` : "none" }}>
+              <span className="px-2 py-0.5 rounded-md text-[10px]" style={{ background: palette.successBg, color: palette.success }}>
+                {item.event_type}
+              </span>
+              <span className="flex-1 text-xs" style={{ color: palette.textMuted }}>{item.action}</span>
+              <span className="text-[11px]" style={{ color: palette.textFaint }}>{formatDateTime(item.created_at)}</span>
+            </div>
+          ))}
+        </SectionCard>
+      </div>
     </motion.div>
   );
 }

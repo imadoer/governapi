@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { database } from '@/infrastructure/database'
 import crypto from 'crypto'
+import { requireAdmin, isAuthError } from '@/lib/auth/require-admin'
 
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
+  const authResult = await requireAdmin(request);
+  if (isAuthError(authResult)) return authResult;
+
   try {
     const { id } = await context.params
     const newApiKey = 'sk_live_' + crypto.randomBytes(32).toString('hex')

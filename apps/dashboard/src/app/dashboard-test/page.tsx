@@ -1,8 +1,5 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Card, Typography } from "antd";
-
-const { Title, Text } = Typography;
 
 export default function DashboardTest() {
   const [status, setStatus] = useState("Loading...");
@@ -27,13 +24,12 @@ export default function DashboardTest() {
   }, []);
 
   return (
-    <div style={{ padding: "20px" }}>
-      <Card>
-        <Title level={3}>Dashboard Debug Test</Title>
-        <Text>{status}</Text>
-        <br />
-        <Text>Check console for detailed logs</Text>
-      </Card>
+    <div className="min-h-screen bg-[#0a0a0f] p-8">
+      <div className="bg-slate-800/30 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
+        <h3 className="text-xl font-bold text-white mb-4">Dashboard Debug Test</h3>
+        <p className="text-slate-300">{status}</p>
+        <p className="text-slate-400 text-sm mt-2">Check console for detailed logs</p>
+      </div>
     </div>
   );
 }

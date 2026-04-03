@@ -9,8 +9,6 @@ export async function collectSlackData(
   botToken: string,
   channelId: string
 ): Promise<SlackCollectorResult> {
-  console.log('🔍 Slack Collector Called:', { botToken: botToken?.substring(0, 20) + '...', channelId });
-  
   const headers = {
     Authorization: `Bearer ${botToken}`,
     "Content-Type": "application/json",

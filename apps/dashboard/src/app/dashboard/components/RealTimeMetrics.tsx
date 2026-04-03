@@ -1,13 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card, Row, Col, Statistic, Progress } from "antd";
-import {
-  ApiOutlined,
-  SecurityScanOutlined,
-  DollarOutlined,
-  SafetyCertificateOutlined,
-} from "@ant-design/icons";
 import { supabase } from "@/lib/db/supabase";
 
 interface Metrics {
@@ -30,16 +23,11 @@ export function RealTimeMetrics() {
   useEffect(() => {
     const fetchMetrics = async () => {
       try {
-        // Get real API count
         const { data: apis } = await supabase.from("apis").select("*");
-
-        // Get compliance data
         const { data: violations } = await supabase
           .from("violations")
           .select("*")
           .eq("status", "active");
-
-        // Get recent scans
         const { data: scans } = await supabase
           .from("scans")
           .select("*")
@@ -48,7 +36,6 @@ export function RealTimeMetrics() {
             new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
           );
 
-        // Calculate real metrics
         const totalAPIs = apis?.length || 0;
         const activeViolations = violations?.length || 0;
         const policyCompliance =
@@ -56,7 +43,7 @@ export function RealTimeMetrics() {
             ? Math.round(((totalAPIs - activeViolations) / totalAPIs) * 100)
             : 100;
         const securityScore = Math.max(50, 100 - activeViolations * 5);
-        const monthlySavings = (scans?.length || 0) * 50; // Estimate $50 saved per scan
+        const monthlySavings = (scans?.length || 0) * 50;
         const discoveredThisWeek = scans?.length || 0;
 
         setMetrics({
@@ -72,70 +59,53 @@ export function RealTimeMetrics() {
     };
 
     fetchMetrics();
-    // Update every 30 seconds
     const interval = setInterval(fetchMetrics, 30000);
-
     return () => clearInterval(interval);
   }, []);
 
   return (
-    <Row gutter={[16, 16]} className="mb-6">
-      <Col xs={24} sm={12} lg={6}>
-        <Card>
-          <Statistic
-            title="Total APIs"
-            value={metrics.totalAPIs}
-            prefix={<ApiOutlined />}
-            suffix={
-              <span style={{ fontSize: "12px", color: "#52c41a" }}>
-                +{metrics.discoveredThisWeek} discovered this week
-              </span>
-            }
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      {/* Total APIs */}
+      <div className="rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-5">
+        <div className="text-sm text-gray-400 mb-1">Total APIs</div>
+        <div className="text-2xl font-bold text-white">{metrics.totalAPIs}</div>
+        <div className="text-xs text-emerald-400 mt-1">+{metrics.discoveredThisWeek} discovered this week</div>
+      </div>
+
+      {/* Policy Compliance */}
+      <div className="rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-5">
+        <div className="text-sm text-gray-400 mb-1">Policy Compliance</div>
+        <div className={`text-2xl font-bold ${metrics.policyCompliance > 80 ? "text-emerald-400" : "text-amber-400"}`}>
+          {metrics.policyCompliance}%
+        </div>
+        <div className="w-full bg-white/10 rounded-full h-1.5 mt-2">
+          <div
+            className={`h-1.5 rounded-full ${metrics.policyCompliance > 80 ? "bg-emerald-400" : "bg-amber-400"}`}
+            style={{ width: `${metrics.policyCompliance}%` }}
           />
-        </Card>
-      </Col>
-      <Col xs={24} sm={12} lg={6}>
-        <Card>
-          <Statistic
-            title="Policy Compliance"
-            value={metrics.policyCompliance}
-            suffix="%"
-            prefix={<SecurityScanOutlined />}
-            valueStyle={{
-              color: metrics.policyCompliance > 80 ? "#52c41a" : "#fa8c16",
-            }}
+        </div>
+      </div>
+
+      {/* Security Score */}
+      <div className="rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-5">
+        <div className="text-sm text-gray-400 mb-1">Security Score</div>
+        <div className={`text-2xl font-bold ${metrics.securityScore > 80 ? "text-emerald-400" : "text-amber-400"}`}>
+          {metrics.securityScore}/100
+        </div>
+        <div className="w-full bg-white/10 rounded-full h-1.5 mt-2">
+          <div
+            className={`h-1.5 rounded-full ${metrics.securityScore > 80 ? "bg-emerald-400" : "bg-amber-400"}`}
+            style={{ width: `${metrics.securityScore}%` }}
           />
-          <Progress percent={metrics.policyCompliance} showInfo={false} />
-        </Card>
-      </Col>
-      <Col xs={24} sm={12} lg={6}>
-        <Card>
-          <Statistic
-            title="Security Score"
-            value={`${metrics.securityScore}/100`}
-            prefix={<SafetyCertificateOutlined />}
-            valueStyle={{
-              color: metrics.securityScore > 80 ? "#52c41a" : "#fa8c16",
-            }}
-          />
-          <Progress percent={metrics.securityScore} showInfo={false} />
-        </Card>
-      </Col>
-      <Col xs={24} sm={12} lg={6}>
-        <Card>
-          <Statistic
-            title="Monthly Savings"
-            value={metrics.monthlySavings}
-            prefix="$"
-            suffix={
-              <span style={{ fontSize: "12px", color: "#52c41a" }}>
-                28.9% cost reduction
-              </span>
-            }
-            valueStyle={{ color: "#52c41a" }}
-          />
-        </Card>
-      </Col>
-    </Row>
+        </div>
+      </div>
+
+      {/* Monthly Savings */}
+      <div className="rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-5">
+        <div className="text-sm text-gray-400 mb-1">Monthly Savings</div>
+        <div className="text-2xl font-bold text-emerald-400">${metrics.monthlySavings}</div>
+        <div className="text-xs text-emerald-400 mt-1">28.9% cost reduction</div>
+      </div>
+    </div>
   );
 }

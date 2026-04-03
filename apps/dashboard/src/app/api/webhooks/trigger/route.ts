@@ -149,11 +149,12 @@ export async function POST(req: NextRequest) {
         success,
       });
 
-      // Log webhook execution
+      // Log webhook execution (store summary only, never full payload)
+      const payloadSummary = JSON.stringify(data).substring(0, 500);
       await database.query(
-        `INSERT INTO webhook_logs (tenant_id, webhook_id, event_type, payload, success, created_at)
+        `INSERT INTO webhook_logs (tenant_id, webhook_id, event_type, payload_summary, success, created_at)
          VALUES ($1, $2, $3, $4, $5, NOW())`,
-        [tenantId, webhook.id, event_type, JSON.stringify(data), success],
+        [tenantId, webhook.id, event_type, payloadSummary, success],
       );
     }
 

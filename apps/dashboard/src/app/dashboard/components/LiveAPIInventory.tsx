@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card, Progress } from "antd";
 import { supabase } from "@/lib/db/supabase";
 
 interface APIStats {
@@ -36,7 +35,6 @@ export function LiveAPIInventory() {
           },
           { critical: 0, internal: 0, external: 0, unclassified: 0, total: 0 },
         );
-
         setStats(stats);
       }
     };
@@ -52,35 +50,47 @@ export function LiveAPIInventory() {
       : 0;
 
   return (
-    <Card title="API Inventory" extra="View All">
-      <div className="flex items-center justify-center mb-4">
-        <Progress
-          type="circle"
-          percent={classificationPercentage}
-          format={(percent) => `${percent}%`}
-          width={120}
-        />
+    <div className="rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold text-white">API Inventory</h3>
+        <span className="text-cyan-400 text-sm cursor-pointer hover:text-cyan-300">View All</span>
       </div>
+
+      {/* Circle Progress */}
+      <div className="flex items-center justify-center mb-4">
+        <div className="relative w-[120px] h-[120px]">
+          <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
+            <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="8" />
+            <circle
+              cx="60" cy="60" r="50" fill="none" stroke="#06b6d4" strokeWidth="8"
+              strokeDasharray={`${classificationPercentage * 3.14} ${314 - classificationPercentage * 3.14}`}
+              strokeLinecap="round"
+            />
+          </svg>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="text-xl font-bold text-white">{classificationPercentage}%</span>
+          </div>
+        </div>
+      </div>
+
       <div className="space-y-2">
         <div className="flex justify-between">
-          <span>Critical APIs:</span>
-          <span className="font-semibold">{stats.critical}</span>
+          <span className="text-gray-400 text-sm">Critical APIs:</span>
+          <span className="font-semibold text-white">{stats.critical}</span>
         </div>
         <div className="flex justify-between">
-          <span>Internal APIs:</span>
-          <span className="font-semibold">{stats.internal}</span>
+          <span className="text-gray-400 text-sm">Internal APIs:</span>
+          <span className="font-semibold text-white">{stats.internal}</span>
         </div>
         <div className="flex justify-between">
-          <span>External APIs:</span>
-          <span className="font-semibold">{stats.external}</span>
+          <span className="text-gray-400 text-sm">External APIs:</span>
+          <span className="font-semibold text-white">{stats.external}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-orange-500">Unclassified:</span>
-          <span className="font-semibold text-orange-500">
-            {stats.unclassified}
-          </span>
+          <span className="text-amber-400 text-sm">Unclassified:</span>
+          <span className="font-semibold text-amber-400">{stats.unclassified}</span>
         </div>
       </div>
-    </Card>
+    </div>
   );
 }

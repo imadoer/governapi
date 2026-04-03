@@ -25,10 +25,10 @@ export async function blockIP(
   try {
     await database.query(
       `INSERT INTO ip_blocks (tenant_id, ip_address, reason, blocked_until, created_at)
-       VALUES ($1, $2, $3, NOW() + INTERVAL '${duration} seconds', NOW())
-       ON CONFLICT (tenant_id, ip_address) 
-       DO UPDATE SET blocked_until = NOW() + INTERVAL '${duration} seconds', reason = EXCLUDED.reason`,
-      [tenantId, ip, reason],
+       VALUES ($1, $2, $3, NOW() + make_interval(secs => $4), NOW())
+       ON CONFLICT (tenant_id, ip_address)
+       DO UPDATE SET blocked_until = NOW() + make_interval(secs => $4), reason = EXCLUDED.reason`,
+      [tenantId, ip, reason, duration],
     );
   } catch (error) {
     console.error("Failed to block IP:", error);

@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { database } from '@/infrastructure/database'
+import { requireAdmin, isAuthError } from '@/lib/auth/require-admin'
 
 export async function GET(request: NextRequest) {
+  const authResult = await requireAdmin(request);
+  if (isAuthError(authResult)) return authResult;
+
   try {
     // API calls today
     const todayResult = await database.queryOne(

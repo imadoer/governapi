@@ -1,172 +1,104 @@
 "use client";
 
-import {
-  Card,
-  Table,
-  Button,
-  Tag,
-  Space,
-  Row,
-  Col,
-  Statistic,
-  Progress,
-} from "antd";
-import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
-
 export function PolicyManagement() {
   const policies = [
-    {
-      key: 1,
-      name: "Rate Limiting Policy",
-      status: "active",
-      type: "Rate Control",
-      requests: "1,247",
-      blocked: 23,
-      effectiveness: 98,
-    },
-    {
-      key: 2,
-      name: "Authentication Required",
-      status: "active",
-      type: "Security",
-      requests: "892",
-      blocked: 45,
-      effectiveness: 95,
-    },
-    {
-      key: 3,
-      name: "CORS Policy",
-      status: "active",
-      type: "Access Control",
-      requests: "2,156",
-      blocked: 12,
-      effectiveness: 99,
-    },
-    {
-      key: 4,
-      name: "Data Validation",
-      status: "inactive",
-      type: "Input Validation",
-      requests: "0",
-      blocked: 0,
-      effectiveness: 0,
-    },
+    { key: 1, name: "Rate Limiting Policy", status: "active", type: "Rate Control", requests: "1,247", blocked: 23, effectiveness: 98 },
+    { key: 2, name: "Authentication Required", status: "active", type: "Security", requests: "892", blocked: 45, effectiveness: 95 },
+    { key: 3, name: "CORS Policy", status: "active", type: "Access Control", requests: "2,156", blocked: 12, effectiveness: 99 },
+    { key: 4, name: "Data Validation", status: "inactive", type: "Input Validation", requests: "0", blocked: 0, effectiveness: 0 },
   ];
 
   const policyTemplates = [
-    {
-      name: "PCI DSS Compliance",
-      description: "Payment card industry security standards",
-    },
-    {
-      name: "GDPR Data Protection",
-      description: "European data privacy regulations",
-    },
-    {
-      name: "SOC2 Controls",
-      description: "Service organization control standards",
-    },
-    {
-      name: "API Rate Limiting",
-      description: "Prevent API abuse and DoS attacks",
-    },
-  ];
-
-  const columns = [
-    { title: "Policy Name", dataIndex: "name", key: "name" },
-    {
-      title: "Status",
-      dataIndex: "status",
-      key: "status",
-      render: (status: string) => (
-        <Tag color={status === "active" ? "green" : "gray"}>
-          {status.toUpperCase()}
-        </Tag>
-      ),
-    },
-    { title: "Type", dataIndex: "type", key: "type" },
-    { title: "Requests Processed", dataIndex: "requests", key: "requests" },
-    { title: "Blocked", dataIndex: "blocked", key: "blocked" },
-    {
-      title: "Effectiveness",
-      dataIndex: "effectiveness",
-      key: "effectiveness",
-      render: (value: number) => `${value}%`,
-    },
-    {
-      title: "Actions",
-      key: "actions",
-      render: () => (
-        <Space>
-          <Button size="small" icon={<EditOutlined />}>
-            Edit
-          </Button>
-          <Button size="small" danger icon={<DeleteOutlined />}>
-            Delete
-          </Button>
-        </Space>
-      ),
-    },
+    { name: "PCI DSS Compliance", description: "Payment card industry security standards" },
+    { name: "GDPR Data Protection", description: "European data privacy regulations" },
+    { name: "SOC2 Controls", description: "Service organization control standards" },
+    { name: "API Rate Limiting", description: "Prevent API abuse and DoS attacks" },
   ];
 
   return (
     <div>
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col span={6}>
-          <Card>
-            <Statistic title="Active Policies" value={3} />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic title="Requests Protected" value="4,295" />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic title="Threats Blocked" value={80} />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic title="Avg Effectiveness" value={97} suffix="%" />
-          </Card>
-        </Col>
-      </Row>
+      {/* Stats Row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-5">
+          <div className="text-sm text-gray-400 mb-1">Active Policies</div>
+          <div className="text-2xl font-bold text-white">3</div>
+        </div>
+        <div className="rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-5">
+          <div className="text-sm text-gray-400 mb-1">Requests Protected</div>
+          <div className="text-2xl font-bold text-white">4,295</div>
+        </div>
+        <div className="rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-5">
+          <div className="text-sm text-gray-400 mb-1">Threats Blocked</div>
+          <div className="text-2xl font-bold text-white">80</div>
+        </div>
+        <div className="rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-5">
+          <div className="text-sm text-gray-400 mb-1">Avg Effectiveness</div>
+          <div className="text-2xl font-bold text-white">97%</div>
+        </div>
+      </div>
 
-      <Card
-        title="Security Policies"
-        extra={
-          <Button type="primary" icon={<PlusOutlined />}>
-            Create Policy
-          </Button>
-        }
-      >
-        <Table
-          dataSource={policies}
-          columns={columns}
-          pagination={false}
-          size="small"
-        />
-      </Card>
+      {/* Policies Table */}
+      <div className="rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-6 mb-4">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-white">Security Policies</h3>
+          <button className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg text-sm font-medium transition-colors">
+            + Create Policy
+          </button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/10">
+                <th className="text-left text-gray-400 py-2 px-3 font-medium">Policy Name</th>
+                <th className="text-left text-gray-400 py-2 px-3 font-medium">Status</th>
+                <th className="text-left text-gray-400 py-2 px-3 font-medium">Type</th>
+                <th className="text-left text-gray-400 py-2 px-3 font-medium">Requests Processed</th>
+                <th className="text-left text-gray-400 py-2 px-3 font-medium">Blocked</th>
+                <th className="text-left text-gray-400 py-2 px-3 font-medium">Effectiveness</th>
+                <th className="text-left text-gray-400 py-2 px-3 font-medium">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {policies.map((policy) => (
+                <tr key={policy.key} className="border-b border-white/5 hover:bg-white/5">
+                  <td className="py-2 px-3 text-white">{policy.name}</td>
+                  <td className="py-2 px-3">
+                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${policy.status === "active" ? "bg-emerald-500/20 text-emerald-400" : "bg-gray-500/20 text-gray-400"}`}>
+                      {policy.status.toUpperCase()}
+                    </span>
+                  </td>
+                  <td className="py-2 px-3 text-gray-300">{policy.type}</td>
+                  <td className="py-2 px-3 text-gray-300">{policy.requests}</td>
+                  <td className="py-2 px-3 text-gray-300">{policy.blocked}</td>
+                  <td className="py-2 px-3 text-gray-300">{policy.effectiveness}%</td>
+                  <td className="py-2 px-3">
+                    <div className="flex gap-2">
+                      <button className="px-2 py-1 text-xs bg-white/10 hover:bg-white/20 text-gray-300 rounded transition-colors">Edit</button>
+                      <button className="px-2 py-1 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded transition-colors">Delete</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-      <Card title="Policy Templates" style={{ marginTop: 16 }}>
-        <Row gutter={[16, 16]}>
+      {/* Policy Templates */}
+      <div className="rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-6">
+        <h3 className="text-lg font-semibold text-white mb-4">Policy Templates</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {policyTemplates.map((template, index) => (
-            <Col xs={24} sm={12} lg={6} key={index}>
-              <Card size="small" hoverable>
-                <Card.Meta
-                  title={template.name}
-                  description={template.description}
-                />
-                <Button type="link" style={{ padding: 0, marginTop: 8 }}>
-                  Use Template
-                </Button>
-              </Card>
-            </Col>
+            <div key={index} className="rounded-xl bg-white/5 border border-white/10 p-4 hover:bg-white/10 transition-colors cursor-pointer">
+              <div className="text-white font-medium text-sm">{template.name}</div>
+              <div className="text-gray-400 text-xs mt-1">{template.description}</div>
+              <button className="text-cyan-400 text-xs mt-2 hover:text-cyan-300 transition-colors">
+                Use Template
+              </button>
+            </div>
           ))}
-        </Row>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

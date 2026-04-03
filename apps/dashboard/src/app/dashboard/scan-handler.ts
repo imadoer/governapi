@@ -1,21 +1,18 @@
-import { message } from "antd";
-
 export async function handleScanSubmit(
-  values: any,
+  values: Record<string, string>,
   category: "api" | "infrastructure",
 ) {
   try {
-    // Get company from sessionStorage
     const companyStr = sessionStorage.getItem("company");
     const company = companyStr ? JSON.parse(companyStr) : null;
-    
+
     if (!company?.id) {
       throw new Error("Company ID not found. Please log in again.");
     }
 
     const response = await fetch("/api/scanner", {
       method: "POST",
-      headers: { 
+      headers: {
         "Content-Type": "application/json",
         "x-tenant-id": company.id.toString(),
       },
@@ -29,23 +26,21 @@ export async function handleScanSubmit(
     const data = await response.json();
 
     if (data.success) {
-      message.success("Scan started successfully!");
       return data.scan;
     } else {
       throw new Error(data.error || "Scan failed");
     }
-  } catch (error: any) {
-    message.error(error.message || "Failed to start scan");
-    throw error;
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Failed to start scan";
+    throw new Error(msg);
   }
 }
 
 export async function fetchScanHistory() {
   try {
-    // Get company from sessionStorage
     const companyStr = sessionStorage.getItem("company");
     const company = companyStr ? JSON.parse(companyStr) : null;
-    
+
     if (!company?.id) {
       return [];
     }
@@ -55,7 +50,7 @@ export async function fetchScanHistory() {
         "x-tenant-id": company.id.toString(),
       },
     });
-    
+
     const data = await response.json();
     return data.scans || [];
   } catch (error) {

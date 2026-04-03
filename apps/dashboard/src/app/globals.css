@@ -6,7 +6,7 @@
   --bg-0: #050A18;
   --bg-1: #121A2E;
   --bg-2: #0E1628;
-  
+
   --ink-0: #FFFFFF;
   --ink-1: #C4CFDE;
 
@@ -15,14 +15,17 @@
   --acc-violet: #7A67FF;
   --acc-lime: #2FEE93;
   --acc-amber: #FFB34D;
+
+  --glow-opacity: 0.15;
 }
 
 body {
-  background: #050A18;
+  background: #0a0a0f;
   color: #FFFFFF;
   font-family: 'Inter', sans-serif;
 }
 
+/* Custom scrollbar */
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
 }
@@ -35,335 +38,56 @@ body {
   border-radius: 10px;
 }
 
-/* Dark Scan Table Styles */
-.dark-scan-table .ant-table {
-  background: transparent !important;
-  color: #e2e8f0 !important;
+/* Global scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
-.dark-scan-table .ant-table-thead > tr > th {
-  background: rgba(51, 65, 85, 0.5) !important;
-  color: #94a3b8 !important;
-  border-bottom: 1px solid #475569 !important;
-  font-weight: 600 !important;
+/* Selection color */
+::selection {
+  background: rgba(6, 182, 212, 0.3);
+  color: white;
 }
 
-.dark-scan-table .ant-table-tbody > tr > td {
-  background: transparent !important;
-  color: #e2e8f0 !important;
-  border-bottom: 1px solid #334155 !important;
+/* Focus ring utility */
+.focus-ring {
+  @apply focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:ring-offset-0;
 }
 
-.dark-scan-table .ant-table-tbody > tr:hover > td {
-  background: rgba(51, 65, 85, 0.3) !important;
+/* Gradient text utility */
+.gradient-text {
+  background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 50%, #8b5cf6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
-.dark-scan-table .ant-pagination {
-  color: #94a3b8 !important;
+/* Subtle card depth */
+.card-glow {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
-.dark-scan-table .ant-pagination-item {
-  background: transparent !important;
-  border-color: #475569 !important;
+/* Neon pulse animation */
+@keyframes neon-pulse {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(6, 182, 212, 0.3), 0 0 40px rgba(6, 182, 212, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(6, 182, 212, 0.5), 0 0 60px rgba(6, 182, 212, 0.2);
+  }
 }
 
-.dark-scan-table .ant-pagination-item a {
-  color: #94a3b8 !important;
-}
-
-.dark-scan-table .ant-pagination-item-active {
-  background: rgba(6, 182, 212, 0.2) !important;
-  border-color: #06b6d4 !important;
-}
-
-.dark-scan-table .ant-pagination-item-active a {
-  color: #06b6d4 !important;
-}
-
-/* Premium Dark Table Styles */
-.premium-dark-table {
-  background: transparent !important;
-}
-
-.premium-dark-table .ant-table {
-  background: transparent !important;
-  color: #e2e8f0 !important;
-}
-
-.premium-dark-table .ant-table-thead > tr > th {
-  background: rgba(30, 41, 59, 0.8) !important;
-  color: #94a3b8 !important;
-  border-bottom: 2px solid rgba(71, 85, 105, 0.5) !important;
-  font-weight: 700 !important;
-  text-transform: uppercase !important;
-  font-size: 11px !important;
-  letter-spacing: 0.5px !important;
-  padding: 16px !important;
-}
-
-.premium-dark-table .ant-table-tbody > tr {
-  background: rgba(30, 35, 45, 0.3) !important;
-  border-bottom: 1px solid rgba(51, 65, 85, 0.3) !important;
-  transition: all 0.2s ease-in-out !important;
-}
-
-.premium-dark-table .ant-table-tbody > tr:hover {
-  background: rgba(51, 65, 85, 0.4) !important;
-  box-shadow: 0 0 20px rgba(6, 182, 212, 0.1) !important;
-  transform: translateY(-1px) !important;
-}
-
-.premium-dark-table .ant-table-tbody > tr > td {
-  background: transparent !important;
-  color: #e2e8f0 !important;
-  border-bottom: 1px solid rgba(51, 65, 85, 0.2) !important;
-  padding: 16px !important;
-  vertical-align: middle !important;
-}
-
-.premium-dark-table .ant-table-cell {
-  border-bottom: none !important;
-}
-
-/* Pagination */
-.dark-pagination .ant-pagination-item {
-  background: rgba(30, 41, 59, 0.6) !important;
-  border-color: rgba(71, 85, 105, 0.5) !important;
-  transition: all 0.2s ease-in-out !important;
-}
-
-.dark-pagination .ant-pagination-item a {
-  color: #94a3b8 !important;
-}
-
-.dark-pagination .ant-pagination-item:hover {
-  background: rgba(51, 65, 85, 0.8) !important;
-  border-color: #06b6d4 !important;
-  transform: translateY(-2px) !important;
-}
-
-.dark-pagination .ant-pagination-item-active {
-  background: linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(37, 99, 235, 0.3)) !important;
-  border-color: #06b6d4 !important;
-  box-shadow: 0 0 15px rgba(6, 182, 212, 0.3) !important;
-}
-
-.dark-pagination .ant-pagination-item-active a {
-  color: #06b6d4 !important;
-  font-weight: bold !important;
-}
-
-.dark-pagination .ant-pagination-prev,
-.dark-pagination .ant-pagination-next {
-  background: rgba(30, 41, 59, 0.6) !important;
-  border-color: rgba(71, 85, 105, 0.5) !important;
-}
-
-.dark-pagination .ant-pagination-prev:hover,
-.dark-pagination .ant-pagination-next:hover {
-  background: rgba(51, 65, 85, 0.8) !important;
-  border-color: #06b6d4 !important;
-}
-
-.dark-pagination .ant-pagination-prev button,
-.dark-pagination .ant-pagination-next button {
-  color: #94a3b8 !important;
-}
-
-/* Dark Table Styles */
-.ant-table {
-  background: transparent !important;
-}
-
-.ant-table-wrapper {
-  background: transparent !important;
-}
-
-.ant-table-thead > tr > th {
-  background: rgba(30, 41, 59, 0.8) !important;
-  color: #94a3b8 !important;
-  border-bottom: 2px solid rgba(71, 85, 105, 0.5) !important;
-  font-weight: 600 !important;
-}
-
-.ant-table-tbody > tr {
-  background: rgba(30, 35, 45, 0.3) !important;
-  transition: all 0.2s ease !important;
-}
-
-.ant-table-tbody > tr:hover {
-  background: rgba(51, 65, 85, 0.4) !important;
-}
-
-.ant-table-tbody > tr > td {
-  background: transparent !important;
-  color: #e2e8f0 !important;
-  border-bottom: 1px solid rgba(51, 65, 85, 0.2) !important;
-}
-
-.ant-pagination-item {
-  background: rgba(30, 41, 59, 0.6) !important;
-  border-color: rgba(71, 85, 105, 0.5) !important;
-}
-
-.ant-pagination-item a {
-  color: #94a3b8 !important;
-}
-
-.ant-pagination-item-active {
-  background: rgba(6, 182, 212, 0.2) !important;
-  border-color: #06b6d4 !important;
-}
-
-.ant-pagination-item-active a {
-  color: #06b6d4 !important;
-}
-
-/* Refined Enterprise Styling - Tone Down Neon */
-:root {
-  --glow-opacity: 0.15;
-  --blur-radius: 10px;
-}
-
-/* Severity Card Inner Highlight */
-.bg-gradient-to-br.from-slate-900\/80::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
-}
-
-/* Tone down tag colors */
-.ant-tag {
-  opacity: 0.9 !important;
-}
-
-/* Remove aggressive glows from buttons - keep them bright but contained */
-.bg-cyan-500 {
-  box-shadow: 0 2px 8px rgba(6, 182, 212, 0.2) !important;
-}
-
-.bg-cyan-500:hover {
-  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.3) !important;
-}
-
-/* Subtle depth for cards */
-.rounded-2xl {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
-}
-
-/* Refined table styling - darker, more professional */
-.ant-table-wrapper {
-  background: rgba(13, 17, 23, 0.6) !important;
-  border-radius: 12px !important;
-  overflow: hidden !important;
-}
-
-.ant-table-thead > tr > th {
-  background: rgba(15, 20, 28, 0.9) !important;
-  color: #8b92a0 !important;
-  font-size: 11px !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.5px !important;
-  font-weight: 600 !important;
-  border-bottom: 1px solid rgba(51, 65, 85, 0.3) !important;
-}
-
-.ant-table-tbody > tr {
-  background: rgba(13, 17, 23, 0.4) !important;
-  border-bottom: 1px solid rgba(30, 41, 59, 0.2) !important;
-}
-
-.ant-table-tbody > tr:hover {
-  background: rgba(30, 41, 59, 0.3) !important;
-  box-shadow: inset 0 0 0 1px rgba(100, 116, 139, 0.2) !important;
-}
-
-/* Tone down severity colors by 30% */
-.text-red-500 { color: #dc262680 !important; }
-.text-amber-400 { color: #fbbf2480 !important; }
-.text-rose-400 { color: #fb718580 !important; }
-.text-emerald-400 { color: #34d39980 !important; }
-
-/* Professional score badge */
-.font-bold.text-2xl {
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
-}
-
-/* Compliance Hub Tab Styling */
-.ant-tabs-tab {
-  color: rgba(255, 255, 255, 0.45) !important;
-}
-.ant-tabs-tab:hover {
-  color: rgba(255, 255, 255, 0.7) !important;
-}
-.ant-tabs-tab-active .ant-tabs-tab-btn {
-  color: #06b6d4 !important;
-}
-.ant-tabs-ink-bar {
-  background: #06b6d4 !important;
-}
-
-/* Force all tab text to be gray */
-.ant-tabs .ant-tabs-tab .ant-tabs-tab-btn,
-.ant-tabs .ant-tabs-tab .ant-tabs-tab-btn span,
-.ant-tabs .ant-tabs-tab .ant-tabs-tab-btn > span,
-.ant-tabs .ant-tabs-tab-btn {
-  color: rgba(255, 255, 255, 0.45) !important;
-}
-.ant-tabs .ant-tabs-tab:hover .ant-tabs-tab-btn,
-.ant-tabs .ant-tabs-tab:hover .ant-tabs-tab-btn span {
-  color: rgba(255, 255, 255, 0.75) !important;
-}
-.ant-tabs .ant-tabs-tab-active .ant-tabs-tab-btn,
-.ant-tabs .ant-tabs-tab-active .ant-tabs-tab-btn span,
-.ant-tabs .ant-tabs-tab-active .ant-tabs-tab-btn > span {
-  color: #06b6d4 !important;
-}
-.ant-badge {
-  color: inherit !important;
-}
-.ant-badge > span {
-  color: inherit !important;
-}
-
-/* Dark Table Styling */
-.dark-table .ant-table {
-  background: transparent !important;
-}
-.dark-table .ant-table-thead > tr > th {
-  background: rgba(255, 255, 255, 0.04) !important;
-  color: rgba(255, 255, 255, 0.5) !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
-  font-size: 11px !important;
-  text-transform: uppercase !important;
-  letter-spacing: 1px !important;
-}
-.dark-table .ant-table-tbody > tr > td {
-  background: transparent !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
-  color: rgba(255, 255, 255, 0.7) !important;
-}
-.dark-table .ant-table-tbody > tr:hover > td {
-  background: rgba(255, 255, 255, 0.03) !important;
-}
-.dark-table .ant-pagination .ant-pagination-item {
-  background: rgba(255, 255, 255, 0.04) !important;
-  border-color: rgba(255, 255, 255, 0.1) !important;
-}
-.dark-table .ant-pagination .ant-pagination-item a {
-  color: rgba(255, 255, 255, 0.6) !important;
-}
-.dark-table .ant-pagination .ant-pagination-item-active {
-  background: rgba(6, 182, 212, 0.15) !important;
-  border-color: rgba(6, 182, 212, 0.3) !important;
-}
-.dark-table .ant-pagination .ant-pagination-item-active a {
-  color: #06b6d4 !important;
-}
-.dark-table .ant-empty-description {
-  color: rgba(255, 255, 255, 0.4) !important;
+.neon-glow {
+  animation: neon-pulse 3s ease-in-out infinite;
 }

@@ -1,198 +1,208 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Button, Layout, Typography, Space, Tag, Divider } from "antd";
+import { motion } from "framer-motion";
 import {
-  ArrowLeftOutlined,
-  CalendarOutlined,
-  UserOutlined,
-  ClockCircleOutlined,
-} from "@ant-design/icons";
-
-const { Header, Content } = Layout;
-const { Title, Paragraph, Text } = Typography;
+  ArrowLeftIcon,
+  UserIcon,
+  CalendarIcon,
+  ClockIcon,
+} from "@heroicons/react/24/outline";
 
 export default function BlogPost() {
   const router = useRouter();
 
   return (
-    <Layout className="min-h-screen bg-white">
-      <Header className="bg-slate-900 px-8">
-        <div className="max-w-4xl mx-auto flex items-center justify-between h-full">
-          <Button
-            type="text"
-            icon={<ArrowLeftOutlined />}
-            onClick={() => router.push("/blog")}
-            className="text-white hover:text-blue-400"
-          >
-            Back to Blog
-          </Button>
-        </div>
-      </Header>
+    <div className="min-h-screen bg-[#0a0a0f]">
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-0 left-1/3 w-[600px] h-[600px] bg-cyan-500/3 rounded-full blur-[120px]" />
+      </div>
 
-      <Content className="max-w-4xl mx-auto px-8 py-12">
-        <article>
-          <header className="mb-8">
-            <div className="mb-4">
-              <Space wrap>
-                <Tag color="blue">API Security</Tag>
-                <Tag color="green">Trends</Tag>
-                <Tag color="purple">Enterprise</Tag>
-              </Space>
+      <nav className="relative border-b border-white/5">
+        <div className="max-w-4xl mx-auto px-8 py-4">
+          <button
+            onClick={() => router.push("/blog")}
+            className="text-slate-400 hover:text-white flex items-center gap-2 transition-colors"
+          >
+            <ArrowLeftIcon className="w-4 h-4" />
+            Back to Blog
+          </button>
+        </div>
+      </nav>
+
+      <div className="relative max-w-4xl mx-auto px-8 py-12">
+        <motion.article
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <header className="mb-10">
+            <div className="flex flex-wrap gap-2 mb-5">
+              <span className="px-3 py-1 text-xs font-medium rounded-full bg-blue-500/15 text-blue-400">
+                API Security
+              </span>
+              <span className="px-3 py-1 text-xs font-medium rounded-full bg-emerald-500/15 text-emerald-400">
+                Trends
+              </span>
+              <span className="px-3 py-1 text-xs font-medium rounded-full bg-violet-500/15 text-violet-400">
+                Enterprise
+              </span>
             </div>
 
-            <Title level={1} className="text-4xl font-bold mb-4">
+            <h1 className="text-4xl md:text-5xl font-bold text-white mb-6 leading-tight">
               API Security Trends 2025: What Enterprises Need to Know
-            </Title>
+            </h1>
 
-            <div className="flex items-center space-x-6 text-gray-500 mb-6">
-              <Space>
-                <UserOutlined />
-                <span>GovernAPI Team</span>
-              </Space>
-              <Space>
-                <CalendarOutlined />
-                <span>September 13, 2025</span>
-              </Space>
-              <Space>
-                <ClockCircleOutlined />
-                <span>8 min read</span>
-              </Space>
+            <div className="flex items-center gap-6 text-sm text-slate-500">
+              <span className="flex items-center gap-1.5">
+                <UserIcon className="w-4 h-4" />
+                GovernAPI Team
+              </span>
+              <span className="flex items-center gap-1.5">
+                <CalendarIcon className="w-4 h-4" />
+                September 13, 2025
+              </span>
+              <span className="flex items-center gap-1.5">
+                <ClockIcon className="w-4 h-4" />
+                8 min read
+              </span>
             </div>
           </header>
 
-          <div className="prose prose-lg max-w-none">
-            <Paragraph className="text-xl text-gray-600 mb-8">
+          <div className="prose prose-invert prose-lg max-w-none">
+            <p className="text-xl text-slate-400 mb-10 leading-relaxed">
               The API security landscape is evolving rapidly as enterprises
               adopt API-first architectures. With 91% of organizations
               experiencing API-related security incidents in 2024, understanding
               emerging trends is critical for security leaders planning 2025
               strategies.
-            </Paragraph>
+            </p>
 
-            <Title level={2} className="text-2xl font-semibold mt-8 mb-4">
+            <h2 className="text-2xl font-semibold text-white mt-12 mb-4">
               Key Trends Reshaping API Security
-            </Title>
+            </h2>
 
-            <Title level={3} className="text-xl font-semibold mt-6 mb-3">
+            <h3 className="text-xl font-semibold text-white mt-8 mb-3">
               1. AI-Powered Bot Sophistication
-            </Title>
-            <Paragraph>
+            </h3>
+            <p className="text-slate-400 leading-relaxed">
               Traditional rate limiting is no longer sufficient. Modern bots use
               machine learning to mimic human behavior patterns, making
               detection increasingly difficult. Organizations need behavioral
               analysis and real-time threat intelligence to stay ahead.
-            </Paragraph>
+            </p>
 
-            <Title level={3} className="text-xl font-semibold mt-6 mb-3">
+            <h3 className="text-xl font-semibold text-white mt-8 mb-3">
               2. Shadow API Proliferation
-            </Title>
-            <Paragraph>
+            </h3>
+            <p className="text-slate-400 leading-relaxed">
               The average enterprise now manages 15,000+ APIs, with 67% being
-              "shadow APIs" unknown to security teams. Automated discovery has
+              &quot;shadow APIs&quot; unknown to security teams. Automated discovery has
               become essential as manual inventory management becomes impossible
               at scale.
-            </Paragraph>
+            </p>
 
-            <Title level={3} className="text-xl font-semibold mt-6 mb-3">
+            <h3 className="text-xl font-semibold text-white mt-8 mb-3">
               3. Compliance Automation Mandate
-            </Title>
-            <Paragraph>
+            </h3>
+            <p className="text-slate-400 leading-relaxed">
               With SOC2, GDPR, and PCI-DSS requirements becoming more stringent,
               manual compliance processes are creating significant business
               risk. Organizations spending $500K+ annually on audit preparation
               are seeking automated solutions.
-            </Paragraph>
+            </p>
 
-            <Title level={3} className="text-xl font-semibold mt-6 mb-3">
+            <h3 className="text-xl font-semibold text-white mt-8 mb-3">
               4. Real-Time Protection Requirements
-            </Title>
-            <Paragraph>
+            </h3>
+            <p className="text-slate-400 leading-relaxed">
               Static API testing tools can no longer meet enterprise security
               needs. Organizations require real-time threat detection and
               automatic policy enforcement to prevent breaches before they
               occur.
-            </Paragraph>
+            </p>
 
-            <Title level={3} className="text-xl font-semibold mt-6 mb-3">
+            <h3 className="text-xl font-semibold text-white mt-8 mb-3">
               5. Business Context Integration
-            </Title>
-            <Paragraph>
+            </h3>
+            <p className="text-slate-400 leading-relaxed">
               Security teams are under pressure to demonstrate business value.
               API security platforms must provide executive-level reporting
               showing ROI, risk reduction, and business impact metrics.
-            </Paragraph>
+            </p>
 
-            <Title level={2} className="text-2xl font-semibold mt-8 mb-4">
+            <h2 className="text-2xl font-semibold text-white mt-12 mb-4">
               Predictions for 2025
-            </Title>
-            <ul className="list-disc pl-6 space-y-2">
+            </h2>
+            <ul className="list-disc pl-6 space-y-2 text-slate-400">
               <li>
-                <strong>API-first compliance frameworks</strong> will emerge
+                <strong className="text-white">API-first compliance frameworks</strong> will emerge
                 from major standards bodies
               </li>
               <li>
-                <strong>Zero-trust API architectures</strong> will become
+                <strong className="text-white">Zero-trust API architectures</strong> will become
                 standard for enterprise deployments
               </li>
               <li>
-                <strong>Business-context security platforms</strong> will
+                <strong className="text-white">Business-context security platforms</strong> will
                 replace purely technical solutions
               </li>
               <li>
-                <strong>Automated threat response</strong> will eliminate the
+                <strong className="text-white">Automated threat response</strong> will eliminate the
                 need for manual incident management
               </li>
             </ul>
 
-            <Title level={2} className="text-2xl font-semibold mt-8 mb-4">
+            <h2 className="text-2xl font-semibold text-white mt-12 mb-4">
               Strategic Recommendations
-            </Title>
-            <ol className="list-decimal pl-6 space-y-2">
+            </h2>
+            <ol className="list-decimal pl-6 space-y-2 text-slate-400">
               <li>
-                <strong>Invest in unified platforms</strong> rather than point
+                <strong className="text-white">Invest in unified platforms</strong> rather than point
                 solutions to reduce complexity
               </li>
               <li>
-                <strong>Prioritize automated discovery</strong> to eliminate
+                <strong className="text-white">Prioritize automated discovery</strong> to eliminate
                 shadow API risks
               </li>
               <li>
-                <strong>Implement real-time protection</strong> to prevent
+                <strong className="text-white">Implement real-time protection</strong> to prevent
                 rather than detect breaches
               </li>
               <li>
-                <strong>Demand business context</strong> from security tools for
+                <strong className="text-white">Demand business context</strong> from security tools for
                 executive visibility
               </li>
             </ol>
           </div>
 
-          <Divider className="my-12" />
+          <div className="border-t border-white/10 my-12" />
 
           <div className="text-center">
-            <Title level={3} className="mb-4">
+            <h3 className="text-2xl font-bold text-white mb-4">
               Ready to Future-Proof Your API Security?
-            </Title>
-            <Paragraph className="text-lg text-gray-600 mb-6">
+            </h3>
+            <p className="text-lg text-slate-400 mb-8">
               GovernAPI provides the unified platform and real-time protection
               enterprises need for 2025 and beyond.
-            </Paragraph>
-            <Space size="large">
-              <Button size="large" onClick={() => router.push("/dashboard")}>
+            </p>
+            <div className="flex gap-4 justify-center">
+              <button
+                onClick={() => router.push("/dashboard")}
+                className="px-8 py-3.5 bg-white/5 border border-white/10 text-white rounded-xl font-semibold hover:bg-white/10 transition-all"
+              >
                 View Live Demo
-              </Button>
-              <Button
-                type="primary"
-                size="large"
+              </button>
+              <button
                 onClick={() => router.push("/login")}
+                className="px-8 py-3.5 bg-gradient-to-r from-cyan-500 to-violet-500 text-white rounded-xl font-semibold hover:shadow-[0_0_20px_rgba(6,182,212,0.4)] transition-all hover:scale-[1.02]"
               >
                 Start Free Trial
-              </Button>
-            </Space>
+              </button>
+            </div>
           </div>
-        </article>
-      </Content>
-    </Layout>
+        </motion.article>
+      </div>
+    </div>
   );
 }

@@ -1,5 +1,6 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import bcrypt from "bcryptjs";
 import { database } from "../../infrastructure/database";
 
 export const authOptions: NextAuthOptions = {
@@ -20,17 +21,27 @@ export const authOptions: NextAuthOptions = {
           [credentials.email],
         );
 
-        if (user && user.password === credentials.password) {
-          return {
-            id: user.id,
-            email: user.email,
-            name: `${user.first_name} ${user.last_name}`,
-            tenantId: user.company_id,
-            role: "user",
-            orgId: user.company_id,
-          };
+        if (!user) {
+          return null;
         }
-        return null;
+
+        const isValid = await bcrypt.compare(
+          credentials.password,
+          user.password_hash,
+        );
+
+        if (!isValid) {
+          return null;
+        }
+
+        return {
+          id: user.id,
+          email: user.email,
+          name: `${user.first_name} ${user.last_name}`,
+          tenantId: user.company_id,
+          role: "user",
+          orgId: user.company_id,
+        };
       },
     }),
   ],

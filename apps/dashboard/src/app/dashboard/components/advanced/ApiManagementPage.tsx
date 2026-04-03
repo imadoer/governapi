@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   PlusIcon,
@@ -14,8 +14,8 @@ import {
   BeakerIcon,
   ClipboardDocumentIcon,
   CheckIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
-import { Modal, Input, Select, message, Spin, Tabs, Switch, Tag } from "antd";
 
 interface PlatformApiKey {
   id: string;
@@ -43,6 +43,62 @@ interface ApiEndpoint {
   vulnerability_count: number;
 }
 
+// Toast notification component
+function Toast({
+  message,
+  type,
+  onClose,
+}: {
+  message: string;
+  type: "success" | "error";
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 3000);
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 50, scale: 0.9 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 20, scale: 0.9 }}
+      className={`fixed bottom-6 right-6 z-[100] px-5 py-3 rounded-xl text-sm font-medium shadow-2xl backdrop-blur-xl border ${
+        type === "success"
+          ? "bg-emerald-500/20 border-emerald-500/30 text-emerald-300"
+          : "bg-red-500/20 border-red-500/30 text-red-300"
+      }`}
+    >
+      {message}
+    </motion.div>
+  );
+}
+
+// Method tag colors
+function MethodTag({ method }: { method: string }) {
+  const colors: Record<string, string> = {
+    GET: "bg-blue-500/15 text-blue-400",
+    POST: "bg-emerald-500/15 text-emerald-400",
+    PUT: "bg-amber-500/15 text-amber-400",
+    PATCH: "bg-amber-500/15 text-amber-400",
+    DELETE: "bg-red-500/15 text-red-400",
+  };
+  const cls = colors[method] || "bg-cyan-500/15 text-cyan-400";
+  return (
+    <span className={`px-2.5 py-0.5 text-xs font-medium rounded-full ${cls}`}>
+      {method}
+    </span>
+  );
+}
+
+const PERMISSION_OPTIONS = [
+  { value: "read", label: "Read" },
+  { value: "write", label: "Write" },
+  { value: "scan", label: "Scan" },
+  { value: "monitor", label: "Monitor" },
+  { value: "admin", label: "Admin" },
+];
+
 export function ApiManagementPage({ companyId }: { companyId: string }) {
   // Platform API Keys state
   const [platformKeys, setPlatformKeys] = useState<PlatformApiKey[]>([]);
@@ -65,6 +121,22 @@ export function ApiManagementPage({ companyId }: { companyId: string }) {
   const [apiEndpoints, setApiEndpoints] = useState<ApiEndpoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  // Tabs state
+  const [activeTab, setActiveTab] = useState("platform-keys");
+
+  // Toast state
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "success" | "error";
+  } | null>(null);
+
+  const showToast = useCallback(
+    (message: string, type: "success" | "error") => {
+      setToast({ message, type });
+    },
+    [],
+  );
 
   const fetchPlatformKeys = async () => {
     try {
@@ -105,7 +177,7 @@ export function ApiManagementPage({ companyId }: { companyId: string }) {
 
   const handleCreatePlatformKey = async () => {
     if (!newKeyName) {
-      message.error("Please enter a key name");
+      showToast("Please enter a key name", "error");
       return;
     }
 
@@ -135,13 +207,13 @@ export function ApiManagementPage({ companyId }: { companyId: string }) {
 
       if (data.success) {
         setGeneratedKey(data.apiKey.key);
-        message.success("API key created successfully!");
+        showToast("API key created successfully!", "success");
         fetchPlatformKeys();
       } else {
-        message.error(data.error || "Failed to create API key");
+        showToast(data.error || "Failed to create API key", "error");
       }
     } catch (error) {
-      message.error("Failed to create API key");
+      showToast("Failed to create API key", "error");
     } finally {
       setSubmitting(false);
     }
@@ -149,7 +221,7 @@ export function ApiManagementPage({ companyId }: { companyId: string }) {
 
   const handleDiscoverApis = async () => {
     if (!discoverDomain) {
-      message.error("Please enter a domain");
+      showToast("Please enter a domain", "error");
       return;
     }
 
@@ -165,14 +237,15 @@ export function ApiManagementPage({ companyId }: { companyId: string }) {
 
       if (data.success) {
         setDiscoveredApis(data.discovery.discoveredEndpoints || []);
-        message.success(
+        showToast(
           `Discovered ${data.discovery.discoveredEndpoints?.length || 0} APIs!`,
+          "success",
         );
       } else {
-        message.error(data.error || "Discovery failed");
+        showToast(data.error || "Discovery failed", "error");
       }
     } catch (error) {
-      message.error("Failed to discover APIs");
+      showToast("Failed to discover APIs", "error");
     } finally {
       setDiscovering(false);
     }
@@ -181,7 +254,7 @@ export function ApiManagementPage({ companyId }: { companyId: string }) {
   const copyToClipboard = (text: string, keyId: string) => {
     navigator.clipboard.writeText(text);
     setCopiedKeyId(keyId);
-    message.success("Copied to clipboard!");
+    showToast("Copied to clipboard!", "success");
     setTimeout(() => setCopiedKeyId(null), 2000);
   };
 
@@ -194,13 +267,37 @@ export function ApiManagementPage({ companyId }: { companyId: string }) {
     setGeneratedKey(null);
   };
 
+  const togglePermission = (perm: string) => {
+    setNewKeyPermissions((prev) =>
+      prev.includes(perm) ? prev.filter((p) => p !== perm) : [...prev, perm],
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <Spin size="large" />
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400" />
       </div>
     );
   }
+
+  const tabs = [
+    {
+      key: "platform-keys",
+      icon: <KeyIcon className="w-5 h-5" />,
+      label: "Your GovernAPI Keys",
+    },
+    {
+      key: "api-discovery",
+      icon: <MagnifyingGlassIcon className="w-5 h-5" />,
+      label: "Discover APIs",
+    },
+    {
+      key: "monitored-apis",
+      icon: <ShieldCheckIcon className="w-5 h-5" />,
+      label: `Monitored APIs (${apiEndpoints.length})`,
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -211,387 +308,463 @@ export function ApiManagementPage({ companyId }: { companyId: string }) {
         </p>
       </div>
 
-      <Tabs
-        defaultActiveKey="platform-keys"
-        items={[
-          {
-            key: "platform-keys",
-            label: (
-              <div className="flex items-center gap-2">
-                <KeyIcon className="w-5 h-5" />
-                <span>Your GovernAPI Keys</span>
-              </div>
-            ),
-            children: (
-              <div className="space-y-6">
-                {/* Platform Keys Header */}
-                <div className="flex items-center justify-between">
-                  <p className="text-slate-400">
-                    API keys to authenticate with GovernAPI
-                  </p>
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => setShowNewKeyModal(true)}
-                    className="px-6 py-3 bg-cyan-500 hover:bg-cyan-600 text-white rounded-xl font-semibold flex items-center gap-2"
-                  >
-                    <PlusIcon className="w-5 h-5" />
-                    Generate New Key
-                  </motion.button>
-                </div>
+      {/* Custom Tabs */}
+      <div>
+        <div className="flex gap-1 p-1 bg-slate-800/50 rounded-xl border border-white/5 mb-6">
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex items-center gap-2 px-5 py-3 rounded-lg text-sm font-medium transition-all ${
+                activeTab === tab.key
+                  ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/30"
+                  : "text-slate-400 hover:text-white hover:bg-slate-700/50"
+              }`}
+            >
+              {tab.icon}
+              <span>{tab.label}</span>
+            </button>
+          ))}
+        </div>
 
-                {/* Platform Keys List */}
-                <div className="space-y-3">
-                  {platformKeys.map((key, index) => (
+        {/* Platform Keys Tab */}
+        {activeTab === "platform-keys" && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-6"
+          >
+            {/* Platform Keys Header */}
+            <div className="flex items-center justify-between">
+              <p className="text-slate-400">
+                API keys to authenticate with GovernAPI
+              </p>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setShowNewKeyModal(true)}
+                className="px-6 py-3 bg-cyan-500 hover:bg-cyan-600 text-white rounded-xl font-semibold flex items-center gap-2"
+              >
+                <PlusIcon className="w-5 h-5" />
+                Generate New Key
+              </motion.button>
+            </div>
+
+            {/* Platform Keys List */}
+            <div className="space-y-3">
+              {platformKeys.map((key, index) => (
+                <motion.div
+                  key={key.id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                  className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 hover:border-cyan-500/50 transition-all"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="text-lg font-semibold text-white">
+                          {key.name}
+                        </h3>
+                        {key.isActive ? (
+                          <span className="px-2.5 py-0.5 text-xs font-medium rounded-full bg-emerald-500/15 text-emerald-400">
+                            Active
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-0.5 text-xs font-medium rounded-full bg-red-500/15 text-red-400">
+                            Inactive
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 mb-3">
+                        <code className="px-3 py-1 bg-slate-900 rounded text-cyan-400 font-mono">
+                          {key.keyPrefix}••••••••••••••••
+                        </code>
+                        <button
+                          onClick={() =>
+                            copyToClipboard(key.keyPrefix, key.id)
+                          }
+                          className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+                        >
+                          {copiedKeyId === key.id ? (
+                            <CheckIcon className="w-4 h-4 text-green-500" />
+                          ) : (
+                            <ClipboardDocumentIcon className="w-4 h-4 text-slate-400" />
+                          )}
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-4 text-sm text-slate-400">
+                        <span>
+                          Permissions: {key.permissions.join(", ")}
+                        </span>
+                        <span>•</span>
+                        <span>Rate Limit: {key.rateLimit}/hr</span>
+                        <span>•</span>
+                        <span>Used: {key.usageCount} times</span>
+                        {key.lastUsed && (
+                          <>
+                            <span>•</span>
+                            <span>
+                              Last used:{" "}
+                              {new Date(key.lastUsed).toLocaleDateString()}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+
+              {platformKeys.length === 0 && (
+                <div className="text-center py-16 bg-slate-800/30 rounded-2xl">
+                  <KeyIcon className="w-16 h-16 text-slate-600 mx-auto mb-4" />
+                  <p className="text-slate-400">
+                    No API keys yet. Generate your first key to get started.
+                  </p>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+
+        {/* API Discovery Tab */}
+        {activeTab === "api-discovery" && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-6"
+          >
+            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
+              <h3 className="text-lg font-bold text-white mb-4">
+                Scan Domain for APIs
+              </h3>
+              <p className="text-slate-400 mb-6">
+                Enter a domain to automatically discover API endpoints via
+                OpenAPI/Swagger documentation
+              </p>
+
+              <div className="flex gap-4">
+                <div className="flex-1 relative">
+                  <GlobeAltIcon className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="api.example.com"
+                    value={discoverDomain}
+                    onChange={(e) => setDiscoverDomain(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleDiscoverApis();
+                    }}
+                    className="w-full pl-12 pr-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-colors"
+                  />
+                </div>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleDiscoverApis}
+                  disabled={discovering}
+                  className="px-8 py-3 bg-cyan-500 hover:bg-cyan-600 text-white rounded-xl font-semibold flex items-center gap-2 disabled:opacity-50"
+                >
+                  {discovering ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />{" "}
+                      Scanning...
+                    </>
+                  ) : (
+                    <>
+                      <MagnifyingGlassIcon className="w-5 h-5" /> Discover
+                    </>
+                  )}
+                </motion.button>
+              </div>
+            </div>
+
+            {discoveredApis.length > 0 && (
+              <div>
+                <h3 className="text-xl font-bold text-white mb-4">
+                  Discovered APIs ({discoveredApis.length})
+                </h3>
+                <div className="space-y-2">
+                  {discoveredApis.map((api, index) => (
                     <motion.div
-                      key={key.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
+                      key={index}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.05 }}
-                      className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 hover:border-cyan-500/50 transition-all"
+                      className="bg-slate-800/50 border border-slate-700 rounded-lg p-4"
                     >
                       <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <h3 className="text-lg font-semibold text-white">
-                              {key.name}
-                            </h3>
-                            {key.isActive ? (
-                              <Tag color="green">Active</Tag>
-                            ) : (
-                              <Tag color="red">Inactive</Tag>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-2 mb-3">
-                            <code className="px-3 py-1 bg-slate-900 rounded text-cyan-400 font-mono">
-                              {key.keyPrefix}••••••••••••••••
-                            </code>
-                            <button
-                              onClick={() =>
-                                copyToClipboard(key.keyPrefix, key.id)
-                              }
-                              className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
-                            >
-                              {copiedKeyId === key.id ? (
-                                <CheckIcon className="w-4 h-4 text-green-500" />
-                              ) : (
-                                <ClipboardDocumentIcon className="w-4 h-4 text-slate-400" />
-                              )}
-                            </button>
-                          </div>
-
-                          <div className="flex items-center gap-4 text-sm text-slate-400">
-                            <span>
-                              Permissions: {key.permissions.join(", ")}
+                        <div>
+                          <div className="flex items-center gap-3 mb-1">
+                            <MethodTag method={api.method} />
+                            <span className="text-white font-mono">
+                              {api.path}
                             </span>
-                            <span>•</span>
-                            <span>Rate Limit: {key.rateLimit}/hr</span>
-                            <span>•</span>
-                            <span>Used: {key.usageCount} times</span>
-                            {key.lastUsed && (
-                              <>
-                                <span>•</span>
-                                <span>
-                                  Last used:{" "}
-                                  {new Date(key.lastUsed).toLocaleDateString()}
-                                </span>
-                              </>
-                            )}
                           </div>
+                          {api.description && (
+                            <p className="text-sm text-slate-400">
+                              {api.description}
+                            </p>
+                          )}
                         </div>
+                        <motion.button
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          className="px-4 py-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30"
+                        >
+                          Add to Monitor
+                        </motion.button>
                       </div>
                     </motion.div>
                   ))}
-
-                  {platformKeys.length === 0 && (
-                    <div className="text-center py-16 bg-slate-800/30 rounded-2xl">
-                      <KeyIcon className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-                      <p className="text-slate-400">
-                        No API keys yet. Generate your first key to get started.
-                      </p>
-                    </div>
-                  )}
                 </div>
               </div>
-            ),
-          },
-          {
-            key: "api-discovery",
-            label: (
-              <div className="flex items-center gap-2">
-                <MagnifyingGlassIcon className="w-5 h-5" />
-                <span>Discover APIs</span>
-              </div>
-            ),
-            children: (
-              <div className="space-y-6">
-                <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
-                  <h3 className="text-lg font-bold text-white mb-4">
-                    Scan Domain for APIs
-                  </h3>
-                  <p className="text-slate-400 mb-6">
-                    Enter a domain to automatically discover API endpoints via
-                    OpenAPI/Swagger documentation
-                  </p>
+            )}
+          </motion.div>
+        )}
 
-                  <div className="flex gap-4">
-                    <Input
-                      size="large"
-                      prefix={
-                        <GlobeAltIcon className="w-5 h-5 text-slate-400" />
-                      }
-                      placeholder="api.example.com"
-                      value={discoverDomain}
-                      onChange={(e) => setDiscoverDomain(e.target.value)}
-                      onPressEnter={handleDiscoverApis}
-                    />
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={handleDiscoverApis}
-                      disabled={discovering}
-                      className="px-8 py-3 bg-cyan-500 hover:bg-cyan-600 text-white rounded-xl font-semibold flex items-center gap-2 disabled:opacity-50"
-                    >
-                      {discovering ? (
+        {/* Monitored APIs Tab */}
+        {activeTab === "monitored-apis" && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-3"
+          >
+            {apiEndpoints.map((endpoint, index) => (
+              <motion.div
+                key={endpoint.id}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: index * 0.05 }}
+                className="bg-slate-800/50 border border-slate-700 rounded-xl p-5"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <MethodTag method={endpoint.method} />
+                      <span className="text-white font-mono">
+                        {endpoint.path}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4 text-sm text-slate-400">
+                      <span>Scans: {endpoint.scan_count}</span>
+                      {endpoint.avg_security_score && (
                         <>
-                          <Spin size="small" /> Scanning...
-                        </>
-                      ) : (
-                        <>
-                          <MagnifyingGlassIcon className="w-5 h-5" /> Discover
+                          <span>•</span>
+                          <span>
+                            Score: {Math.round(endpoint.avg_security_score)}
+                          </span>
                         </>
                       )}
-                    </motion.button>
+                      {endpoint.vulnerability_count > 0 && (
+                        <>
+                          <span>•</span>
+                          <span className="text-red-400">
+                            {endpoint.vulnerability_count} vulns
+                          </span>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
+              </motion.div>
+            ))}
 
-                {discoveredApis.length > 0 && (
-                  <div>
-                    <h3 className="text-xl font-bold text-white mb-4">
-                      Discovered APIs ({discoveredApis.length})
-                    </h3>
-                    <div className="space-y-2">
-                      {discoveredApis.map((api, index) => (
-                        <motion.div
-                          key={index}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: index * 0.05 }}
-                          className="bg-slate-800/50 border border-slate-700 rounded-lg p-4"
-                        >
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <div className="flex items-center gap-3 mb-1">
-                                <Tag
-                                  color={
-                                    api.method === "GET"
-                                      ? "blue"
-                                      : api.method === "POST"
-                                        ? "green"
-                                        : "orange"
-                                  }
-                                >
-                                  {api.method}
-                                </Tag>
-                                <span className="text-white font-mono">
-                                  {api.path}
-                                </span>
-                              </div>
-                              {api.description && (
-                                <p className="text-sm text-slate-400">
-                                  {api.description}
-                                </p>
-                              )}
-                            </div>
-                            <motion.button
-                              whileHover={{ scale: 1.05 }}
-                              whileTap={{ scale: 0.95 }}
-                              className="px-4 py-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30"
-                            >
-                              Add to Monitor
-                            </motion.button>
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+            {apiEndpoints.length === 0 && (
+              <div className="text-center py-16 bg-slate-800/30 rounded-2xl">
+                <ShieldCheckIcon className="w-16 h-16 text-slate-600 mx-auto mb-4" />
+                <p className="text-slate-400">
+                  No APIs being monitored yet. Use API Discovery to find
+                  APIs to monitor.
+                </p>
               </div>
-            ),
-          },
-          {
-            key: "monitored-apis",
-            label: (
-              <div className="flex items-center gap-2">
-                <ShieldCheckIcon className="w-5 h-5" />
-                <span>Monitored APIs ({apiEndpoints.length})</span>
-              </div>
-            ),
-            children: (
-              <div className="space-y-3">
-                {apiEndpoints.map((endpoint, index) => (
-                  <motion.div
-                    key={endpoint.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    className="bg-slate-800/50 border border-slate-700 rounded-xl p-5"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <Tag
-                            color={
-                              endpoint.method === "GET"
-                                ? "blue"
-                                : endpoint.method === "POST"
-                                  ? "green"
-                                  : "orange"
-                            }
-                          >
-                            {endpoint.method}
-                          </Tag>
-                          <span className="text-white font-mono">
-                            {endpoint.path}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-4 text-sm text-slate-400">
-                          <span>Scans: {endpoint.scan_count}</span>
-                          {endpoint.avg_security_score && (
-                            <>
-                              <span>•</span>
-                              <span>
-                                Score: {Math.round(endpoint.avg_security_score)}
-                              </span>
-                            </>
-                          )}
-                          {endpoint.vulnerability_count > 0 && (
-                            <>
-                              <span>•</span>
-                              <span className="text-red-400">
-                                {endpoint.vulnerability_count} vulns
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
-
-                {apiEndpoints.length === 0 && (
-                  <div className="text-center py-16 bg-slate-800/30 rounded-2xl">
-                    <ShieldCheckIcon className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-                    <p className="text-slate-400">
-                      No APIs being monitored yet. Use API Discovery to find
-                      APIs to monitor.
-                    </p>
-                  </div>
-                )}
-              </div>
-            ),
-          },
-        ]}
-      />
+            )}
+          </motion.div>
+        )}
+      </div>
 
       {/* Create Platform Key Modal */}
-      <Modal
-        title={
-          generatedKey ? "🎉 API Key Created!" : "Generate New Platform API Key"
-        }
-        open={showNewKeyModal}
-        onOk={generatedKey ? closeKeyModal : handleCreatePlatformKey}
-        onCancel={closeKeyModal}
-        okText={generatedKey ? "Done" : "Generate Key"}
-        confirmLoading={submitting}
-        width={600}
-      >
-        {generatedKey ? (
-          <div className="space-y-4 mt-4">
-            <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
-              <p className="text-yellow-600 font-semibold mb-2">
-                ⚠️ Save this key securely!
-              </p>
-              <p className="text-sm text-yellow-600">
-                This is the only time you'll see the full key. Store it in a
-                secure location.
-              </p>
-            </div>
+      <AnimatePresence>
+        {showNewKeyModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          >
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={closeKeyModal}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
 
-            <div className="relative">
-              <Input.TextArea
-                value={generatedKey}
-                readOnly
-                rows={3}
-                className="font-mono"
-              />
-              <button
-                onClick={() => copyToClipboard(generatedKey, "generated")}
-                className="absolute top-2 right-2 p-2 bg-slate-700 hover:bg-slate-600 rounded-lg"
-              >
-                {copiedKeyId === "generated" ? (
-                  <CheckIcon className="w-4 h-4 text-green-500" />
+            {/* Modal Card */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: "spring", duration: 0.5 }}
+              className="relative w-full max-w-[600px] bg-slate-800/90 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl"
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between p-6 border-b border-white/10">
+                <h2 className="text-xl font-bold text-white">
+                  {generatedKey
+                    ? "API Key Created!"
+                    : "Generate New Platform API Key"}
+                </h2>
+                <button
+                  onClick={closeKeyModal}
+                  className="p-2 hover:bg-slate-700/50 rounded-lg transition-colors"
+                >
+                  <XMarkIcon className="w-5 h-5 text-slate-400" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-6">
+                {generatedKey ? (
+                  <div className="space-y-4">
+                    <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                      <p className="text-yellow-400 font-semibold mb-2">
+                        Save this key securely!
+                      </p>
+                      <p className="text-sm text-yellow-400/80">
+                        This is the only time you&apos;ll see the full key.
+                        Store it in a secure location.
+                      </p>
+                    </div>
+
+                    <div className="relative">
+                      <textarea
+                        value={generatedKey}
+                        readOnly
+                        rows={3}
+                        className="w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl text-cyan-400 font-mono placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-colors resize-none"
+                      />
+                      <button
+                        onClick={() =>
+                          copyToClipboard(generatedKey, "generated")
+                        }
+                        className="absolute top-2 right-2 p-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
+                      >
+                        {copiedKeyId === "generated" ? (
+                          <CheckIcon className="w-4 h-4 text-green-500" />
+                        ) : (
+                          <ClipboardDocumentIcon className="w-4 h-4 text-white" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
                 ) : (
-                  <ClipboardDocumentIcon className="w-4 h-4 text-white" />
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">
+                        Key Name
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g., Production API Key"
+                        value={newKeyName}
+                        onChange={(e) => setNewKeyName(e.target.value)}
+                        className="w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-colors"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">
+                        Permissions
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {PERMISSION_OPTIONS.map((opt) => (
+                          <button
+                            key={opt.value}
+                            onClick={() => togglePermission(opt.value)}
+                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                              newKeyPermissions.includes(opt.value)
+                                ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/40"
+                                : "bg-slate-900/50 text-slate-400 border border-white/10 hover:border-white/20"
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">
+                        Rate Limit (requests/hour)
+                      </label>
+                      <input
+                        type="number"
+                        value={newKeyRateLimit}
+                        onChange={(e) =>
+                          setNewKeyRateLimit(parseInt(e.target.value))
+                        }
+                        className="w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-colors"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">
+                        IP Whitelist (optional, comma-separated)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="192.168.1.0/24, 10.0.0.1"
+                        value={newKeyIpWhitelist}
+                        onChange={(e) => setNewKeyIpWhitelist(e.target.value)}
+                        className="w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-colors"
+                      />
+                    </div>
+                  </div>
                 )}
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-4 mt-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Key Name</label>
-              <Input
-                placeholder="e.g., Production API Key"
-                value={newKeyName}
-                onChange={(e) => setNewKeyName(e.target.value)}
-              />
-            </div>
+              </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-2">
-                Permissions
-              </label>
-              <Select
-                mode="multiple"
-                value={newKeyPermissions}
-                onChange={setNewKeyPermissions}
-                className="w-full"
-                options={[
-                  { value: "read", label: "Read" },
-                  { value: "write", label: "Write" },
-                  { value: "scan", label: "Scan" },
-                  { value: "monitor", label: "Monitor" },
-                  { value: "admin", label: "Admin" },
-                ]}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">
-                Rate Limit (requests/hour)
-              </label>
-              <Input
-                type="number"
-                value={newKeyRateLimit}
-                onChange={(e) => setNewKeyRateLimit(parseInt(e.target.value))}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">
-                IP Whitelist (optional, comma-separated)
-              </label>
-              <Input
-                placeholder="192.168.1.0/24, 10.0.0.1"
-                value={newKeyIpWhitelist}
-                onChange={(e) => setNewKeyIpWhitelist(e.target.value)}
-              />
-            </div>
-          </div>
+              {/* Modal Footer */}
+              <div className="flex items-center justify-end gap-3 p-6 border-t border-white/10">
+                <button
+                  onClick={closeKeyModal}
+                  className="px-5 py-2.5 text-sm font-medium text-slate-400 hover:text-white bg-slate-700/50 hover:bg-slate-700 border border-white/10 rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={
+                    generatedKey ? closeKeyModal : handleCreatePlatformKey
+                  }
+                  disabled={submitting}
+                  className="px-5 py-2.5 text-sm font-medium text-white bg-cyan-500 hover:bg-cyan-600 rounded-xl transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {submitting && (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                  )}
+                  {generatedKey ? "Done" : "Generate Key"}
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
-      </Modal>
+      </AnimatePresence>
+
+      {/* Toast Notifications */}
+      <AnimatePresence>
+        {toast && (
+          <Toast
+            message={toast.message}
+            type={toast.type}
+            onClose={() => setToast(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

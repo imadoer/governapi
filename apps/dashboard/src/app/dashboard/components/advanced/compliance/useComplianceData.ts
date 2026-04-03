@@ -1,5 +1,4 @@
 import { useState, useCallback, useEffect } from "react";
-import { message } from "antd";
 import {
   Framework, Control, Evidence, Attestation, RemediationTask,
   Vendor, Violation, AuditLogEntry, Policy, DashboardData, AuditReadiness
@@ -8,6 +7,7 @@ import {
 export function useComplianceData(tenantId: string) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [toastMessage, setToastMessage] = useState<{ type: "success" | "error" | "info" | "loading"; text: string } | null>(null);
 
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [frameworks, setFrameworks] = useState<Framework[]>([]);
@@ -26,6 +26,13 @@ export function useComplianceData(tenantId: string) {
   const [auditReadiness, setAuditReadiness] = useState<AuditReadiness[]>([]);
 
   const headers = { "x-tenant-id": tenantId };
+
+  const showToast = (type: "success" | "error" | "info" | "loading", text: string) => {
+    setToastMessage({ type, text });
+    if (type !== "loading") {
+      setTimeout(() => setToastMessage(null), 3000);
+    }
+  };
 
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -180,7 +187,7 @@ export function useComplianceData(tenantId: string) {
     setRefreshing(true);
     await fetchAllData();
     setRefreshing(false);
-    message.success("Data refreshed");
+    showToast("success", "Data refreshed");
   };
 
   // Actions
@@ -192,11 +199,11 @@ export function useComplianceData(tenantId: string) {
     });
     const data = await res.json();
     if (data.success) {
-      message.success("Attestation submitted successfully");
+      showToast("success", "Attestation submitted successfully");
       fetchAttestations();
       fetchDashboardData();
     } else {
-      message.error(data.error || "Failed to submit attestation");
+      showToast("error", data.error || "Failed to submit attestation");
     }
     return data;
   };
@@ -209,10 +216,10 @@ export function useComplianceData(tenantId: string) {
     });
     const data = await res.json();
     if (data.success) {
-      message.success("Remediation task created");
+      showToast("success", "Remediation task created");
       fetchRemediation({ status: "all", priority: "all" });
     } else {
-      message.error(data.error || "Failed to create task");
+      showToast("error", data.error || "Failed to create task");
     }
     return data;
   };
@@ -225,7 +232,7 @@ export function useComplianceData(tenantId: string) {
     });
     const data = await res.json();
     if (data.success) {
-      message.success(`Task ${status}`);
+      showToast("success", `Task ${status}`);
       fetchRemediation({ status: "all", priority: "all" });
     }
     return data;
@@ -239,10 +246,10 @@ export function useComplianceData(tenantId: string) {
     });
     const data = await res.json();
     if (data.success) {
-      message.success("Vendor added successfully");
+      showToast("success", "Vendor added successfully");
       fetchVendors();
     } else {
-      message.error(data.error || "Failed to add vendor");
+      showToast("error", data.error || "Failed to add vendor");
     }
     return data;
   };
@@ -255,10 +262,10 @@ export function useComplianceData(tenantId: string) {
     });
     const data = await res.json();
     if (data.success) {
-      message.success("Evidence uploaded successfully");
+      showToast("success", "Evidence uploaded successfully");
       if (values.controlId) fetchControlEvidence(values.controlId);
     } else {
-      message.error(data.error || "Failed to upload evidence");
+      showToast("error", data.error || "Failed to upload evidence");
     }
     return data;
   };
@@ -271,10 +278,10 @@ export function useComplianceData(tenantId: string) {
     });
     const data = await res.json();
     if (data.success) {
-      message.success("Policy created successfully");
+      showToast("success", "Policy created successfully");
       fetchPolicies();
     } else {
-      message.error(data.error || "Failed to create policy");
+      showToast("error", data.error || "Failed to create policy");
     }
     return data;
   };
@@ -287,7 +294,7 @@ export function useComplianceData(tenantId: string) {
     });
     const data = await res.json();
     if (data.success) {
-      message.success("Violation resolved");
+      showToast("success", "Violation resolved");
       fetchViolations({ status: "all", severity: "all" });
       fetchDashboardData();
     }
@@ -295,8 +302,7 @@ export function useComplianceData(tenantId: string) {
   };
 
   const generateReport = async (reportType: string, format: string = "pdf") => {
-    const key = "report-generation";
-    message.loading({ content: `Generating ${reportType} report...`, key, duration: 0 });
+    showToast("loading", `Generating ${reportType} report...`);
     try {
       const res = await fetch(`/api/compliance/reports/generate?type=${reportType}&format=${format}`, { headers });
       if (!res.ok) throw new Error("Failed to generate report");
@@ -322,9 +328,9 @@ export function useComplianceData(tenantId: string) {
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
       }
-      message.success({ content: "Report generated successfully!", key });
+      showToast("success", "Report generated successfully!");
     } catch (error) {
-      message.error({ content: "Failed to generate report", key });
+      showToast("error", "Failed to generate report");
     }
   };
 
@@ -333,7 +339,7 @@ export function useComplianceData(tenantId: string) {
   }, [fetchAllData]);
 
   return {
-    loading, refreshing, handleRefresh,
+    loading, refreshing, handleRefresh, toastMessage,
     dashboardData, frameworks, controls, controlEvidence, policies,
     attestations, attestationStats, remediationTasks, remediationStats,
     vendors, vendorStats, violations, violationStats, auditLogs, auditReadiness,

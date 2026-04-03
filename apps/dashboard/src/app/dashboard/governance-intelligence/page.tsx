@@ -13,7 +13,6 @@ import {
   ExclamationTriangleIcon,
   ArrowLeftIcon,
 } from "@heroicons/react/24/outline";
-import { Spin } from "antd";
 import Link from "next/link";
 import {
   BarChart,
@@ -115,7 +114,7 @@ export default function GovernanceIntelligencePage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <Spin size="large" />
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400" />
       </div>
     );
   }

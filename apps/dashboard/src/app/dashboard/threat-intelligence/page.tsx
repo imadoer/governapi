@@ -13,15 +13,11 @@ import {
   ExclamationTriangleIcon,
   BoltIcon,
   ClockIcon,
-  EyeIcon,
   XCircleIcon,
   CheckCircleIcon,
   ShieldCheckIcon,
 } from "@heroicons/react/24/outline";
-import { Select, Tag, Spin, Progress, Tabs, Empty, Badge, Switch, Tooltip, message, Button } from "antd";
 import {
-  LineChart,
-  Line,
   BarChart,
   Bar,
   XAxis,
@@ -32,14 +28,11 @@ import {
   PieChart,
   Pie,
   Cell,
-  AreaChart,
-  Area,
   RadarChart,
   PolarGrid,
   PolarAngleAxis,
   PolarRadiusAxis,
   Radar,
-  ComposedChart,
 } from "recharts";
 
 const fetcher = (url: string, tenantId: string) =>
@@ -112,11 +105,43 @@ interface ThreatIntelligenceData {
   };
 }
 
+function SeverityBadge({ severity }: { severity: string }) {
+  const colors: Record<string, string> = {
+    CRITICAL: "bg-red-500/15 text-red-400 border-red-500/30",
+    HIGH: "bg-orange-500/15 text-orange-400 border-orange-500/30",
+    MEDIUM: "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
+    LOW: "bg-green-500/15 text-green-400 border-green-500/30",
+  };
+  const cls = colors[severity.toUpperCase()] || "bg-slate-500/15 text-slate-400 border-slate-500/30";
+  return (
+    <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full border ${cls}`}>
+      {severity}
+    </span>
+  );
+}
+
+function TagPill({ children, color = "cyan" }: { children: React.ReactNode; color?: string }) {
+  const colorMap: Record<string, string> = {
+    cyan: "bg-cyan-500/15 text-cyan-400",
+    red: "bg-red-500/15 text-red-400",
+    blue: "bg-blue-500/15 text-blue-400",
+    green: "bg-green-500/15 text-green-400",
+    slate: "bg-slate-500/15 text-slate-400",
+  };
+  return (
+    <span className={`px-2.5 py-0.5 text-xs font-medium rounded-full ${colorMap[color] || colorMap.cyan}`}>
+      {children}
+    </span>
+  );
+}
+
 export default function ThreatIntelligencePage() {
   const [timeframe, setTimeframe] = useState("24h");
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [activeTab, setActiveTab] = useState("live-threats");
   const [blockingIPs, setBlockingIPs] = useState<Set<string>>(new Set());
   const [blockedIPs, setBlockedIPs] = useState<Set<string>>(new Set());
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   const tenantId = "1";
 
@@ -126,9 +151,14 @@ export default function ThreatIntelligencePage() {
     { refreshInterval: autoRefresh ? 30000 : 0 }
   );
 
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(null), 3000);
+  };
+
   const handleToggleBlock = async (ip: string, currentlyBlocked: boolean) => {
     setBlockingIPs(prev => new Set(prev).add(ip));
-    
+
     try {
       const action = currentlyBlocked ? "unblock" : "block";
       const response = await fetch("/api/customer/block-ip", {
@@ -147,32 +177,19 @@ export default function ThreatIntelligencePage() {
       const result = await response.json();
 
       if (result.success) {
-        // Update local state immediately
         setBlockedIPs(prev => {
           const newSet = new Set(prev);
-          if (action === "block") {
-            newSet.add(ip);
-          } else {
-            newSet.delete(ip);
-          }
+          if (action === "block") newSet.add(ip);
+          else newSet.delete(ip);
           return newSet;
         });
-
-        // Show success message
-        message.success({
-          content: action === "block" 
-            ? `✅ ${ip} blocked successfully` 
-            : `✅ ${ip} unblocked successfully`,
-          duration: 3,
-        });
-
-        // Refresh data from server
+        showToast(`${ip} ${action}ed successfully`);
         mutate();
       } else {
-        message.error(result.error || `Failed to ${action} IP`);
+        showToast(result.error || `Failed to ${action} IP`);
       }
-    } catch (error) {
-      message.error("Network error - please try again");
+    } catch {
+      showToast("Network error - please try again");
     } finally {
       setBlockingIPs(prev => {
         const newSet = new Set(prev);
@@ -182,44 +199,24 @@ export default function ThreatIntelligencePage() {
     }
   };
 
-  const isIPBlocked = (ip: string) => {
-    return blockedIPs.has(ip);
-  };
-
-  const isIPBlocking = (ip: string) => {
-    return blockingIPs.has(ip);
-  };
+  const isIPBlocked = (ip: string) => blockedIPs.has(ip);
+  const isIPBlocking = (ip: string) => blockingIPs.has(ip);
 
   const getSeverityColor = (severity: string) => {
     switch (severity.toUpperCase()) {
-      case "CRITICAL":
-        return "#dc2626";
-      case "HIGH":
-        return "#ea580c";
-      case "MEDIUM":
-        return "#ca8a04";
-      case "LOW":
-        return "#16a34a";
-      default:
-        return "#6b7280";
+      case "CRITICAL": return "#dc2626";
+      case "HIGH": return "#ea580c";
+      case "MEDIUM": return "#ca8a04";
+      case "LOW": return "#16a34a";
+      default: return "#6b7280";
     }
-  };
-
-  const getSeverityBadge = (severity: string) => {
-    const colors = {
-      CRITICAL: "red",
-      HIGH: "orange",
-      MEDIUM: "gold",
-      LOW: "green",
-    };
-    return colors[severity.toUpperCase()] || "default";
   };
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
         <div className="text-center">
-          <Spin size="large" />
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400 mx-auto" />
           <p className="text-slate-400 mt-4">Loading Threat Intelligence...</p>
         </div>
       </div>
@@ -235,7 +232,7 @@ export default function ThreatIntelligencePage() {
           <p className="text-slate-400 mb-4">Please try again later</p>
           <button
             onClick={() => mutate()}
-            className="px-6 py-3 bg-cyan-500 hover:bg-cyan-600 text-white rounded-xl font-semibold"
+            className="px-6 py-3 bg-cyan-500 hover:bg-cyan-600 text-white rounded-xl font-semibold transition-colors"
           >
             Retry
           </button>
@@ -258,61 +255,34 @@ export default function ThreatIntelligencePage() {
     ? Math.round((summary.blockedThreats / summary.totalThreats) * 100)
     : 0;
 
+  const tabs = [
+    { key: "live-threats", label: "Live Threats", icon: FireIcon, count: threatIntelligence.recentBlocked.length },
+    { key: "threat-sources", label: "Threat Sources", icon: GlobeAltIcon, count: threatIntelligence.threatSources.length },
+    { key: "patterns", label: "Threat Patterns", icon: BoltIcon, count: threatIntelligence.patterns.length },
+  ];
+
+  const timeframeOptions = [
+    { value: "1h", label: "Last Hour" },
+    { value: "24h", label: "Last 24h" },
+    { value: "7d", label: "Last 7d" },
+    { value: "30d", label: "Last 30d" },
+  ];
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-8">
-      <style jsx global>{`
-        @keyframes neonPulse {
-          0%, 100% {
-            box-shadow: 0 0 20px rgba(6,182,212,0.3), 0 0 40px rgba(6,182,212,0.1);
-          }
-          50% {
-            box-shadow: 0 0 30px rgba(6,182,212,0.5), 0 0 60px rgba(6,182,212,0.2);
-          }
-        }
-
-        @keyframes statusChange {
-          0% {
-            transform: scale(1);
-            opacity: 1;
-          }
-          50% {
-            transform: scale(1.05);
-            opacity: 0.8;
-          }
-          100% {
-            transform: scale(1);
-            opacity: 1;
-          }
-        }
-
-        .status-changed {
-          animation: statusChange 0.6s ease-in-out;
-        }
-
-        .neon-glow {
-          animation: neonPulse 3s ease-in-out infinite;
-        }
-
-        .threat-card {
-          background: rgba(15, 23, 42, 0.6);
-          backdrop-filter: blur(12px);
-          border: 1px solid rgba(148, 163, 184, 0.1);
-          transition: all 0.3s ease;
-        }
-
-        .threat-card:hover {
-          border-color: rgba(6, 182, 212, 0.3);
-          transform: translateY(-2px);
-          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-        }
-
-        .gradient-text {
-          background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 50%, #8b5cf6 100%);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
-        }
-      `}</style>
+      {/* Toast */}
+      <AnimatePresence>
+        {toastMsg && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="fixed top-6 right-6 z-50 bg-slate-800 border border-white/10 text-white px-5 py-3 rounded-xl shadow-2xl"
+          >
+            {toastMsg}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Header */}
       <motion.div
@@ -330,7 +300,7 @@ export default function ThreatIntelligencePage() {
               >
                 <ShieldExclamationIcon className="w-12 h-12 text-cyan-400" />
               </motion.div>
-              <h1 className="text-5xl font-black gradient-text">
+              <h1 className="text-5xl font-black bg-gradient-to-r from-cyan-400 via-blue-400 to-violet-400 bg-clip-text text-transparent">
                 Threat Intelligence Command Center
               </h1>
             </div>
@@ -343,84 +313,79 @@ export default function ThreatIntelligencePage() {
                 <ClockIcon className="w-4 h-4" />
                 Last updated: {new Date(summary.updatedAt).toLocaleString()}
               </p>
-              <Badge
-                status={autoRefresh ? "processing" : "default"}
-                text={autoRefresh ? "Live" : "Paused"}
-              />
-              <Badge
-                count={`${blockRate}% Block Rate`}
-                style={{ backgroundColor: blockRate > 80 ? '#16a34a' : '#ea580c' }}
-              />
+              <span className={`flex items-center gap-1.5 text-xs ${autoRefresh ? "text-emerald-400" : "text-slate-500"}`}>
+                <span className={`w-2 h-2 rounded-full ${autoRefresh ? "bg-emerald-400 animate-pulse" : "bg-slate-500"}`} />
+                {autoRefresh ? "Live" : "Paused"}
+              </span>
+              <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${blockRate > 80 ? "bg-green-500/15 text-green-400" : "bg-orange-500/15 text-orange-400"}`}>
+                {blockRate}% Block Rate
+              </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 bg-slate-800/50 px-4 py-2 rounded-xl border border-slate-700">
-              <Switch
-                checked={autoRefresh}
-                onChange={setAutoRefresh}
-                size="small"
-              />
-              <span className="text-sm text-slate-300">Auto-refresh</span>
-            </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setAutoRefresh(!autoRefresh)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-all text-sm ${
+                autoRefresh
+                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                  : "bg-slate-800/50 border-white/10 text-slate-400"
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full ${autoRefresh ? "bg-emerald-400" : "bg-slate-500"}`} />
+              Auto-refresh
+            </button>
 
-            <Select
+            <select
               value={timeframe}
-              onChange={setTimeframe}
-              className="w-40"
-              size="large"
-              options={[
-                { value: "1h", label: "🕐 Last Hour" },
-                { value: "24h", label: "📅 Last 24h" },
-                { value: "7d", label: "📊 Last 7d" },
-                { value: "30d", label: "📈 Last 30d" },
-              ]}
-            />
+              onChange={(e) => setTimeframe(e.target.value)}
+              className="bg-slate-800/50 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-cyan-500/50 appearance-none cursor-pointer"
+            >
+              {timeframeOptions.map((opt) => (
+                <option key={opt.value} value={opt.value} className="bg-slate-800">
+                  {opt.label}
+                </option>
+              ))}
+            </select>
 
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => mutate()}
-              className="p-3 bg-cyan-500 hover:bg-cyan-600 rounded-xl transition-colors neon-glow"
+              className="p-2.5 bg-cyan-500 hover:bg-cyan-600 rounded-xl transition-colors shadow-[0_0_20px_rgba(6,182,212,0.3)]"
             >
-              <ArrowPathIcon className="w-6 h-6 text-white" />
+              <ArrowPathIcon className="w-5 h-5 text-white" />
             </motion.button>
           </div>
         </div>
 
         {/* Quick Stats Bar */}
         <div className="grid grid-cols-5 gap-4 mb-6">
-          <div className="bg-slate-800/30 border border-slate-700 rounded-xl p-4 text-center">
-            <div className="text-2xl font-bold text-white">{summary.totalThreats}</div>
-            <div className="text-xs text-slate-400">Total Threats</div>
-          </div>
-          <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 text-center">
-            <div className="text-2xl font-bold text-green-400">{summary.blockedThreats}</div>
-            <div className="text-xs text-green-300">Blocked</div>
-          </div>
-          <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-center">
-            <div className="text-2xl font-bold text-red-400">{summary.criticalThreats}</div>
-            <div className="text-xs text-red-300">Critical</div>
-          </div>
-          <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-4 text-center">
-            <div className="text-2xl font-bold text-orange-400">{summary.uniqueSources}</div>
-            <div className="text-xs text-orange-300">Sources</div>
-          </div>
-          <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-4 text-center">
-            <div className="text-2xl font-bold text-purple-400">{Math.round(summary.averageRiskScore)}</div>
-            <div className="text-xs text-purple-300">Avg Risk</div>
-          </div>
+          {[
+            { label: "Total Threats", value: summary.totalThreats, cls: "bg-slate-800/30 border-slate-700" },
+            { label: "Blocked", value: summary.blockedThreats, cls: "bg-green-500/10 border-green-500/30", valueCls: "text-green-400" },
+            { label: "Critical", value: summary.criticalThreats, cls: "bg-red-500/10 border-red-500/30", valueCls: "text-red-400" },
+            { label: "Sources", value: summary.uniqueSources, cls: "bg-orange-500/10 border-orange-500/30", valueCls: "text-orange-400" },
+            { label: "Avg Risk", value: Math.round(summary.averageRiskScore), cls: "bg-purple-500/10 border-purple-500/30", valueCls: "text-purple-400" },
+          ].map((stat) => (
+            <div key={stat.label} className={`border rounded-xl p-4 text-center ${stat.cls}`}>
+              <div className={`text-2xl font-bold ${stat.valueCls || "text-white"}`}>{stat.value}</div>
+              <div className={`text-xs ${stat.valueCls ? stat.valueCls.replace("text-", "text-").replace("-400", "-300") : "text-slate-400"}`}>
+                {stat.label}
+              </div>
+            </div>
+          ))}
         </div>
       </motion.div>
 
-      {/* Charts - keeping your existing charts */}
+      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 mb-8">
-        {/* Threat Distribution Pie */}
+        {/* Severity Distribution Pie */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
-          className="threat-card rounded-2xl p-6"
+          className="bg-slate-800/30 backdrop-blur-sm border border-white/10 rounded-2xl p-6 hover:border-cyan-500/20 transition-all"
         >
           <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
             <FireIcon className="w-5 h-5 text-cyan-400" />
@@ -434,7 +399,9 @@ export default function ThreatIntelligencePage() {
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ name, value, percent }: any) => `${name}: ${value} (${(percent * 100).toFixed(0)}%)`}
+                  label={({ name, value, percent }: any) =>
+                    `${name}: ${value} (${(percent * 100).toFixed(0)}%)`
+                  }
                   outerRadius={90}
                   fill="#8884d8"
                   dataKey="value"
@@ -453,7 +420,9 @@ export default function ThreatIntelligencePage() {
               </PieChart>
             </ResponsiveContainer>
           ) : (
-            <Empty description="No threats detected" />
+            <div className="flex items-center justify-center h-[280px] text-slate-500">
+              No threats detected
+            </div>
           )}
         </motion.div>
 
@@ -462,7 +431,7 @@ export default function ThreatIntelligencePage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.6 }}
-          className="threat-card rounded-2xl p-6"
+          className="bg-slate-800/30 backdrop-blur-sm border border-white/10 rounded-2xl p-6 hover:border-cyan-500/20 transition-all"
         >
           <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
             <ChartBarIcon className="w-5 h-5 text-cyan-400" />
@@ -485,7 +454,9 @@ export default function ThreatIntelligencePage() {
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <Empty description="No threat data" />
+            <div className="flex items-center justify-center h-[280px] text-slate-500">
+              No threat data
+            </div>
           )}
         </motion.div>
 
@@ -494,7 +465,7 @@ export default function ThreatIntelligencePage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.7 }}
-          className="threat-card rounded-2xl p-6"
+          className="bg-slate-800/30 backdrop-blur-sm border border-white/10 rounded-2xl p-6 hover:border-cyan-500/20 transition-all"
         >
           <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
             <BoltIcon className="w-5 h-5 text-yellow-400" />
@@ -517,229 +488,236 @@ export default function ThreatIntelligencePage() {
               </RadarChart>
             </ResponsiveContainer>
           ) : (
-            <Empty description="No attack vectors" />
+            <div className="flex items-center justify-center h-[280px] text-slate-500">
+              No attack vectors
+            </div>
           )}
         </motion.div>
       </div>
 
-      {/* Enhanced Tabs Section with Block/Unblock */}
+      {/* Tabs Section */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.9 }}
-        className="threat-card rounded-2xl p-6"
+        className="bg-slate-800/30 backdrop-blur-sm border border-white/10 rounded-2xl overflow-hidden"
       >
-        <Tabs
-          defaultActiveKey="live-threats"
-          size="large"
-          items={[
-            {
-              key: "live-threats",
-              label: (
-                <span className="flex items-center gap-2">
-                  <FireIcon className="w-4 h-4" />
-                  Live Threats
-                  <Badge count={threatIntelligence.recentBlocked.length} showZero />
+        {/* Tab Headers */}
+        <div className="flex border-b border-white/10">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`flex items-center gap-2 px-6 py-4 text-sm font-medium transition-all border-b-2 ${
+                  activeTab === tab.key
+                    ? "border-cyan-400 text-cyan-400 bg-cyan-500/5"
+                    : "border-transparent text-slate-400 hover:text-white hover:bg-white/[0.02]"
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {tab.label}
+                <span className={`ml-1 px-2 py-0.5 text-xs rounded-full ${
+                  activeTab === tab.key
+                    ? "bg-cyan-500/20 text-cyan-400"
+                    : "bg-slate-700 text-slate-400"
+                }`}>
+                  {tab.count}
                 </span>
-              ),
-              children: (
-                <div className="space-y-3">
-                  <AnimatePresence>
-                    {threatIntelligence.recentBlocked.length > 0 ? (
-                      threatIntelligence.recentBlocked.map((threat, index) => {
-                        const isBlocked = isIPBlocked(threat.source_ip);
-                        const isLoading = isIPBlocking(threat.source_ip);
-                        
-                        return (
-                          <motion.div
-                            key={threat.id}
-                            initial={{ opacity: 0, x: -20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: 20 }}
-                            transition={{ delay: index * 0.03 }}
-                            className={`p-5 bg-slate-800/40 border-l-4 rounded-r-2xl hover:bg-slate-700/40 transition-all ${
-                              isLoading ? 'status-changed' : ''
-                            }`}
-                            style={{ borderLeftColor: getSeverityColor(threat.severity) }}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-3 mb-3">
-                                  <Badge color={getSeverityBadge(threat.severity)}>
-                                    {threat.severity}
-                                  </Badge>
-                                  <span className="text-white font-bold text-lg">{threat.threat_type}</span>
-                                  <Tag color="blue">Risk: {Math.round(threat.risk_score)}</Tag>
-                                  {isBlocked && (
-                                    <Tag color="red" icon={<XCircleIcon className="w-3 h-3" />}>
-                                      BLOCKED
-                                    </Tag>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-4 text-sm text-slate-400">
-                                  <Tooltip title="Source IP">
-                                    <span className="flex items-center gap-1">
-                                      <MapPinIcon className="w-4 h-4" />
-                                      <code className="text-cyan-400 font-mono">{threat.source_ip}</code>
-                                    </span>
-                                  </Tooltip>
-                                  <span>→</span>
-                                  <Tooltip title="Target">
-                                    <code className="text-purple-400">{threat.target_endpoint}</code>
-                                  </Tooltip>
-                                  <span>•</span>
-                                  <span className="flex items-center gap-1">
-                                    <ClockIcon className="w-4 h-4" />
-                                    {new Date(threat.blocked_at).toLocaleString()}
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="flex gap-2">
-                                <Button
-                                  type={isBlocked ? "default" : "primary"}
-                                  danger={!isBlocked}
-                                  loading={isLoading}
-                                  icon={isBlocked ? <ShieldCheckIcon className="w-4 h-4" /> : <XCircleIcon className="w-4 h-4" />}
-                                  onClick={() => handleToggleBlock(threat.source_ip, isBlocked)}
-                                  size="large"
-                                >
-                                  {isBlocked ? "Unblock" : "Block"}
-                                </Button>
-                              </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Tab Content */}
+        <div className="p-6">
+          {/* Live Threats Tab */}
+          {activeTab === "live-threats" && (
+            <div className="space-y-3">
+              <AnimatePresence>
+                {threatIntelligence.recentBlocked.length > 0 ? (
+                  threatIntelligence.recentBlocked.map((threat, index) => {
+                    const blocked = isIPBlocked(threat.source_ip);
+                    const loading = isIPBlocking(threat.source_ip);
+
+                    return (
+                      <motion.div
+                        key={threat.id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 20 }}
+                        transition={{ delay: index * 0.03 }}
+                        className="p-5 bg-slate-800/40 border-l-4 rounded-r-2xl hover:bg-slate-700/40 transition-all"
+                        style={{ borderLeftColor: getSeverityColor(threat.severity) }}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-3">
+                              <SeverityBadge severity={threat.severity} />
+                              <span className="text-white font-bold text-lg">{threat.threat_type}</span>
+                              <TagPill color="blue">Risk: {Math.round(threat.risk_score)}</TagPill>
+                              {blocked && (
+                                <TagPill color="red">BLOCKED</TagPill>
+                              )}
                             </div>
-                          </motion.div>
-                        );
-                      })
-                    ) : (
-                      <div className="text-center py-20">
-                        <CheckCircleIcon className="w-20 h-20 text-green-500 mx-auto mb-4" />
-                        <p className="text-2xl text-white font-bold mb-2">All Clear!</p>
-                        <p className="text-slate-400">No active threats detected</p>
-                      </div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              ),
-            },
-            {
-              key: "threat-sources",
-              label: (
-                <span className="flex items-center gap-2">
-                  <GlobeAltIcon className="w-4 h-4" />
-                  Threat Sources
-                  <Badge count={threatIntelligence.threatSources.length} showZero />
-                </span>
-              ),
-              children: (
-                <div className="space-y-3">
-                  {threatIntelligence.threatSources.length > 0 ? (
-                    threatIntelligence.threatSources.map((source, index) => {
-                      const isBlocked = isIPBlocked(source.source_ip);
-                      const isLoading = isIPBlocking(source.source_ip);
-                      
-                      return (
-                        <motion.div
-                          key={index}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: index * 0.05 }}
-                          className={`p-5 bg-slate-800/40 border border-slate-700 rounded-2xl hover:border-red-500/50 transition-all ${
-                            isLoading ? 'status-changed' : ''
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-3">
-                                <code className="text-xl font-mono text-red-400">{source.source_ip}</code>
-                                <Badge count={`${source.threat_count} threats`} style={{ backgroundColor: '#dc2626' }} />
-                                {source.country && <Tag icon={<MapPinIcon className="w-3 h-3" />}>{source.country}</Tag>}
-                                {isBlocked && (
-                                  <Tag color="red" icon={<XCircleIcon className="w-3 h-3" />}>
-                                    BLOCKED
-                                  </Tag>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-4 text-sm text-slate-400 mb-3">
-                                <span>Blocked: <strong className="text-green-400">{source.blocked_count}</strong></span>
-                                <span>•</span>
-                                <span>Avg Risk: <strong className="text-orange-400">{Math.round(source.avg_risk_score)}</strong></span>
-                                <span>•</span>
-                                <span>Last: {new Date(source.last_activity).toLocaleString()}</span>
-                              </div>
-                              <div className="flex flex-wrap gap-2">
-                                {source.threat_types.slice(0, 4).map((type, i) => (
-                                  <Tag key={i} color="red">{type}</Tag>
-                                ))}
-                                {source.threat_types.length > 4 && (
-                                  <Tag>+{source.threat_types.length - 4} more</Tag>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex flex-col gap-2">
-                              <Button
-                                type={isBlocked ? "default" : "primary"}
-                                danger={!isBlocked}
-                                size="large"
-                                loading={isLoading}
-                                icon={isBlocked ? <ShieldCheckIcon className="w-5 h-5" /> : <XCircleIcon className="w-5 h-5" />}
-                                onClick={() => handleToggleBlock(source.source_ip, isBlocked)}
-                              >
-                                {isBlocked ? "Unblock Source" : "Block Source"}
-                              </Button>
+                            <div className="flex items-center gap-4 text-sm text-slate-400">
+                              <span className="flex items-center gap-1" title="Source IP">
+                                <MapPinIcon className="w-4 h-4" />
+                                <code className="text-cyan-400 font-mono">{threat.source_ip}</code>
+                              </span>
+                              <span>-&gt;</span>
+                              <code className="text-purple-400" title="Target">{threat.target_endpoint}</code>
+                              <span className="flex items-center gap-1">
+                                <ClockIcon className="w-4 h-4" />
+                                {new Date(threat.blocked_at).toLocaleString()}
+                              </span>
                             </div>
                           </div>
-                        </motion.div>
-                      );
-                    })
-                  ) : (
-                    <Empty description="No repeat threat sources identified" />
-                  )}
-                </div>
-              ),
-            },
-            {
-              key: "patterns",
-              label: (
-                <span className="flex items-center gap-2">
-                  <BoltIcon className="w-4 h-4" />
-                  Threat Patterns
-                  <Badge count={threatIntelligence.patterns.length} showZero />
-                </span>
-              ),
-              children: (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {threatIntelligence.patterns.length > 0 ? (
-                    threatIntelligence.patterns.map((pattern, index) => (
-                      <motion.div
-                        key={pattern.id}
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: index * 0.05 }}
-                        className="p-5 bg-slate-800/40 border border-slate-700 rounded-2xl hover:border-cyan-500/50 transition-all"
-                      >
-                        <div className="flex items-center justify-between mb-3">
-                          <h4 className="text-white font-bold text-lg">{pattern.name}</h4>
-                          <Badge status={pattern.isActive ? "processing" : "default"} text={pattern.isActive ? "Active" : "Inactive"} />
+                          <button
+                            onClick={() => handleToggleBlock(threat.source_ip, blocked)}
+                            disabled={loading}
+                            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all disabled:opacity-50 ${
+                              blocked
+                                ? "bg-white/5 border border-white/10 text-white hover:bg-white/10"
+                                : "bg-red-500/15 border border-red-500/30 text-red-400 hover:bg-red-500/25"
+                            }`}
+                          >
+                            {loading ? (
+                              <div className="animate-spin w-4 h-4 border-2 border-current border-t-transparent rounded-full" />
+                            ) : blocked ? (
+                              <ShieldCheckIcon className="w-4 h-4" />
+                            ) : (
+                              <XCircleIcon className="w-4 h-4" />
+                            )}
+                            {blocked ? "Unblock" : "Block"}
+                          </button>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <Badge color={getSeverityBadge(pattern.severity)}>{pattern.severity}</Badge>
-                          <Tag color="blue">{pattern.type}</Tag>
-                        </div>
-                        <p className="text-xs text-slate-500 mt-3">
-                          Created: {new Date(pattern.createdAt).toLocaleDateString()}
-                        </p>
                       </motion.div>
-                    ))
-                  ) : (
-                    <div className="col-span-3">
-                      <Empty description="No threat patterns detected" />
-                    </div>
-                  )}
+                    );
+                  })
+                ) : (
+                  <div className="text-center py-20">
+                    <CheckCircleIcon className="w-20 h-20 text-green-500 mx-auto mb-4" />
+                    <p className="text-2xl text-white font-bold mb-2">All Clear!</p>
+                    <p className="text-slate-400">No active threats detected</p>
+                  </div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
+
+          {/* Threat Sources Tab */}
+          {activeTab === "threat-sources" && (
+            <div className="space-y-3">
+              {threatIntelligence.threatSources.length > 0 ? (
+                threatIntelligence.threatSources.map((source, index) => {
+                  const blocked = isIPBlocked(source.source_ip);
+                  const loading = isIPBlocking(source.source_ip);
+
+                  return (
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      className="p-5 bg-slate-800/40 border border-slate-700 rounded-2xl hover:border-red-500/50 transition-all"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-3">
+                            <code className="text-xl font-mono text-red-400">{source.source_ip}</code>
+                            <span className="bg-red-500/15 text-red-400 text-xs font-semibold px-2.5 py-0.5 rounded-full">
+                              {source.threat_count} threats
+                            </span>
+                            {source.country && (
+                              <span className="flex items-center gap-1 text-xs text-slate-400">
+                                <MapPinIcon className="w-3 h-3" />
+                                {source.country}
+                              </span>
+                            )}
+                            {blocked && <TagPill color="red">BLOCKED</TagPill>}
+                          </div>
+                          <div className="flex items-center gap-4 text-sm text-slate-400 mb-3">
+                            <span>Blocked: <strong className="text-green-400">{source.blocked_count}</strong></span>
+                            <span>Avg Risk: <strong className="text-orange-400">{Math.round(source.avg_risk_score)}</strong></span>
+                            <span>Last: {new Date(source.last_activity).toLocaleString()}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {source.threat_types.slice(0, 4).map((type, i) => (
+                              <TagPill key={i} color="red">{type}</TagPill>
+                            ))}
+                            {source.threat_types.length > 4 && (
+                              <TagPill color="slate">+{source.threat_types.length - 4} more</TagPill>
+                            )}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleToggleBlock(source.source_ip, blocked)}
+                          disabled={loading}
+                          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all disabled:opacity-50 ${
+                            blocked
+                              ? "bg-white/5 border border-white/10 text-white hover:bg-white/10"
+                              : "bg-red-500/15 border border-red-500/30 text-red-400 hover:bg-red-500/25"
+                          }`}
+                        >
+                          {loading ? (
+                            <div className="animate-spin w-4 h-4 border-2 border-current border-t-transparent rounded-full" />
+                          ) : blocked ? (
+                            <ShieldCheckIcon className="w-5 h-5" />
+                          ) : (
+                            <XCircleIcon className="w-5 h-5" />
+                          )}
+                          {blocked ? "Unblock Source" : "Block Source"}
+                        </button>
+                      </div>
+                    </motion.div>
+                  );
+                })
+              ) : (
+                <div className="text-center py-20 text-slate-500">
+                  No repeat threat sources identified
                 </div>
-              ),
-            },
-          ]}
-        />
+              )}
+            </div>
+          )}
+
+          {/* Patterns Tab */}
+          {activeTab === "patterns" && (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {threatIntelligence.patterns.length > 0 ? (
+                threatIntelligence.patterns.map((pattern, index) => (
+                  <motion.div
+                    key={pattern.id}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: index * 0.05 }}
+                    className="p-5 bg-slate-800/40 border border-slate-700 rounded-2xl hover:border-cyan-500/50 transition-all"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-white font-bold text-lg">{pattern.name}</h4>
+                      <span className={`flex items-center gap-1.5 text-xs ${pattern.isActive ? "text-emerald-400" : "text-slate-500"}`}>
+                        <span className={`w-2 h-2 rounded-full ${pattern.isActive ? "bg-emerald-400 animate-pulse" : "bg-slate-500"}`} />
+                        {pattern.isActive ? "Active" : "Inactive"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <SeverityBadge severity={pattern.severity} />
+                      <TagPill color="blue">{pattern.type}</TagPill>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-3">
+                      Created: {new Date(pattern.createdAt).toLocaleDateString()}
+                    </p>
+                  </motion.div>
+                ))
+              ) : (
+                <div className="col-span-3 text-center py-20 text-slate-500">
+                  No threat patterns detected
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </motion.div>
     </div>
   );

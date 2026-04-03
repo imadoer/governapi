@@ -4,7 +4,10 @@ import { database } from '@/infrastructure/database';
 
 // Lazy initialization - only create when needed
 function getStripeClient() {
-  return new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder', {
+  if (!process.env.STRIPE_SECRET_KEY) {
+    throw new Error("STRIPE_SECRET_KEY environment variable is required");
+  }
+  return new Stripe(process.env.STRIPE_SECRET_KEY, {
     apiVersion: '2025-08-27.basil',
   });
 }
@@ -12,7 +15,10 @@ function getStripeClient() {
 export class StripeService {
   static async handleWebhook(rawBody: string, signature: string) {
     const stripe = getStripeClient();
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || 'whsec_placeholder';
+    if (!process.env.STRIPE_WEBHOOK_SECRET) {
+      throw new Error("STRIPE_WEBHOOK_SECRET environment variable is required");
+    }
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
     let event: Stripe.Event;
 

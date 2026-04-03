@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Card, Progress, Row, Col } from "antd";
 
 export function APIHealthScore() {
   const [healthData, setHealthData] = useState({
@@ -25,76 +24,63 @@ export function APIHealthScore() {
     return () => clearInterval(interval);
   }, []);
 
+  const getScoreColor = (score: number) => {
+    if (score > 80) return "text-emerald-400";
+    if (score > 60) return "text-amber-400";
+    return "text-red-400";
+  };
+
+  const getBarColor = (score: number) => {
+    if (score > 80) return "bg-emerald-400";
+    if (score > 60) return "bg-amber-400";
+    return "bg-red-400";
+  };
+
   return (
-    <Card title="API Health Overview">
-      <Row gutter={[16, 16]}>
-        <Col xs={24} md={8}>
-          <div style={{ textAlign: "center" }}>
-            <Progress
-              type="circle"
-              percent={healthData.overallScore}
-              size={120}
-              strokeColor="#52c41a"
-              format={(percent) => `${percent}%`}
-            />
-            <div style={{ marginTop: 16, fontSize: 16, fontWeight: "bold" }}>
-              Overall Health Score
+    <div className="rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-6">
+      <h3 className="text-lg font-semibold text-white mb-6">API Health Overview</h3>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Circle Progress */}
+        <div className="flex flex-col items-center justify-center">
+          <div className="relative w-[120px] h-[120px]">
+            <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
+              <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="8" />
+              <circle
+                cx="60" cy="60" r="50" fill="none" stroke="#10b981" strokeWidth="8"
+                strokeDasharray={`${healthData.overallScore * 3.14} ${314 - healthData.overallScore * 3.14}`}
+                strokeLinecap="round"
+              />
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-xl font-bold text-white">{healthData.overallScore}%</span>
             </div>
           </div>
-        </Col>
-        <Col xs={24} md={16}>
-          {healthData.apis.map((api, index) => (
+          <div className="mt-4 text-white font-semibold">Overall Health Score</div>
+        </div>
+
+        {/* API List */}
+        <div className="md:col-span-2 space-y-3">
+          {healthData.apis.map((api: any, index: number) => (
             <div
               key={index}
-              style={{
-                marginBottom: 12,
-                padding: "8px",
-                border: "1px solid #f0f0f0",
-                borderRadius: "6px",
-              }}
+              className="flex items-center justify-between p-2.5 rounded-lg bg-white/5 border border-white/5"
             >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <span>{api.name}</span>
-                <div
-                  style={{ display: "flex", alignItems: "center", gap: "8px" }}
-                >
-                  <Progress
-                    percent={api.health_score}
-                    size="small"
-                    style={{ width: 120 }}
-                    strokeColor={
-                      api.health_score > 80
-                        ? "#52c41a"
-                        : api.health_score > 60
-                          ? "#faad14"
-                          : "#ff4d4f"
-                    }
+              <span className="text-gray-300 text-sm">{api.name}</span>
+              <div className="flex items-center gap-3">
+                <div className="w-28 bg-white/10 rounded-full h-1.5">
+                  <div
+                    className={`h-1.5 rounded-full ${getBarColor(api.health_score)}`}
+                    style={{ width: `${api.health_score}%` }}
                   />
-                  <span
-                    style={{
-                      fontWeight: "bold",
-                      color:
-                        api.health_score > 80
-                          ? "#52c41a"
-                          : api.health_score > 60
-                            ? "#faad14"
-                            : "#ff4d4f",
-                    }}
-                  >
-                    {api.health_score}
-                  </span>
                 </div>
+                <span className={`font-bold text-sm w-8 text-right ${getScoreColor(api.health_score)}`}>
+                  {api.health_score}
+                </span>
               </div>
             </div>
           ))}
-        </Col>
-      </Row>
-    </Card>
+        </div>
+      </div>
+    </div>
   );
 }

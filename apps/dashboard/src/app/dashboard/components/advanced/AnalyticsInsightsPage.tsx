@@ -12,7 +12,6 @@ import {
   ExclamationTriangleIcon,
   CheckCircleIcon,
 } from "@heroicons/react/24/outline";
-import { Spin, Select, Tabs, Tag } from "antd";
 import {
   LineChart,
   Line,
@@ -63,6 +62,7 @@ export function AnalyticsInsightsPage({ companyId }: { companyId: string }) {
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [timeframe, setTimeframe] = useState("24h");
+  const [activeTab, setActiveTab] = useState("overview");
 
   const fetchAnalytics = async () => {
     setLoading(true);
@@ -115,13 +115,18 @@ export function AnalyticsInsightsPage({ companyId }: { companyId: string }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <Spin size="large" />
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400" />
       </div>
     );
   }
 
   const costSavings = costsData?.savings || 0;
   const totalCosts = costsData?.total || 0;
+
+  const tabs = [
+    { key: "overview", label: "Overview" },
+    { key: "activity", label: "Recent Activity" },
+  ];
 
   return (
     <div className="space-y-6">
@@ -136,17 +141,16 @@ export function AnalyticsInsightsPage({ companyId }: { companyId: string }) {
           </p>
         </div>
         <div className="flex items-center gap-4">
-          <Select
+          <select
             value={timeframe}
-            onChange={setTimeframe}
-            className="w-32"
-            options={[
-              { value: "1h", label: "Last Hour" },
-              { value: "24h", label: "Last 24h" },
-              { value: "7d", label: "Last 7d" },
-              { value: "30d", label: "Last 30d" },
-            ]}
-          />
+            onChange={(e) => setTimeframe(e.target.value)}
+            className="w-32 px-4 py-2.5 bg-slate-800 border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500 transition-colors appearance-none cursor-pointer"
+          >
+            <option value="1h" className="bg-slate-800">Last Hour</option>
+            <option value="24h" className="bg-slate-800">Last 24h</option>
+            <option value="7d" className="bg-slate-800">Last 7d</option>
+            <option value="30d" className="bg-slate-800">Last 30d</option>
+          </select>
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
@@ -193,7 +197,7 @@ export function AnalyticsInsightsPage({ companyId }: { companyId: string }) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6"
+          className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6"
         >
           <div className="flex items-center justify-between mb-4">
             <ClockIcon className="w-10 h-10 text-blue-500" />
@@ -208,7 +212,7 @@ export function AnalyticsInsightsPage({ companyId }: { companyId: string }) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6"
+          className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6"
         >
           <div className="flex items-center justify-between mb-4">
             <CheckCircleIcon className="w-10 h-10 text-green-500" />
@@ -236,182 +240,192 @@ export function AnalyticsInsightsPage({ companyId }: { companyId: string }) {
       </div>
 
       {/* Tabs */}
-      <Tabs
-        defaultActiveKey="overview"
-        items={[
-          {
-            key: "overview",
-            label: "📊 Overview",
-            children: (
-              <div className="space-y-6">
-                {/* Cost Analysis */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6"
-                  >
-                    <h3 className="text-xl font-bold text-white mb-4">
-                      Cost Analysis
-                    </h3>
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between p-4 bg-slate-900/50 rounded-xl">
-                        <div className="flex items-center gap-3">
-                          <CurrencyDollarIcon className="w-8 h-8 text-cyan-500" />
-                          <div>
-                            <p className="text-sm text-slate-400">
-                              Total Costs
-                            </p>
-                            <p className="text-2xl font-bold text-white">
-                              ${totalCosts.toFixed(2)}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
+      <div>
+        <div className="flex gap-2 mb-6">
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`px-5 py-2.5 rounded-xl font-medium text-sm transition-all ${
+                activeTab === tab.key
+                  ? "bg-cyan-500 text-white shadow-lg shadow-cyan-500/25"
+                  : "bg-slate-800/50 text-slate-400 hover:text-white hover:bg-slate-700 border border-white/10"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
 
-                      <div className="flex items-center justify-between p-4 bg-green-500/10 rounded-xl">
-                        <div className="flex items-center gap-3">
-                          <CheckCircleIcon className="w-8 h-8 text-green-500" />
-                          <div>
-                            <p className="text-sm text-slate-400">
-                              Cost Savings
-                            </p>
-                            <p className="text-2xl font-bold text-green-500">
-                              ${costSavings.toFixed(2)}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div className="p-3 bg-slate-900/50 rounded-lg">
-                          <p className="text-slate-400">APIs Monitored</p>
-                          <p className="text-xl font-bold text-white mt-1">
-                            {costsData?.apis_monitored || 0}
-                          </p>
-                        </div>
-                        <div className="p-3 bg-slate-900/50 rounded-lg">
-                          <p className="text-slate-400">Scans Performed</p>
-                          <p className="text-xl font-bold text-white mt-1">
-                            {costsData?.scans_performed || 0}
-                          </p>
-                        </div>
+        {activeTab === "overview" && (
+          <div className="space-y-6">
+            {/* Cost Analysis */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6"
+              >
+                <h3 className="text-xl font-bold text-white mb-4">
+                  Cost Analysis
+                </h3>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-4 bg-slate-900/50 rounded-xl">
+                    <div className="flex items-center gap-3">
+                      <CurrencyDollarIcon className="w-8 h-8 text-cyan-500" />
+                      <div>
+                        <p className="text-sm text-slate-400">
+                          Total Costs
+                        </p>
+                        <p className="text-2xl font-bold text-white">
+                          ${totalCosts.toFixed(2)}
+                        </p>
                       </div>
                     </div>
-                  </motion.div>
-
-                  {/* Compliance Overview */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.1 }}
-                    className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6"
-                  >
-                    <h3 className="text-xl font-bold text-white mb-4">
-                      Compliance Overview
-                    </h3>
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between p-4 bg-slate-900/50 rounded-xl">
-                        <div>
-                          <p className="text-sm text-slate-400">
-                            Avg Compliance Score
-                          </p>
-                          <p className="text-3xl font-bold text-cyan-500">
-                            {Math.round(
-                              complianceData?.avg_compliance_score || 0,
-                            )}
-                            %
-                          </p>
-                        </div>
-                        <ShieldCheckIcon className="w-12 h-12 text-cyan-500" />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div className="p-3 bg-slate-900/50 rounded-lg">
-                          <p className="text-slate-400">Frameworks</p>
-                          <p className="text-xl font-bold text-white mt-1">
-                            {complianceData?.frameworks_assessed || 0}
-                          </p>
-                        </div>
-                        <div className="p-3 bg-slate-900/50 rounded-lg">
-                          <p className="text-slate-400">Total Findings</p>
-                          <p className="text-xl font-bold text-white mt-1">
-                            {complianceData?.total_findings || 0}
-                          </p>
-                        </div>
-                        <div className="p-3 bg-red-500/10 rounded-lg">
-                          <p className="text-slate-400">Critical</p>
-                          <p className="text-xl font-bold text-red-500 mt-1">
-                            {complianceData?.critical_findings || 0}
-                          </p>
-                        </div>
-                        <div className="p-3 bg-green-500/10 rounded-lg">
-                          <p className="text-slate-400">Resolved</p>
-                          <p className="text-xl font-bold text-green-500 mt-1">
-                            {complianceData?.resolved_findings || 0}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                </div>
-              </div>
-            ),
-          },
-          {
-            key: "activity",
-            label: "📈 Recent Activity",
-            children: (
-              <div className="space-y-3">
-                {recentActivity.map((activity, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    className="bg-slate-800/50 border border-slate-700 rounded-xl p-5"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <code className="text-cyan-400 font-mono">
-                            {activity.url}
-                          </code>
-                          {activity.blocked && <Tag color="red">BLOCKED</Tag>}
-                        </div>
-                        <div className="flex items-center gap-4 text-sm text-slate-400">
-                          <span>
-                            Response:{" "}
-                            <span className="text-white">
-                              {activity.response_time}ms
-                            </span>
-                          </span>
-                          <span>•</span>
-                          <span>
-                            {new Date(activity.created_at).toLocaleString()}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
-
-                {recentActivity.length === 0 && (
-                  <div className="text-center py-16 bg-slate-800/30 rounded-2xl">
-                    <ChartBarIcon className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-                    <p className="text-xl text-white font-semibold mb-2">
-                      No Recent Activity
-                    </p>
-                    <p className="text-slate-400">
-                      Activity will appear here as your APIs are used
-                    </p>
                   </div>
-                )}
+
+                  <div className="flex items-center justify-between p-4 bg-green-500/10 rounded-xl">
+                    <div className="flex items-center gap-3">
+                      <CheckCircleIcon className="w-8 h-8 text-green-500" />
+                      <div>
+                        <p className="text-sm text-slate-400">
+                          Cost Savings
+                        </p>
+                        <p className="text-2xl font-bold text-green-500">
+                          ${costSavings.toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div className="p-3 bg-slate-900/50 rounded-lg">
+                      <p className="text-slate-400">APIs Monitored</p>
+                      <p className="text-xl font-bold text-white mt-1">
+                        {costsData?.apis_monitored || 0}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-slate-900/50 rounded-lg">
+                      <p className="text-slate-400">Scans Performed</p>
+                      <p className="text-xl font-bold text-white mt-1">
+                        {costsData?.scans_performed || 0}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Compliance Overview */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6"
+              >
+                <h3 className="text-xl font-bold text-white mb-4">
+                  Compliance Overview
+                </h3>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-4 bg-slate-900/50 rounded-xl">
+                    <div>
+                      <p className="text-sm text-slate-400">
+                        Avg Compliance Score
+                      </p>
+                      <p className="text-3xl font-bold text-cyan-500">
+                        {Math.round(
+                          complianceData?.avg_compliance_score || 0,
+                        )}
+                        %
+                      </p>
+                    </div>
+                    <ShieldCheckIcon className="w-12 h-12 text-cyan-500" />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div className="p-3 bg-slate-900/50 rounded-lg">
+                      <p className="text-slate-400">Frameworks</p>
+                      <p className="text-xl font-bold text-white mt-1">
+                        {complianceData?.frameworks_assessed || 0}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-slate-900/50 rounded-lg">
+                      <p className="text-slate-400">Total Findings</p>
+                      <p className="text-xl font-bold text-white mt-1">
+                        {complianceData?.total_findings || 0}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-red-500/10 rounded-lg">
+                      <p className="text-slate-400">Critical</p>
+                      <p className="text-xl font-bold text-red-500 mt-1">
+                        {complianceData?.critical_findings || 0}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-green-500/10 rounded-lg">
+                      <p className="text-slate-400">Resolved</p>
+                      <p className="text-xl font-bold text-green-500 mt-1">
+                        {complianceData?.resolved_findings || 0}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "activity" && (
+          <div className="space-y-3">
+            {recentActivity.map((activity, index) => (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: index * 0.05 }}
+                className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-5"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <code className="text-cyan-400 font-mono">
+                        {activity.url}
+                      </code>
+                      {activity.blocked && (
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-500/20 text-red-400 border border-red-500/30">
+                          BLOCKED
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-4 text-sm text-slate-400">
+                      <span>
+                        Response:{" "}
+                        <span className="text-white">
+                          {activity.response_time}ms
+                        </span>
+                      </span>
+                      <span>•</span>
+                      <span>
+                        {new Date(activity.created_at).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+
+            {recentActivity.length === 0 && (
+              <div className="text-center py-16 bg-slate-800/30 rounded-2xl">
+                <ChartBarIcon className="w-16 h-16 text-slate-600 mx-auto mb-4" />
+                <p className="text-xl text-white font-semibold mb-2">
+                  No Recent Activity
+                </p>
+                <p className="text-slate-400">
+                  Activity will appear here as your APIs are used
+                </p>
               </div>
-            ),
-          },
-        ]}
-      />
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,17 +1,11 @@
 import { logger } from "../../../../utils/logging/logger";
 import { NextRequest, NextResponse } from "next/server";
 import { database } from "../../../../infrastructure/database";
+import { requireAdmin, isAuthError } from "@/lib/auth/require-admin";
 
 export async function GET(request: NextRequest) {
-  const adminId = request.headers.get("x-admin-id");
-  const adminRole = request.headers.get("x-admin-role");
-
-  if (!adminId || adminRole !== "admin") {
-    return NextResponse.json(
-      { error: "Admin authentication required" },
-      { status: 401 },
-    );
-  }
+  const authResult = await requireAdmin(request);
+  if (isAuthError(authResult)) return authResult;
 
   try {
     // Get real revenue data from subscriptions and payments

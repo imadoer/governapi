@@ -241,6 +241,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Auto-trigger a quick security scan on the new endpoint
+    if (url.startsWith("http")) {
+      fetch(`http://localhost:3000/api/customer/security-scans`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-tenant-id": tenantId,
+          "x-internal-request": "true",
+          "x-request-id": `auto-scan-${newEndpoint.id}`,
+        },
+        body: JSON.stringify({ url, scanType: "quick" }),
+      }).catch((err) => {
+        logger.error("Auto-scan trigger failed:", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+    }
+
     return NextResponse.json({
       success: true,
       endpoint: {
@@ -253,7 +271,7 @@ export async function POST(request: NextRequest) {
         status: newEndpoint.status,
         createdAt: newEndpoint.created_at,
       },
-      message: "API endpoint created successfully",
+      message: "API endpoint created successfully. A security scan has been queued automatically.",
     });
   } catch (error) {
     logger.error("API endpoint creation error:", {

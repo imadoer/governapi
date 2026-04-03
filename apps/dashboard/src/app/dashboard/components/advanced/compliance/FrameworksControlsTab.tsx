@@ -1,26 +1,18 @@
 "use client";
-import React, { useState } from "react";
-import { Row, Col, Typography, Tag, Table, Button, Modal, Form, Input, Select, Drawer, Tooltip, Upload, Tabs } from "antd";
-import { 
-  CheckCircleOutlined, 
-  CloseCircleOutlined, 
-  WarningOutlined,
-  PlusOutlined,
-  EditOutlined,
-  EyeOutlined,
-  FileTextOutlined,
-  SafetyCertificateOutlined,
-  RightOutlined,
-  ClockCircleOutlined,
-  UploadOutlined,
-  InboxOutlined
-} from "@ant-design/icons";
-import { motion } from "framer-motion";
+import React, { useState, useCallback } from "react";
+import {
+  CheckCircleIcon,
+  XCircleIcon,
+  ExclamationTriangleIcon,
+  PlusIcon,
+  EyeIcon,
+  DocumentTextIcon,
+  ShieldCheckIcon,
+  ChevronRightIcon,
+  ClockIcon,
+} from "@heroicons/react/24/outline";
+import { motion, AnimatePresence } from "framer-motion";
 import { Framework, Control, Policy, Evidence, Attestation } from "./types";
-
-const { Text } = Typography;
-const { TextArea } = Input;
-const { Dragger } = Upload;
 
 // Premium palette
 const palette = {
@@ -47,7 +39,7 @@ const palette = {
 
 const itemVariants = {
   hidden: { opacity: 0, y: 12 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.3 } }
+  visible: { opacity: 1, y: 0, transition: { duration: 0.3 } },
 };
 
 interface Props {
@@ -69,21 +61,56 @@ interface Props {
   userName: string;
 }
 
-const FrameworkCard = ({ framework, index, onClick }: { framework: Framework; index: number; onClick: () => void }) => {
+const FrameworkCard = ({
+  framework,
+  index,
+  onClick,
+}: {
+  framework: Framework;
+  index: number;
+  onClick: () => void;
+}) => {
   const score = Number(framework.score) || 0;
   const passedControls = framework.passedControls || 0;
   const failedControls = framework.failedControls || 0;
   const totalControls = framework.totalControls || 0;
-  
+
   const getConfig = (status: string, sc: number) => {
-    if (status === "compliant" || sc >= 90) return { color: palette.success, bg: palette.successBg, border: palette.successBorder, label: "Compliant", icon: <CheckCircleOutlined /> };
-    if (status === "partial" || sc >= 60) return { color: palette.warning, bg: palette.warningBg, border: palette.warningBorder, label: "Partial", icon: <WarningOutlined /> };
-    if (sc === 0) return { color: palette.neutral, bg: palette.neutralBg, border: palette.neutralBorder, label: "Not Started", icon: <ClockCircleOutlined /> };
-    return { color: palette.danger, bg: palette.dangerBg, border: palette.dangerBorder, label: "At Risk", icon: <CloseCircleOutlined /> };
+    if (status === "compliant" || sc >= 90)
+      return {
+        color: palette.success,
+        bg: palette.successBg,
+        border: palette.successBorder,
+        label: "Compliant",
+        icon: <CheckCircleIcon className="w-3.5 h-3.5" />,
+      };
+    if (status === "partial" || sc >= 60)
+      return {
+        color: palette.warning,
+        bg: palette.warningBg,
+        border: palette.warningBorder,
+        label: "Partial",
+        icon: <ExclamationTriangleIcon className="w-3.5 h-3.5" />,
+      };
+    if (sc === 0)
+      return {
+        color: palette.neutral,
+        bg: palette.neutralBg,
+        border: palette.neutralBorder,
+        label: "Not Started",
+        icon: <ClockIcon className="w-3.5 h-3.5" />,
+      };
+    return {
+      color: palette.danger,
+      bg: palette.dangerBg,
+      border: palette.dangerBorder,
+      label: "At Risk",
+      icon: <XCircleIcon className="w-3.5 h-3.5" />,
+    };
   };
-  
+
   const config = getConfig(framework.status, score);
-  
+
   return (
     <motion.div
       variants={itemVariants}
@@ -101,30 +128,25 @@ const FrameworkCard = ({ framework, index, onClick }: { framework: Framework; in
         height: "100%",
         display: "flex",
         flexDirection: "column",
-        position: "relative"
+        position: "relative",
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
         <span style={{ fontSize: 15, fontWeight: 600, color: palette.text }}>{framework.name}</span>
-        <Tag style={{ 
-          background: `${config.color}15`,
-          border: "none",
-          color: config.color,
-          fontSize: 10,
-          fontWeight: 600,
-          borderRadius: 4,
-          padding: "2px 8px",
-          display: "flex",
-          alignItems: "center",
-          gap: 4
-        }}>
+        <span
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold"
+          style={{
+            background: `${config.color}15`,
+            color: config.color,
+          }}
+        >
           {config.icon} {config.label}
-        </Tag>
+        </span>
       </div>
-      
+
       <div style={{ marginBottom: 12 }}>
         <div style={{ height: 6, background: "rgba(255,255,255,0.1)", borderRadius: 3, overflow: "hidden" }}>
-          <motion.div 
+          <motion.div
             initial={{ width: 0 }}
             animate={{ width: `${score}%` }}
             transition={{ duration: 0.8, delay: index * 0.05 }}
@@ -132,37 +154,49 @@ const FrameworkCard = ({ framework, index, onClick }: { framework: Framework; in
               height: "100%",
               background: `linear-gradient(90deg, ${config.color}80, ${config.color})`,
               borderRadius: 3,
-              boxShadow: score > 0 ? `0 0 8px ${config.color}40` : "none"
-            }} 
+              boxShadow: score > 0 ? `0 0 8px ${config.color}40` : "none",
+            }}
           />
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
           <span style={{ fontSize: 20, fontWeight: 700, color: config.color }}>{score.toFixed(0)}%</span>
         </div>
       </div>
-      
-      <div style={{ 
-        display: "flex", 
-        gap: 16,
-        marginTop: "auto",
-        paddingTop: 12,
-        borderTop: `1px solid ${palette.border}`,
-        fontSize: 12
-      }}>
-        <span style={{ color: palette.success }}>✓ {passedControls}</span>
-        <span style={{ color: palette.danger }}>✗ {failedControls}</span>
-        <span style={{ color: palette.textFaint }}>◎ {totalControls}</span>
+
+      <div
+        style={{
+          display: "flex",
+          gap: 16,
+          marginTop: "auto",
+          paddingTop: 12,
+          borderTop: `1px solid ${palette.border}`,
+          fontSize: 12,
+        }}
+      >
+        <span style={{ color: palette.success }}>&#10003; {passedControls}</span>
+        <span style={{ color: palette.danger }}>&#10007; {failedControls}</span>
+        <span style={{ color: palette.textFaint }}>&#9678; {totalControls}</span>
       </div>
-      
+
       <div style={{ position: "absolute", bottom: 16, right: 16, color: palette.textFaint, fontSize: 12 }}>
-        <RightOutlined />
+        <ChevronRightIcon className="w-4 h-4" />
       </div>
     </motion.div>
   );
 };
 
-const SectionCard = ({ title, icon, extra, children, noPadding }: { 
-  title: string; icon: React.ReactNode; extra?: React.ReactNode; children: React.ReactNode; noPadding?: boolean;
+const SectionCard = ({
+  title,
+  icon,
+  extra,
+  children,
+  noPadding,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  extra?: React.ReactNode;
+  children: React.ReactNode;
+  noPadding?: boolean;
 }) => (
   <motion.div
     variants={itemVariants}
@@ -173,16 +207,18 @@ const SectionCard = ({ title, icon, extra, children, noPadding }: {
       borderRadius: 16,
       border: `1px solid ${palette.borderLight}`,
       boxShadow: "0 8px 32px rgba(0,0,0,0.25)",
-      overflow: "hidden"
+      overflow: "hidden",
     }}
   >
-    <div style={{
-      padding: "18px 24px",
-      borderBottom: `1px solid ${palette.border}`,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between"
-    }}>
+    <div
+      style={{
+        padding: "18px 24px",
+        borderBottom: `1px solid ${palette.border}`,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+      }}
+    >
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <span style={{ color: palette.success, fontSize: 18 }}>{icon}</span>
         <span style={{ fontSize: 15, fontWeight: 600, color: palette.text }}>{title}</span>
@@ -192,6 +228,14 @@ const SectionCard = ({ title, icon, extra, children, noPadding }: {
     <div style={{ padding: noPadding ? 0 : 24 }}>{children}</div>
   </motion.div>
 );
+
+/* Pagination helper */
+function usePagination<T>(data: T[], pageSize: number) {
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(data.length / pageSize));
+  const paginated = data.slice((page - 1) * pageSize, page * pageSize);
+  return { page, totalPages, paginated, setPage };
+}
 
 export function FrameworksControlsTab({
   frameworks,
@@ -209,14 +253,21 @@ export function FrameworksControlsTab({
   onCreatePolicy,
   attestationFilter,
   onAttestationFilterChange,
-  userName
+  userName,
 }: Props) {
   const [policyModalOpen, setPolicyModalOpen] = useState(false);
   const [controlDrawerOpen, setControlDrawerOpen] = useState(false);
   const [selectedControl, setSelectedControl] = useState<Control | null>(null);
   const [attestModalOpen, setAttestModalOpen] = useState(false);
   const [attestNotes, setAttestNotes] = useState("");
-  const [form] = Form.useForm();
+
+  // Policy form state
+  const [policyName, setPolicyName] = useState("");
+  const [policyDescription, setPolicyDescription] = useState("");
+  const [policyOwner, setPolicyOwner] = useState("");
+
+  const controlsPag = usePagination(controls, 10);
+  const policiesPag = usePagination(policies, 5);
 
   const handleFrameworkClick = (fw: Framework) => {
     onSelectFramework(fw);
@@ -237,26 +288,42 @@ export function FrameworksControlsTab({
     }
   };
 
-  const handlePolicySubmit = async (values: any) => {
-    await onCreatePolicy(values);
+  const handlePolicySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await onCreatePolicy({ name: policyName, description: policyDescription, owner: policyOwner });
     setPolicyModalOpen(false);
-    form.resetFields();
+    setPolicyName("");
+    setPolicyDescription("");
+    setPolicyOwner("");
+  };
+
+  const resetPolicyForm = () => {
+    setPolicyName("");
+    setPolicyDescription("");
+    setPolicyOwner("");
   };
 
   return (
     <motion.div initial="hidden" animate="visible">
       {/* Framework Grid */}
       <div style={{ marginBottom: 32 }}>
-        <div style={{ fontSize: 11, color: palette.textFaint, textTransform: "uppercase", letterSpacing: 2, marginBottom: 20, fontWeight: 500 }}>
+        <div
+          style={{
+            fontSize: 11,
+            color: palette.textFaint,
+            textTransform: "uppercase",
+            letterSpacing: 2,
+            marginBottom: 20,
+            fontWeight: 500,
+          }}
+        >
           All Frameworks ({frameworks.length})
         </div>
-        <Row gutter={[16, 16]}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {frameworks.map((fw, i) => (
-            <Col xs={24} sm={12} md={8} lg={6} key={fw.id}>
-              <FrameworkCard framework={fw} index={i} onClick={() => handleFrameworkClick(fw)} />
-            </Col>
+            <FrameworkCard key={fw.id} framework={fw} index={i} onClick={() => handleFrameworkClick(fw)} />
           ))}
-        </Row>
+        </div>
       </div>
 
       {/* Selected Framework Controls */}
@@ -264,32 +331,105 @@ export function FrameworksControlsTab({
         <div style={{ marginBottom: 32 }}>
           <SectionCard
             title={`${selectedFramework.name} Controls`}
-            icon={<SafetyCertificateOutlined />}
-            extra={<Tag style={{ background: palette.successBg, border: "none", color: palette.success, borderRadius: 6 }}>{controls.length} Controls</Tag>}
+            icon={<ShieldCheckIcon className="w-5 h-5" />}
+            extra={
+              <span
+                className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium"
+                style={{ background: palette.successBg, color: palette.success }}
+              >
+                {controls.length} Controls
+              </span>
+            }
             noPadding
           >
-            <Table
-              dataSource={controls}
-              rowKey="id"
-              pagination={{ pageSize: 10 }}
-              className="dark-table"
-              onRow={(record) => ({ onClick: () => handleControlClick(record), style: { cursor: "pointer" } })}
-              columns={[
-                { title: "Control ID", dataIndex: "controlId", key: "controlId", width: 120, render: (id: string) => <span style={{ color: palette.success, fontFamily: "monospace", fontSize: 12 }}>{id}</span> },
-                { title: "Name", dataIndex: "controlName", key: "controlName", render: (name: string) => <span style={{ color: palette.text, fontWeight: 500 }}>{name}</span> },
-                { title: "Status", dataIndex: "status", key: "status", width: 120, render: (status: string) => {
-                  const cfg = status === "implemented" ? { color: palette.success, bg: palette.successBg } : status === "partial" ? { color: palette.warning, bg: palette.warningBg } : { color: palette.danger, bg: palette.dangerBg };
-                  return <Tag style={{ background: cfg.bg, border: "none", color: cfg.color, borderRadius: 4 }}>{status}</Tag>;
-                }},
-                { title: "Evidence", dataIndex: "evidenceCount", key: "evidenceCount", width: 100, render: (count: number) => <span style={{ color: count > 0 ? palette.success : palette.textFaint }}>{count || 0} files</span> },
-                { title: "Actions", key: "actions", width: 120, render: (_: any, record: Control) => (
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <Tooltip title="View"><Button type="text" size="small" icon={<EyeOutlined />} onClick={(e) => { e.stopPropagation(); handleControlClick(record); }} style={{ color: palette.textMuted }} /></Tooltip>
-                    <Tooltip title="Attest"><Button type="text" size="small" icon={<CheckCircleOutlined />} onClick={(e) => { e.stopPropagation(); setSelectedControl(record); setAttestModalOpen(true); }} style={{ color: palette.success }} /></Tooltip>
-                  </div>
-                )}
-              ]}
-            />
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr style={{ borderBottom: `1px solid ${palette.border}` }}>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: palette.textFaint, width: 120 }}>Control ID</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: palette.textFaint }}>Name</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: palette.textFaint, width: 120 }}>Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: palette.textFaint, width: 100 }}>Evidence</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: palette.textFaint, width: 120 }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {controlsPag.paginated.map((record) => {
+                    const statusCfg =
+                      record.status === "implemented"
+                        ? { color: palette.success, bg: palette.successBg }
+                        : record.status === "partial"
+                        ? { color: palette.warning, bg: palette.warningBg }
+                        : { color: palette.danger, bg: palette.dangerBg };
+                    return (
+                      <tr
+                        key={record.id}
+                        className="cursor-pointer hover:bg-white/[0.02] transition-colors"
+                        style={{ borderBottom: `1px solid ${palette.border}` }}
+                        onClick={() => handleControlClick(record)}
+                      >
+                        <td className="px-4 py-3">
+                          <span className="font-mono text-xs" style={{ color: palette.success }}>{record.controlId}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="font-medium" style={{ color: palette.text }}>{record.controlName}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="inline-block px-2 py-0.5 rounded text-xs font-medium" style={{ background: statusCfg.bg, color: statusCfg.color }}>{record.status}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span style={{ color: (record.evidenceCount || 0) > 0 ? palette.success : palette.textFaint }}>{record.evidenceCount || 0} files</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-2">
+                            <button
+                              title="View"
+                              onClick={(e) => { e.stopPropagation(); handleControlClick(record); }}
+                              className="p-1 rounded hover:bg-white/10 transition-colors"
+                              style={{ color: palette.textMuted }}
+                            >
+                              <EyeIcon className="w-4 h-4" />
+                            </button>
+                            <button
+                              title="Attest"
+                              onClick={(e) => { e.stopPropagation(); setSelectedControl(record); setAttestModalOpen(true); }}
+                              className="p-1 rounded hover:bg-white/10 transition-colors"
+                              style={{ color: palette.success }}
+                            >
+                              <CheckCircleIcon className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {/* Pagination */}
+              {controlsPag.totalPages > 1 && (
+                <div className="flex items-center justify-end gap-2 px-4 py-3" style={{ borderTop: `1px solid ${palette.border}` }}>
+                  <button
+                    onClick={() => controlsPag.setPage(Math.max(1, controlsPag.page - 1))}
+                    disabled={controlsPag.page === 1}
+                    className="px-3 py-1 text-xs rounded border transition-colors disabled:opacity-30"
+                    style={{ borderColor: palette.border, color: palette.textMuted }}
+                  >
+                    Prev
+                  </button>
+                  <span className="text-xs" style={{ color: palette.textMuted }}>
+                    {controlsPag.page} / {controlsPag.totalPages}
+                  </span>
+                  <button
+                    onClick={() => controlsPag.setPage(Math.min(controlsPag.totalPages, controlsPag.page + 1))}
+                    disabled={controlsPag.page === controlsPag.totalPages}
+                    className="px-3 py-1 text-xs rounded border transition-colors disabled:opacity-30"
+                    style={{ borderColor: palette.border, color: palette.textMuted }}
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </div>
           </SectionCard>
         </div>
       )}
@@ -297,113 +437,314 @@ export function FrameworksControlsTab({
       {/* Policies Section */}
       <SectionCard
         title="Policies"
-        icon={<FileTextOutlined />}
-        extra={<Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => setPolicyModalOpen(true)} style={{ background: `linear-gradient(135deg, ${palette.success} 0%, ${palette.successMuted} 100%)`, border: "none", borderRadius: 6 }}>Add Policy</Button>}
+        icon={<DocumentTextIcon className="w-5 h-5" />}
+        extra={
+          <button
+            onClick={() => setPolicyModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-white border-0 transition-colors"
+            style={{ background: `linear-gradient(135deg, ${palette.success} 0%, ${palette.successMuted} 100%)` }}
+          >
+            <PlusIcon className="w-3.5 h-3.5" /> Add Policy
+          </button>
+        }
         noPadding
       >
-        <Table
-          dataSource={policies}
-          rowKey="id"
-          pagination={{ pageSize: 5 }}
-          className="dark-table"
-          columns={[
-            { title: "Policy Name", dataIndex: "name", key: "name", render: (name: string) => <span style={{ color: palette.text, fontWeight: 500 }}>{name}</span> },
-            { title: "Version", dataIndex: "version", key: "version", width: 80, render: (v: string) => <Tag style={{ background: palette.neutralBg, border: "none", color: palette.textMuted, borderRadius: 4 }}>v{v}</Tag> },
-            { title: "Status", dataIndex: "status", key: "status", width: 100, render: (status: string) => {
-              const cfg = status === "active" ? { color: palette.success, bg: palette.successBg } : status === "draft" ? { color: palette.warning, bg: palette.warningBg } : { color: palette.textFaint, bg: palette.neutralBg };
-              return <Tag style={{ background: cfg.bg, border: "none", color: cfg.color, borderRadius: 4 }}>{status}</Tag>;
-            }},
-            { title: "Owner", dataIndex: "owner", key: "owner", render: (owner: string) => <span style={{ color: palette.textMuted }}>{owner}</span> },
-          ]}
-        />
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr style={{ borderBottom: `1px solid ${palette.border}` }}>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: palette.textFaint }}>Policy Name</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: palette.textFaint, width: 80 }}>Version</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: palette.textFaint, width: 100 }}>Status</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: palette.textFaint }}>Owner</th>
+              </tr>
+            </thead>
+            <tbody>
+              {policiesPag.paginated.map((p: any) => {
+                const cfg =
+                  p.status === "active"
+                    ? { color: palette.success, bg: palette.successBg }
+                    : p.status === "draft"
+                    ? { color: palette.warning, bg: palette.warningBg }
+                    : { color: palette.textFaint, bg: palette.neutralBg };
+                return (
+                  <tr key={p.id} className="hover:bg-white/[0.02] transition-colors" style={{ borderBottom: `1px solid ${palette.border}` }}>
+                    <td className="px-4 py-3"><span className="font-medium" style={{ color: palette.text }}>{p.name}</span></td>
+                    <td className="px-4 py-3">
+                      <span className="inline-block px-2 py-0.5 rounded text-xs" style={{ background: palette.neutralBg, color: palette.textMuted }}>v{p.version}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="inline-block px-2 py-0.5 rounded text-xs font-medium" style={{ background: cfg.bg, color: cfg.color }}>{p.status}</span>
+                    </td>
+                    <td className="px-4 py-3"><span style={{ color: palette.textMuted }}>{p.owner}</span></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {policiesPag.totalPages > 1 && (
+            <div className="flex items-center justify-end gap-2 px-4 py-3" style={{ borderTop: `1px solid ${palette.border}` }}>
+              <button
+                onClick={() => policiesPag.setPage(Math.max(1, policiesPag.page - 1))}
+                disabled={policiesPag.page === 1}
+                className="px-3 py-1 text-xs rounded border transition-colors disabled:opacity-30"
+                style={{ borderColor: palette.border, color: palette.textMuted }}
+              >
+                Prev
+              </button>
+              <span className="text-xs" style={{ color: palette.textMuted }}>
+                {policiesPag.page} / {policiesPag.totalPages}
+              </span>
+              <button
+                onClick={() => policiesPag.setPage(Math.min(policiesPag.totalPages, policiesPag.page + 1))}
+                disabled={policiesPag.page === policiesPag.totalPages}
+                className="px-3 py-1 text-xs rounded border transition-colors disabled:opacity-30"
+                style={{ borderColor: palette.border, color: palette.textMuted }}
+              >
+                Next
+              </button>
+            </div>
+          )}
+        </div>
       </SectionCard>
 
       {/* Policy Modal */}
-      <Modal
-        title={<span style={{ color: palette.text }}>Create Policy</span>}
-        open={policyModalOpen}
-        onCancel={() => setPolicyModalOpen(false)}
-        footer={null}
-        styles={{ content: { background: "#0f172a", border: `1px solid ${palette.borderLight}` }, header: { background: "#0f172a", borderBottom: `1px solid ${palette.border}` } }}
-      >
-        <Form form={form} layout="vertical" onFinish={handlePolicySubmit} style={{ marginTop: 24 }}>
-          <Form.Item name="name" label={<span style={{ color: palette.textMuted }}>Policy Name</span>} rules={[{ required: true }]}>
-            <Input style={{ background: palette.cardBg, borderColor: palette.border, color: palette.text }} />
-          </Form.Item>
-          <Form.Item name="description" label={<span style={{ color: palette.textMuted }}>Description</span>}>
-            <TextArea rows={3} style={{ background: palette.cardBg, borderColor: palette.border, color: palette.text }} />
-          </Form.Item>
-          <Form.Item name="owner" label={<span style={{ color: palette.textMuted }}>Owner</span>}>
-            <Input style={{ background: palette.cardBg, borderColor: palette.border, color: palette.text }} />
-          </Form.Item>
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 24 }}>
-            <Button onClick={() => setPolicyModalOpen(false)}>Cancel</Button>
-            <Button type="primary" htmlType="submit" style={{ background: `linear-gradient(135deg, ${palette.success} 0%, ${palette.successMuted} 100%)`, border: "none" }}>Create</Button>
-          </div>
-        </Form>
-      </Modal>
-
-      {/* Attest Modal */}
-      <Modal
-        title={<span style={{ color: palette.text }}>Attest Control</span>}
-        open={attestModalOpen}
-        onCancel={() => { setAttestModalOpen(false); setAttestNotes(""); }}
-        onOk={handleAttest}
-        okText="Submit Attestation"
-        okButtonProps={{ style: { background: `linear-gradient(135deg, ${palette.success} 0%, ${palette.successMuted} 100%)`, border: "none" } }}
-        styles={{ content: { background: "#0f172a", border: `1px solid ${palette.borderLight}` }, header: { background: "#0f172a", borderBottom: `1px solid ${palette.border}` } }}
-      >
-        <div style={{ marginBottom: 16 }}>
-          <Text style={{ color: palette.textMuted }}>Control: </Text>
-          <Text strong style={{ color: palette.text }}>{selectedControl?.controlName}</Text>
-        </div>
-        <TextArea placeholder="Add attestation notes..." value={attestNotes} onChange={(e) => setAttestNotes(e.target.value)} rows={4} style={{ background: palette.cardBg, borderColor: palette.border, color: palette.text }} />
-      </Modal>
-
-      {/* Control Drawer */}
-      <Drawer
-        title={<span style={{ color: palette.text }}>{selectedControl?.controlName}</span>}
-        open={controlDrawerOpen}
-        onClose={() => setControlDrawerOpen(false)}
-        width={500}
-        styles={{ body: { background: "#0f172a" }, header: { background: "#0f172a", borderBottom: `1px solid ${palette.border}` } }}
-      >
-        {selectedControl && (
-          <div>
-            <div style={{ marginBottom: 24 }}>
-              <Text style={{ color: palette.textFaint, fontSize: 11, textTransform: "uppercase", letterSpacing: 1 }}>Control ID</Text>
-              <div style={{ color: palette.success, fontFamily: "monospace", fontSize: 14, marginTop: 4 }}>{selectedControl.controlId}</div>
-            </div>
-            <div style={{ marginBottom: 24 }}>
-              <Text style={{ color: palette.textFaint, fontSize: 11, textTransform: "uppercase", letterSpacing: 1 }}>Status</Text>
-              <div style={{ marginTop: 8 }}>
-                <Tag style={{ background: selectedControl.status === "implemented" ? palette.successBg : palette.warningBg, border: "none", color: selectedControl.status === "implemented" ? palette.success : palette.warning, borderRadius: 4 }}>{selectedControl.status}</Tag>
+      <AnimatePresence>
+        {policyModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60"
+              onClick={() => { setPolicyModalOpen(false); resetPolicyForm(); }}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ duration: 0.2 }}
+              className="relative w-full max-w-md mx-4 rounded-2xl"
+              style={{ background: "#0f172a", border: `1px solid ${palette.borderLight}` }}
+            >
+              <div className="px-6 py-4" style={{ borderBottom: `1px solid ${palette.border}` }}>
+                <h3 className="text-base font-semibold" style={{ color: palette.text }}>Create Policy</h3>
               </div>
-            </div>
-            <div style={{ marginBottom: 24 }}>
-              <Text style={{ color: palette.textFaint, fontSize: 11, textTransform: "uppercase", letterSpacing: 1 }}>Description</Text>
-              <div style={{ color: palette.textMuted, marginTop: 4, lineHeight: 1.6 }}>{selectedControl.description || "No description available."}</div>
-            </div>
-            <div style={{ marginBottom: 24 }}>
-              <Text style={{ color: palette.textFaint, fontSize: 11, textTransform: "uppercase", letterSpacing: 1 }}>Evidence ({controlEvidence.length})</Text>
-              {controlEvidence.length > 0 ? (
-                <div style={{ marginTop: 8 }}>
-                  {controlEvidence.map((ev, i) => (
-                    <div key={i} style={{ padding: "8px 12px", background: palette.cardBg, borderRadius: 8, marginBottom: 8, color: palette.textMuted, fontSize: 13 }}>
-                      {ev.fileName || `Evidence ${i + 1}`}
-                    </div>
-                  ))}
+              <form onSubmit={handlePolicySubmit} className="p-6 space-y-4">
+                <div>
+                  <label className="block text-xs font-medium mb-1.5" style={{ color: palette.textMuted }}>Policy Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={policyName}
+                    onChange={(e) => setPolicyName(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl text-sm bg-slate-900/50 border border-white/10 text-white focus:outline-none focus:border-cyan-500/50 transition-colors"
+                  />
                 </div>
-              ) : (
-                <div style={{ color: palette.textFaint, marginTop: 4 }}>No evidence attached</div>
-              )}
-            </div>
-            <Button type="primary" icon={<CheckCircleOutlined />} onClick={() => { setControlDrawerOpen(false); setAttestModalOpen(true); }} style={{ background: `linear-gradient(135deg, ${palette.success} 0%, ${palette.successMuted} 100%)`, border: "none", width: "100%", height: 44 }}>
-              Attest This Control
-            </Button>
+                <div>
+                  <label className="block text-xs font-medium mb-1.5" style={{ color: palette.textMuted }}>Description</label>
+                  <textarea
+                    rows={3}
+                    value={policyDescription}
+                    onChange={(e) => setPolicyDescription(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl text-sm bg-slate-900/50 border border-white/10 text-white focus:outline-none focus:border-cyan-500/50 transition-colors resize-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1.5" style={{ color: palette.textMuted }}>Owner</label>
+                  <input
+                    type="text"
+                    value={policyOwner}
+                    onChange={(e) => setPolicyOwner(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl text-sm bg-slate-900/50 border border-white/10 text-white focus:outline-none focus:border-cyan-500/50 transition-colors"
+                  />
+                </div>
+                <div className="flex justify-end gap-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => { setPolicyModalOpen(false); resetPolicyForm(); }}
+                    className="px-4 py-2 text-sm rounded-lg border transition-colors hover:bg-white/5"
+                    style={{ borderColor: palette.border, color: palette.textMuted }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 text-sm rounded-lg text-white font-medium border-0 transition-colors"
+                    style={{ background: `linear-gradient(135deg, ${palette.success} 0%, ${palette.successMuted} 100%)` }}
+                  >
+                    Create
+                  </button>
+                </div>
+              </form>
+            </motion.div>
           </div>
         )}
-      </Drawer>
+      </AnimatePresence>
+
+      {/* Attest Modal */}
+      <AnimatePresence>
+        {attestModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60"
+              onClick={() => { setAttestModalOpen(false); setAttestNotes(""); }}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ duration: 0.2 }}
+              className="relative w-full max-w-md mx-4 rounded-2xl"
+              style={{ background: "#0f172a", border: `1px solid ${palette.borderLight}` }}
+            >
+              <div className="px-6 py-4" style={{ borderBottom: `1px solid ${palette.border}` }}>
+                <h3 className="text-base font-semibold" style={{ color: palette.text }}>Attest Control</h3>
+              </div>
+              <div className="p-6">
+                <div className="mb-4">
+                  <span style={{ color: palette.textMuted }}>Control: </span>
+                  <span className="font-semibold" style={{ color: palette.text }}>{selectedControl?.controlName}</span>
+                </div>
+                <textarea
+                  placeholder="Add attestation notes..."
+                  value={attestNotes}
+                  onChange={(e) => setAttestNotes(e.target.value)}
+                  rows={4}
+                  className="w-full px-3 py-2 rounded-xl text-sm bg-slate-900/50 border border-white/10 text-white focus:outline-none focus:border-cyan-500/50 transition-colors resize-none"
+                />
+                <div className="flex justify-end gap-3 mt-6">
+                  <button
+                    onClick={() => { setAttestModalOpen(false); setAttestNotes(""); }}
+                    className="px-4 py-2 text-sm rounded-lg border transition-colors hover:bg-white/5"
+                    style={{ borderColor: palette.border, color: palette.textMuted }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleAttest}
+                    className="px-4 py-2 text-sm rounded-lg text-white font-medium border-0 transition-colors"
+                    style={{ background: `linear-gradient(135deg, ${palette.success} 0%, ${palette.successMuted} 100%)` }}
+                  >
+                    Submit Attestation
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Control Drawer (slide-in panel) */}
+      <AnimatePresence>
+        {controlDrawerOpen && (
+          <div className="fixed inset-0 z-50 flex justify-end">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60"
+              onClick={() => setControlDrawerOpen(false)}
+            />
+            <motion.div
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", damping: 30, stiffness: 300 }}
+              className="relative w-full max-w-[500px] h-full overflow-y-auto"
+              style={{ background: "#0f172a" }}
+            >
+              <div
+                className="sticky top-0 z-10 flex items-center justify-between px-6 py-4"
+                style={{ background: "#0f172a", borderBottom: `1px solid ${palette.border}` }}
+              >
+                <span className="text-base font-semibold" style={{ color: palette.text }}>
+                  {selectedControl?.controlName}
+                </span>
+                <button
+                  onClick={() => setControlDrawerOpen(false)}
+                  className="p-1 rounded hover:bg-white/10 transition-colors"
+                  style={{ color: palette.textMuted }}
+                >
+                  <XCircleIcon className="w-5 h-5" />
+                </button>
+              </div>
+              {selectedControl && (
+                <div className="p-6">
+                  <div className="mb-6">
+                    <span className="block text-[11px] uppercase tracking-wider" style={{ color: palette.textFaint }}>
+                      Control ID
+                    </span>
+                    <div className="mt-1 font-mono text-sm" style={{ color: palette.success }}>
+                      {selectedControl.controlId}
+                    </div>
+                  </div>
+                  <div className="mb-6">
+                    <span className="block text-[11px] uppercase tracking-wider" style={{ color: palette.textFaint }}>
+                      Status
+                    </span>
+                    <div className="mt-2">
+                      <span
+                        className="inline-block px-2 py-0.5 rounded text-xs font-medium"
+                        style={{
+                          background: selectedControl.status === "implemented" ? palette.successBg : palette.warningBg,
+                          color: selectedControl.status === "implemented" ? palette.success : palette.warning,
+                        }}
+                      >
+                        {selectedControl.status}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="mb-6">
+                    <span className="block text-[11px] uppercase tracking-wider" style={{ color: palette.textFaint }}>
+                      Description
+                    </span>
+                    <div className="mt-1 leading-relaxed" style={{ color: palette.textMuted }}>
+                      {selectedControl.description || "No description available."}
+                    </div>
+                  </div>
+                  <div className="mb-6">
+                    <span className="block text-[11px] uppercase tracking-wider" style={{ color: palette.textFaint }}>
+                      Evidence ({controlEvidence.length})
+                    </span>
+                    {controlEvidence.length > 0 ? (
+                      <div className="mt-2 space-y-2">
+                        {controlEvidence.map((ev, i) => (
+                          <div
+                            key={i}
+                            className="px-3 py-2 rounded-lg text-[13px]"
+                            style={{ background: palette.cardBg, color: palette.textMuted }}
+                          >
+                            {ev.fileName || `Evidence ${i + 1}`}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mt-1" style={{ color: palette.textFaint }}>
+                        No evidence attached
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => {
+                      setControlDrawerOpen(false);
+                      setAttestModalOpen(true);
+                    }}
+                    className="flex items-center justify-center gap-2 w-full h-11 rounded-lg text-sm font-medium text-white border-0 transition-colors"
+                    style={{ background: `linear-gradient(135deg, ${palette.success} 0%, ${palette.successMuted} 100%)` }}
+                  >
+                    <CheckCircleIcon className="w-4 h-4" />
+                    Attest This Control
+                  </button>
+                </div>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

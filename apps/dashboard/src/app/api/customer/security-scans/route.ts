@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
       FROM security_scans ss
       WHERE ss.tenant_id = $1`;
 
-    const params: any[] = [parseInt(tenantId)];
+    const params: any[] = [tenantId];
     let paramIndex = 2;
 
     if (status) {
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
          AVG(CASE WHEN security_score IS NOT NULL THEN security_score END) as avg_security_score
        FROM security_scans
        WHERE tenant_id = $1`,
-      [parseInt(tenantId)],
+      [tenantId],
     );
 
     const vulnSummary = await database.queryOne(
@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
          COUNT(CASE WHEN severity = 'LOW' THEN 1 END) as low_vulns
        FROM vulnerabilities
        WHERE tenant_id = $1 AND status = 'open'`,
-      [parseInt(tenantId)],
+      [tenantId],
     );
 
     const formattedScans = securityScans.map((scan: any) => ({
@@ -173,7 +173,7 @@ export async function POST(request: NextRequest) {
     const existingScan = await database.queryOne(
       `SELECT id FROM security_scans
        WHERE tenant_id = $1 AND url = $2 AND status IN ('pending', 'running')`,
-      [parseInt(tenantId), url],
+      [tenantId, url],
     );
 
     if (existingScan) {
@@ -189,7 +189,7 @@ export async function POST(request: NextRequest) {
     const securityScan = await database.queryOne(
       `INSERT INTO security_scans (tenant_id, url, target, scan_type, status, created_at, created_by)
        VALUES ($1, $2, $2, $3, $4, NOW(), $5) RETURNING *`,
-      [parseInt(tenantId), url, scanType, "pending", userId || "system"],
+      [tenantId, url, scanType, "pending", userId || "system"],
     );
 
     if (!securityScan) {
@@ -202,10 +202,10 @@ export async function POST(request: NextRequest) {
     await database.query(
       `INSERT INTO scan_queue (scan_id, tenant_id, scan_type, priority, created_at)
        VALUES ($1, $2, $3, $4, NOW())`,
-      [securityScan.id, parseInt(tenantId), "security", "normal"],
+      [securityScan.id, tenantId, "security", "normal"],
     );
 
-    startSecurityScan(securityScan.id, parseInt(tenantId), url, scanType).catch(err => {
+    startSecurityScan(securityScan.id, tenantId, url, scanType).catch(err => {
       logger.error("Async scan start failed:", err);
     });
 
@@ -241,11 +241,10 @@ export async function POST(request: NextRequest) {
 
 async function startSecurityScan(
   scanId: number,
-  tenantId: number,
+  tenantId: string,
   targetUrl: string,
   scanType: string
 ) {
-  console.log('🔍 STARTING SCAN:', { scanId, tenantId, targetUrl, scanType });
   const startTime = Date.now();
   
   try {
@@ -285,13 +284,8 @@ async function startSecurityScan(
 
     securityScore = Math.max(0, securityScore);
 
-    console.log('📊 Found vulnerabilities:', vulnerabilities.length);
-    console.log('First vuln:', vulnerabilities[0]);
-    console.log('📊 Found vulnerabilities:', vulnerabilities.length);
-    console.log('First vuln:', vulnerabilities[0]);
     // Insert vulnerabilities into database
     for (const vuln of vulnerabilities) {
-      console.log('💾 Inserting vuln:', { title: vuln.title, type: vuln.vulnerability_type, severity: vuln.severity });
       await database.query(
         `INSERT INTO vulnerabilities (
           tenant_id, scan_id, vulnerability_type, severity, title, 

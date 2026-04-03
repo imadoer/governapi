@@ -1,5 +1,5 @@
 "use client";
-import { Card, List, Badge, Button } from "antd";
+
 import { useState, useEffect } from "react";
 
 export function SecurityAlerts() {
@@ -36,24 +36,23 @@ export function SecurityAlerts() {
   }, []);
 
   return (
-    <Card title="Security Alerts" size="small">
+    <div className="rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-5">
+      <h3 className="text-white font-semibold text-sm mb-3">Security Alerts</h3>
       {alerts.length > 0 ? (
-        <List
-          size="small"
-          dataSource={alerts}
-          renderItem={(alert: any) => (
-            <List.Item>
-              <List.Item.Meta
-                avatar={<Badge status="error" />}
-                title={alert.message}
-                description={`${alert.time} • Source: ${alert.source}`}
-              />
-            </List.Item>
-          )}
-        />
+        <div className="space-y-3">
+          {alerts.map((alert: any) => (
+            <div key={alert.id} className="flex items-start gap-3 p-2 rounded-lg bg-white/5">
+              <span className="w-2 h-2 rounded-full bg-red-400 mt-1.5 flex-shrink-0" />
+              <div>
+                <div className="text-white text-sm font-medium">{alert.message}</div>
+                <div className="text-gray-500 text-xs mt-0.5">{alert.time} &bull; Source: {alert.source}</div>
+              </div>
+            </div>
+          ))}
+        </div>
       ) : (
-        <p>No security alerts</p>
+        <p className="text-gray-500 text-sm">No security alerts</p>
       )}
-    </Card>
+    </div>
   );
 }

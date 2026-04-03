@@ -11,7 +11,6 @@ import {
   CheckCircleIcon,
   ChartBarIcon,
 } from "@heroicons/react/24/outline";
-import { Spin, Progress, Tag, Tabs } from "antd";
 import {
   LineChart,
   Line,
@@ -64,6 +63,7 @@ export function PerformanceMonitorPage({ companyId }: { companyId: string }) {
   );
   const [slowestEndpoints, setSlowestEndpoints] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("endpoints");
 
   const fetchPerformanceData = async () => {
     setLoading(true);
@@ -103,22 +103,30 @@ export function PerformanceMonitorPage({ companyId }: { companyId: string }) {
   };
 
   const getPerformanceStatus = (avgTime: number) => {
-    if (avgTime < 200) return { label: "Excellent", color: "green" };
-    if (avgTime < 500) return { label: "Good", color: "blue" };
-    if (avgTime < 1000) return { label: "Fair", color: "orange" };
-    return { label: "Slow", color: "red" };
+    if (avgTime < 200) return { label: "Excellent", classes: "bg-green-500/20 text-green-400 border border-green-500/30" };
+    if (avgTime < 500) return { label: "Good", classes: "bg-blue-500/20 text-blue-400 border border-blue-500/30" };
+    if (avgTime < 1000) return { label: "Fair", classes: "bg-orange-500/20 text-orange-400 border border-orange-500/30" };
+    return { label: "Slow", classes: "bg-red-500/20 text-red-400 border border-red-500/30" };
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <Spin size="large" />
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400" />
       </div>
     );
   }
 
   const avgResponseTime = summary?.averageResponseTime || 0;
   const performanceStatus = getPerformanceStatus(avgResponseTime);
+  const progressPercent = Math.min(100, (avgResponseTime / 1000) * 100);
+  const successPercent = summary?.successRate || 0;
+
+  const tabs = [
+    { key: "endpoints", label: "Endpoint Performance" },
+    { key: "slowest", label: "Slowest Endpoints" },
+    { key: "errors", label: "Error Analysis" },
+  ];
 
   return (
     <div className="space-y-6">
@@ -151,24 +159,27 @@ export function PerformanceMonitorPage({ companyId }: { companyId: string }) {
         >
           <div className="flex items-center justify-between mb-4">
             <BoltIcon className="w-10 h-10 text-cyan-500" />
-            <Tag color={performanceStatus.color}>{performanceStatus.label}</Tag>
+            <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${performanceStatus.classes}`}>
+              {performanceStatus.label}
+            </span>
           </div>
           <p className="text-sm text-slate-400 mb-1">Avg Response Time</p>
           <p className="text-3xl font-bold text-white mb-2">
             {avgResponseTime}ms
           </p>
-          <Progress
-            percent={Math.min(100, (avgResponseTime / 1000) * 100)}
-            strokeColor={getResponseTimeColor(avgResponseTime)}
-            showInfo={false}
-          />
+          <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{ width: `${progressPercent}%`, backgroundColor: getResponseTimeColor(avgResponseTime) }}
+            />
+          </div>
         </motion.div>
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6"
+          className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6"
         >
           <div className="flex items-center justify-between mb-4">
             <RocketLaunchIcon className="w-10 h-10 text-green-500" />
@@ -189,29 +200,30 @@ export function PerformanceMonitorPage({ companyId }: { companyId: string }) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6"
+          className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6"
         >
           <div className="flex items-center justify-between mb-4">
             <CheckCircleIcon className="w-10 h-10 text-green-500" />
             <div className="text-right">
               <p className="text-sm text-slate-400">Success Rate</p>
               <p className="text-3xl font-bold text-green-500">
-                {summary?.successRate || 0}%
+                {successPercent}%
               </p>
             </div>
           </div>
-          <Progress
-            percent={summary?.successRate || 0}
-            strokeColor="#10b981"
-            showInfo={false}
-          />
+          <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+              style={{ width: `${successPercent}%` }}
+            />
+          </div>
         </motion.div>
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6"
+          className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6"
         >
           <div className="flex items-center justify-between mb-4">
             <ClockIcon className="w-10 h-10 text-orange-500" />
@@ -233,7 +245,7 @@ export function PerformanceMonitorPage({ companyId }: { companyId: string }) {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4 }}
-        className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6"
+        className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6"
       >
         <h3 className="text-xl font-bold text-white mb-4">
           24-Hour Response Time Trend
@@ -282,239 +294,244 @@ export function PerformanceMonitorPage({ companyId }: { companyId: string }) {
       </motion.div>
 
       {/* Tabs */}
-      <Tabs
-        defaultActiveKey="endpoints"
-        items={[
-          {
-            key: "endpoints",
-            label: "📊 Endpoint Performance",
-            children: (
-              <div className="space-y-3">
-                {endpointPerformance.map((endpoint, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    className="bg-slate-800/50 border border-slate-700 rounded-xl p-5"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <code className="text-cyan-400 font-mono">
-                            {endpoint.endpoint}
-                          </code>
-                          <Tag
-                            color={
-                              getPerformanceStatus(endpoint.averageResponseTime)
-                                .color
-                            }
-                          >
-                            {endpoint.averageResponseTime}ms
-                          </Tag>
-                        </div>
-                        <div className="flex items-center gap-4 text-sm text-slate-400">
-                          <span>
-                            Requests:{" "}
-                            <span className="text-white font-semibold">
-                              {endpoint.requestCount}
-                            </span>
-                          </span>
-                          <span>•</span>
-                          <span>
-                            P95:{" "}
-                            <span className="text-purple-400">
-                              {endpoint.p95ResponseTime}ms
-                            </span>
-                          </span>
-                          <span>•</span>
-                          <span>
-                            Slow:{" "}
-                            <span className="text-orange-400">
-                              {endpoint.slowRequests}
-                            </span>
-                          </span>
-                        </div>
-                      </div>
-                      <Progress
-                        type="circle"
-                        percent={Math.min(
-                          100,
-                          100 - (endpoint.averageResponseTime / 1000) * 100,
-                        )}
-                        strokeColor={getResponseTimeColor(
-                          endpoint.averageResponseTime,
-                        )}
-                        width={60}
-                      />
-                    </div>
-                  </motion.div>
-                ))}
+      <div>
+        <div className="flex gap-2 mb-6">
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`px-5 py-2.5 rounded-xl font-medium text-sm transition-all ${
+                activeTab === tab.key
+                  ? "bg-cyan-500 text-white shadow-lg shadow-cyan-500/25"
+                  : "bg-slate-800/50 text-slate-400 hover:text-white hover:bg-slate-700 border border-white/10"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
 
-                {endpointPerformance.length === 0 && (
-                  <div className="text-center py-16 bg-slate-800/30 rounded-2xl">
-                    <ChartBarIcon className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-                    <p className="text-xl text-white font-semibold mb-2">
-                      No Performance Data
-                    </p>
-                    <p className="text-slate-400">
-                      Start making API requests to see performance metrics
-                    </p>
-                  </div>
-                )}
-              </div>
-            ),
-          },
-          {
-            key: "slowest",
-            label: "🐌 Slowest Endpoints",
-            children: (
-              <div className="space-y-3">
-                {slowestEndpoints.map((endpoint, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    className="bg-slate-800/50 border-l-4 border-red-500 rounded-r-xl p-5"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <code className="text-red-400 font-mono text-lg">
+        {activeTab === "endpoints" && (
+          <div className="space-y-3">
+            {endpointPerformance.map((endpoint, index) => {
+              const score = Math.min(100, 100 - (endpoint.averageResponseTime / 1000) * 100);
+              return (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                  className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-5"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <code className="text-cyan-400 font-mono">
                           {endpoint.endpoint}
                         </code>
-                        <div className="flex items-center gap-4 text-sm text-slate-400 mt-2">
-                          <span>
-                            Avg:{" "}
-                            <span className="text-red-400 font-bold">
-                              {endpoint.averageResponseTime}ms
-                            </span>
-                          </span>
-                          <span>•</span>
-                          <span>Requests: {endpoint.requestCount}</span>
-                        </div>
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${getPerformanceStatus(endpoint.averageResponseTime).classes}`}>
+                          {endpoint.averageResponseTime}ms
+                        </span>
                       </div>
-                      <Tag color="red">SLOW</Tag>
+                      <div className="flex items-center gap-4 text-sm text-slate-400">
+                        <span>
+                          Requests:{" "}
+                          <span className="text-white font-semibold">
+                            {endpoint.requestCount}
+                          </span>
+                        </span>
+                        <span>•</span>
+                        <span>
+                          P95:{" "}
+                          <span className="text-purple-400">
+                            {endpoint.p95ResponseTime}ms
+                          </span>
+                        </span>
+                        <span>•</span>
+                        <span>
+                          Slow:{" "}
+                          <span className="text-orange-400">
+                            {endpoint.slowRequests}
+                          </span>
+                        </span>
+                      </div>
                     </div>
-                  </motion.div>
-                ))}
-
-                {slowestEndpoints.length === 0 && (
-                  <div className="text-center py-16 bg-slate-800/30 rounded-2xl">
-                    <CheckCircleIcon className="w-16 h-16 text-green-500 mx-auto mb-4" />
-                    <p className="text-xl text-white font-semibold mb-2">
-                      All Endpoints Performing Well
-                    </p>
-                    <p className="text-slate-400">No slow endpoints detected</p>
+                    <div className="relative w-[60px] h-[60px] flex items-center justify-center">
+                      <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                        <circle cx="18" cy="18" r="15.5" fill="none" stroke="#334155" strokeWidth="3" />
+                        <circle
+                          cx="18" cy="18" r="15.5" fill="none"
+                          stroke={getResponseTimeColor(endpoint.averageResponseTime)}
+                          strokeWidth="3"
+                          strokeDasharray={`${score} ${100 - score}`}
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                      <span className="absolute text-xs font-bold text-white">{Math.round(score)}%</span>
+                    </div>
                   </div>
-                )}
+                </motion.div>
+              );
+            })}
+
+            {endpointPerformance.length === 0 && (
+              <div className="text-center py-16 bg-slate-800/30 rounded-2xl">
+                <ChartBarIcon className="w-16 h-16 text-slate-600 mx-auto mb-4" />
+                <p className="text-xl text-white font-semibold mb-2">
+                  No Performance Data
+                </p>
+                <p className="text-slate-400">
+                  Start making API requests to see performance metrics
+                </p>
               </div>
-            ),
-          },
-          {
-            key: "errors",
-            label: "⚠️ Error Analysis",
-            children: (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6"
-                >
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="p-3 bg-yellow-500/20 rounded-xl">
-                      <ExclamationTriangleIcon className="w-6 h-6 text-yellow-500" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-slate-400">
-                        Client Errors (4xx)
-                      </p>
-                      <p className="text-2xl font-bold text-yellow-500">
-                        {errorAnalysis?.clientErrors || 0}
-                      </p>
-                    </div>
-                  </div>
-                  <p className="text-xs text-slate-500">
-                    Bad requests, unauthorized, not found, etc.
-                  </p>
-                </motion.div>
+            )}
+          </div>
+        )}
 
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 0.1 }}
-                  className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6"
-                >
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="p-3 bg-red-500/20 rounded-xl">
-                      <ExclamationTriangleIcon className="w-6 h-6 text-red-500" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-slate-400">
-                        Server Errors (5xx)
-                      </p>
-                      <p className="text-2xl font-bold text-red-500">
-                        {errorAnalysis?.serverErrors || 0}
-                      </p>
+        {activeTab === "slowest" && (
+          <div className="space-y-3">
+            {slowestEndpoints.map((endpoint, index) => (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: index * 0.05 }}
+                className="bg-slate-800/50 border-l-4 border-red-500 rounded-r-xl p-5"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <code className="text-red-400 font-mono text-lg">
+                      {endpoint.endpoint}
+                    </code>
+                    <div className="flex items-center gap-4 text-sm text-slate-400 mt-2">
+                      <span>
+                        Avg:{" "}
+                        <span className="text-red-400 font-bold">
+                          {endpoint.averageResponseTime}ms
+                        </span>
+                      </span>
+                      <span>•</span>
+                      <span>Requests: {endpoint.requestCount}</span>
                     </div>
                   </div>
-                  <p className="text-xs text-slate-500">
-                    Internal server errors, service unavailable
-                  </p>
-                </motion.div>
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-500/20 text-red-400 border border-red-500/30">
+                    SLOW
+                  </span>
+                </div>
+              </motion.div>
+            ))}
 
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 0.2 }}
-                  className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6"
-                >
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="p-3 bg-orange-500/20 rounded-xl">
-                      <ClockIcon className="w-6 h-6 text-orange-500" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-slate-400">
-                        Rate Limit Errors
-                      </p>
-                      <p className="text-2xl font-bold text-orange-500">
-                        {errorAnalysis?.rateLimitErrors || 0}
-                      </p>
-                    </div>
-                  </div>
-                  <p className="text-xs text-slate-500">
-                    429 Too Many Requests
-                  </p>
-                </motion.div>
-
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 0.3 }}
-                  className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6"
-                >
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="p-3 bg-purple-500/20 rounded-xl">
-                      <ExclamationTriangleIcon className="w-6 h-6 text-purple-500" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-slate-400">
-                        Service Unavailable
-                      </p>
-                      <p className="text-2xl font-bold text-purple-500">
-                        {errorAnalysis?.serviceUnavailable || 0}
-                      </p>
-                    </div>
-                  </div>
-                  <p className="text-xs text-slate-500">
-                    503 Service Unavailable
-                  </p>
-                </motion.div>
+            {slowestEndpoints.length === 0 && (
+              <div className="text-center py-16 bg-slate-800/30 rounded-2xl">
+                <CheckCircleIcon className="w-16 h-16 text-green-500 mx-auto mb-4" />
+                <p className="text-xl text-white font-semibold mb-2">
+                  All Endpoints Performing Well
+                </p>
+                <p className="text-slate-400">No slow endpoints detected</p>
               </div>
-            ),
-          },
-        ]}
-      />
+            )}
+          </div>
+        )}
+
+        {activeTab === "errors" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-3 bg-yellow-500/20 rounded-xl">
+                  <ExclamationTriangleIcon className="w-6 h-6 text-yellow-500" />
+                </div>
+                <div>
+                  <p className="text-sm text-slate-400">
+                    Client Errors (4xx)
+                  </p>
+                  <p className="text-2xl font-bold text-yellow-500">
+                    {errorAnalysis?.clientErrors || 0}
+                  </p>
+                </div>
+              </div>
+              <p className="text-xs text-slate-500">
+                Bad requests, unauthorized, not found, etc.
+              </p>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.1 }}
+              className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-3 bg-red-500/20 rounded-xl">
+                  <ExclamationTriangleIcon className="w-6 h-6 text-red-500" />
+                </div>
+                <div>
+                  <p className="text-sm text-slate-400">
+                    Server Errors (5xx)
+                  </p>
+                  <p className="text-2xl font-bold text-red-500">
+                    {errorAnalysis?.serverErrors || 0}
+                  </p>
+                </div>
+              </div>
+              <p className="text-xs text-slate-500">
+                Internal server errors, service unavailable
+              </p>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.2 }}
+              className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-3 bg-orange-500/20 rounded-xl">
+                  <ClockIcon className="w-6 h-6 text-orange-500" />
+                </div>
+                <div>
+                  <p className="text-sm text-slate-400">
+                    Rate Limit Errors
+                  </p>
+                  <p className="text-2xl font-bold text-orange-500">
+                    {errorAnalysis?.rateLimitErrors || 0}
+                  </p>
+                </div>
+              </div>
+              <p className="text-xs text-slate-500">
+                429 Too Many Requests
+              </p>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.3 }}
+              className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-3 bg-purple-500/20 rounded-xl">
+                  <ExclamationTriangleIcon className="w-6 h-6 text-purple-500" />
+                </div>
+                <div>
+                  <p className="text-sm text-slate-400">
+                    Service Unavailable
+                  </p>
+                  <p className="text-2xl font-bold text-purple-500">
+                    {errorAnalysis?.serviceUnavailable || 0}
+                  </p>
+                </div>
+              </div>
+              <p className="text-xs text-slate-500">
+                503 Service Unavailable
+              </p>
+            </motion.div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

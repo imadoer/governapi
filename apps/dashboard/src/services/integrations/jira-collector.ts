@@ -11,8 +11,6 @@ export async function collectJiraData(
   instanceUrl: string,
   projectKey: string
 ): Promise<JiraCollectorResult> {
-  console.log('🎫 Jira Collector Called:', { email, instanceUrl, projectKey });
-  
   const authHeader = `Basic ${Buffer.from(`${email}:${apiToken}`).toString('base64')}`;
   const headers = {
     Authorization: authHeader,

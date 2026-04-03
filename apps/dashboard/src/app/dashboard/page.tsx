@@ -17,7 +17,6 @@ import {
   XMarkIcon,
   ChevronRightIcon,
 } from "@heroicons/react/24/outline";
-import { Spin } from "antd";
 
 // Import all advanced components
 import { HeaderBar } from "./components/advanced/HeaderBar";
@@ -276,12 +275,10 @@ export default function AdvancedDashboard() {
   }, []);
 
   useEffect(() => {
-    console.log("useEffect running, company:", company);
     if (!company?.id) return;
 
     const fetchDashboard = async () => {
       setLoading(true);
-      console.log("Fetching dashboard with company ID:", company.id);
       try {
         const response = await fetch("/api/customer/dashboard", {
           headers: { "x-tenant-id": company.id.toString() },
@@ -321,16 +318,168 @@ export default function AdvancedDashboard() {
 
   if (loading || !dashboardStats) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 flex items-center justify-center">
-        <Spin size="large" />
+      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400" />
       </div>
     );
   }
+
+  const [onboardingStep, setOnboardingStep] = useState(0);
+  const [addApiUrl, setAddApiUrl] = useState("");
+  const [addApiName, setAddApiName] = useState("");
+  const [onboardingLoading, setOnboardingLoading] = useState(false);
+  const [onboardingDone, setOnboardingDone] = useState(false);
+
+  const handleOnboardingAddApi = async () => {
+    if (!addApiUrl || !company?.id) return;
+    setOnboardingLoading(true);
+    try {
+      // Step 1: Register the endpoint
+      const addRes = await fetch("/api/customer/api-endpoints", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-tenant-id": company.id.toString(),
+        },
+        body: JSON.stringify({
+          name: addApiName || new URL(addApiUrl).hostname,
+          url: addApiUrl,
+          method: "GET",
+          description: "Added during onboarding",
+        }),
+      });
+      const addResult = await addRes.json();
+      if (!addResult.success) {
+        alert(addResult.error || "Failed to add API");
+        setOnboardingLoading(false);
+        return;
+      }
+      setOnboardingStep(2);
+
+      // Step 2: Auto-trigger a scan
+      await fetch("/api/customer/security-scans", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-tenant-id": company.id.toString(),
+        },
+        body: JSON.stringify({ url: addApiUrl, scanType: "quick" }),
+      });
+      setOnboardingStep(3);
+
+      // Step 3: Wait for scan to complete, then refresh dashboard
+      const poll = setInterval(async () => {
+        const dashRes = await fetch("/api/customer/dashboard", {
+          headers: { "x-tenant-id": company.id.toString() },
+        });
+        const dashData = await dashRes.json();
+        if (dashData.success && dashData.stats.totalScans > 0 && dashData.stats.postureScore > 0) {
+          clearInterval(poll);
+          setDashboardStats(dashData.dashboard);
+          setOnboardingDone(true);
+          setOnboardingLoading(false);
+        }
+      }, 3000);
+
+      // Stop polling after 60s regardless
+      setTimeout(() => {
+        clearInterval(poll);
+        setOnboardingLoading(false);
+        setOnboardingDone(true);
+        handleRefresh();
+      }, 60000);
+    } catch (err) {
+      console.error("Onboarding error:", err);
+      setOnboardingLoading(false);
+    }
+  };
 
   const renderContent = () => {
     if (activeFeature === "overview") {
       return (
         <div className="space-y-6">
+          {/* Onboarding Card — shown when customer has no APIs and hasn't completed onboarding */}
+          {dashboardStats.overview.totalApis === 0 && !onboardingDone && (
+            <div className="bg-gradient-to-r from-cyan-900/40 to-violet-900/40 border border-cyan-500/30 rounded-2xl p-8 shadow-lg shadow-cyan-500/10">
+              <div className="flex items-start gap-6">
+                <div className="w-14 h-14 bg-gradient-to-br from-cyan-500 to-violet-500 rounded-2xl flex items-center justify-center flex-shrink-0">
+                  <ShieldCheckIcon className="w-8 h-8 text-white" />
+                </div>
+                <div className="flex-1">
+                  <h2 className="text-2xl font-bold text-white mb-2">Get Started with GovernAPI</h2>
+                  <p className="text-slate-300 mb-6">Add your API endpoint and we&apos;ll run a security scan immediately. Takes about 30 seconds.</p>
+
+                  {/* Step indicators */}
+                  <div className="flex items-center gap-3 mb-6">
+                    {["Add your API", "Running scan", "View results"].map((label, i) => (
+                      <div key={label} className="flex items-center gap-2">
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                          onboardingStep > i ? "bg-green-500 text-white" :
+                          onboardingStep === i ? "bg-cyan-500 text-white" :
+                          "bg-slate-700 text-slate-400"
+                        }`}>
+                          {onboardingStep > i ? "✓" : i + 1}
+                        </div>
+                        <span className={`text-sm ${onboardingStep >= i ? "text-white" : "text-slate-500"}`}>{label}</span>
+                        {i < 2 && <div className={`w-8 h-0.5 ${onboardingStep > i ? "bg-green-500" : "bg-slate-700"}`} />}
+                      </div>
+                    ))}
+                  </div>
+
+                  {onboardingStep === 0 && (
+                    <div className="flex flex-col gap-3 max-w-xl">
+                      <input
+                        type="text"
+                        value={addApiName}
+                        onChange={(e) => setAddApiName(e.target.value)}
+                        placeholder="API name (e.g. Users API)"
+                        className="px-4 py-3 bg-slate-800/80 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                      />
+                      <div className="flex gap-3">
+                        <input
+                          type="url"
+                          value={addApiUrl}
+                          onChange={(e) => setAddApiUrl(e.target.value)}
+                          placeholder="https://api.yourcompany.com/endpoint"
+                          className="flex-1 px-4 py-3 bg-slate-800/80 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                        />
+                        <button
+                          onClick={() => { setOnboardingStep(1); handleOnboardingAddApi(); }}
+                          disabled={!addApiUrl || onboardingLoading}
+                          className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-violet-500 text-white font-semibold rounded-xl hover:from-cyan-600 hover:to-violet-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                        >
+                          Scan My API
+                        </button>
+                      </div>
+                      <p className="text-xs text-slate-500">We&apos;ll check security headers, HTTPS, CORS, and common vulnerabilities on your public endpoint.</p>
+                    </div>
+                  )}
+
+                  {onboardingStep >= 1 && onboardingStep < 3 && (
+                    <div className="flex items-center gap-3 text-cyan-400">
+                      <div className="animate-spin w-5 h-5 border-2 border-cyan-400 border-t-transparent rounded-full" />
+                      <span>{onboardingStep === 1 ? "Registering your API..." : "Running security scan..."}</span>
+                    </div>
+                  )}
+
+                  {onboardingStep === 3 && onboardingDone && (
+                    <div className="flex items-center gap-3 text-green-400">
+                      <ShieldCheckIcon className="w-6 h-6" />
+                      <span className="font-medium">Scan complete! Your security score is ready below.</span>
+                    </div>
+                  )}
+
+                  {onboardingStep === 3 && !onboardingDone && (
+                    <div className="flex items-center gap-3 text-cyan-400">
+                      <div className="animate-spin w-5 h-5 border-2 border-cyan-400 border-t-transparent rounded-full" />
+                      <span>Analyzing results...</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Hero Security Score */}
           <SecurityScore
             score={dashboardStats.security.overallScore}
@@ -452,7 +601,7 @@ export default function AdvancedDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 flex">
+    <div className="min-h-screen bg-[#0a0a0f] flex">
       {/* Sidebar */}
       <motion.div
         initial={false}

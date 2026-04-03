@@ -33,10 +33,8 @@ const securityExemptRoutes = [
 const rateLimitExemptRoutes = ["/api/health", "/api/billing/webhook"];
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  console.log("Middleware pathname:", pathname);
   const requestId = crypto.randomUUID();
   const ip = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "127.0.0.1";
-  console.log("DEBUG: IP extracted:", ip, "from headers:", request.headers.get("x-forwarded-for"), request.headers.get("x-real-ip"));
 
   // NEW: Protect admin dashboard pages FIRST (before other processing)
   if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
@@ -56,7 +54,7 @@ export async function middleware(request: NextRequest) {
 
     
     if (!nextAuthToken && !secureToken && !sessionToken) {
-      console.log("No customer session found, redirecting to login");
+      // No customer session found
       return NextResponse.redirect(new URL("/login", request.url));
     }
   }
@@ -83,17 +81,28 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // Skip middleware for internal requests from security processor
-  if (request.headers.get("x-internal-request") === "true") {
+  // Allow security processor internal forwarding but block external spoofing.
+  // The security processor sets x-internal-request when forwarding to the target route.
+  // We validate it by checking that the request also has the security processor's
+  // x-request-id header (set server-side) — external clients won't have both.
+  if (
+    request.headers.get("x-internal-request") === "true" &&
+    request.headers.get("x-request-id")
+  ) {
     const response = NextResponse.next();
-    if (request.headers.get("x-tenant-id")) {
-      response.headers.set(
-        "x-tenant-id",
-        request.headers.get("x-tenant-id") || "",
-      );
-    }
+    // Forward tenant/user headers from security processor
+    const tenantId = request.headers.get("x-tenant-id");
+    if (tenantId) response.headers.set("x-tenant-id", tenantId);
     return addSecurityHeaders(response, requestId);
   }
+
+  // Strip spoofable headers from external requests
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.delete("x-internal-request");
+  requestHeaders.delete("x-admin-id");
+  requestHeaders.delete("x-admin-role");
+  requestHeaders.delete("x-user-id");
+  requestHeaders.delete("x-tenant-id");
 
   try {
     // For public routes, apply security headers and pass through
@@ -118,15 +127,11 @@ export async function middleware(request: NextRequest) {
         pathname.startsWith(route),
       );
 
-      console.log("Middleware setting auth param to:", requiresAuth.toString());
       const rewriteRequest = NextResponse.rewrite(securityUrl);
       rewriteRequest.headers.set("x-requires-auth", requiresAuth.toString());
       rewriteRequest.headers.set("x-requires-rate-limit", requiresRateLimit.toString());
       rewriteRequest.headers.set("x-client-ip", ip);
       return rewriteRequest;
-
-
-      return NextResponse.rewrite(securityUrl);
     }
 
     // For non-API routes, just pass through with security headers

@@ -1,26 +1,28 @@
 "use client";
 
 import React, { useState } from "react";
-import { Card, Input, Button, message, Form, Typography, Layout } from "antd";
-import { KeyOutlined, UserOutlined } from "@ant-design/icons";
-
-const { Title, Text } = Typography;
-const { Header, Content } = Layout;
+import { motion } from "framer-motion";
+import { KeyIcon, UserIcon } from "@heroicons/react/24/outline";
 
 export default function SimpleCustomerPortal() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [customer, setCustomer] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [apiKey, setApiKey] = useState("");
+  const [error, setError] = useState("");
 
-  const handleLogin = async (values: any) => {
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!apiKey) return;
     setLoading(true);
+    setError("");
     try {
       const response = await fetch("/api/customer/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "login_with_key",
-          apiKey: values.apiKey,
+          apiKey,
         }),
       });
 
@@ -29,13 +31,12 @@ export default function SimpleCustomerPortal() {
       if (data.success) {
         setCustomer(data.tenant);
         setIsLoggedIn(true);
-        message.success("Login successful!");
       } else {
-        message.error(data.error || "Login failed");
+        setError(data.error || "Login failed");
       }
-    } catch (error) {
-      console.error("Login error:", error);
-      message.error("Login failed");
+    } catch (err) {
+      console.error("Login error:", err);
+      setError("Login failed");
     } finally {
       setLoading(false);
     }
@@ -43,94 +44,120 @@ export default function SimpleCustomerPortal() {
 
   if (!isLoggedIn) {
     return (
-      <div
-        style={{
-          minHeight: "100vh",
-          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "20px",
-        }}
-      >
-        <Card style={{ width: "100%", maxWidth: "400px" }}>
-          <div style={{ textAlign: "center", marginBottom: 24 }}>
-            <Title level={2}>GovernAPI Login</Title>
-          </div>
+      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center p-6">
+        <div className="fixed inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute top-1/4 left-1/3 w-[500px] h-[500px] bg-cyan-500/5 rounded-full blur-[120px]" />
+          <div className="absolute bottom-1/3 right-1/4 w-[400px] h-[400px] bg-violet-500/5 rounded-full blur-[120px]" />
+        </div>
 
-          <Form onFinish={handleLogin} layout="vertical">
-            <Form.Item
-              name="apiKey"
-              label="API Key"
-              rules={[{ required: true }]}
-            >
-              <Input
-                prefix={<KeyOutlined />}
-                placeholder="gapi_hx6zmpncm6j"
-                size="large"
-              />
-            </Form.Item>
-            <Form.Item>
-              <Button
-                type="primary"
-                htmlType="submit"
-                loading={loading}
-                block
-                size="large"
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="relative w-full max-w-md"
+        >
+          <div className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl">
+            <div className="flex items-center justify-center mb-8">
+              <div className="w-16 h-16 bg-gradient-to-br from-cyan-500 to-violet-500 rounded-2xl flex items-center justify-center">
+                <KeyIcon className="w-10 h-10 text-white" />
+              </div>
+            </div>
+
+            <h1 className="text-3xl font-bold text-white text-center mb-2">GovernAPI Login</h1>
+            <p className="text-slate-400 text-center mb-8">Enter your API key to access your dashboard</p>
+
+            <form onSubmit={handleLogin} className="space-y-6">
+              {error && (
+                <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-xl text-sm">
+                  {error}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">API Key</label>
+                <div className="relative">
+                  <KeyIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                  <input
+                    type="text"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder="gapi_hx6zmpncm6j"
+                    required
+                    className="w-full pl-11 pr-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full px-6 py-4 bg-gradient-to-r from-cyan-500 to-violet-500 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                Login
-              </Button>
-            </Form.Item>
-          </Form>
-        </Card>
+                {loading && (
+                  <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                )}
+                {loading ? "Logging in..." : "Login"}
+              </button>
+            </form>
+          </div>
+        </motion.div>
       </div>
     );
   }
 
   return (
-    <Layout style={{ minHeight: "100vh" }}>
-      <Header
-        style={{
-          background: "#001529",
-          color: "white",
-          display: "flex",
-          alignItems: "center",
-        }}
-      >
-        <Title level={3} style={{ color: "white", margin: 0 }}>
-          GovernAPI Dashboard
-        </Title>
-        <div style={{ marginLeft: "auto" }}>
-          <Text style={{ color: "white", marginRight: 16 }}>
-            Welcome, {customer?.name}
-          </Text>
-          <Button onClick={() => setIsLoggedIn(false)}>Logout</Button>
+    <div className="min-h-screen bg-[#0a0a0f]">
+      <nav className="border-b border-white/10 backdrop-blur-xl bg-black/20">
+        <div className="max-w-7xl mx-auto px-8 py-4 flex items-center justify-between">
+          <h1 className="text-xl font-bold bg-gradient-to-r from-cyan-400 to-violet-400 bg-clip-text text-transparent">
+            GovernAPI Dashboard
+          </h1>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-slate-400">
+              Welcome, <span className="text-white">{customer?.name}</span>
+            </span>
+            <button
+              onClick={() => setIsLoggedIn(false)}
+              className="px-4 py-2 bg-white/5 border border-white/10 text-white rounded-xl text-sm hover:bg-white/10 transition-all"
+            >
+              Logout
+            </button>
+          </div>
         </div>
-      </Header>
+      </nav>
 
-      <Content style={{ padding: "24px" }}>
-        <Card title="Customer Dashboard">
-          <div>
-            <p>
-              <strong>Name:</strong> {customer?.name}
-            </p>
-            <p>
-              <strong>Email:</strong> {customer?.email}
-            </p>
-            <p>
-              <strong>API Key:</strong> {customer?.apiKey}
-            </p>
-            <p>
-              <strong>Customer ID:</strong> {customer?.id}
-            </p>
+      <div className="max-w-7xl mx-auto px-8 py-8">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-slate-800/30 backdrop-blur-sm border border-white/10 rounded-2xl p-8"
+        >
+          <h2 className="text-xl font-semibold text-white mb-6">Customer Dashboard</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+            <div className="bg-slate-900/50 rounded-xl p-4">
+              <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Name</p>
+              <p className="text-white font-medium">{customer?.name}</p>
+            </div>
+            <div className="bg-slate-900/50 rounded-xl p-4">
+              <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Email</p>
+              <p className="text-white font-medium">{customer?.email}</p>
+            </div>
+            <div className="bg-slate-900/50 rounded-xl p-4">
+              <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">API Key</p>
+              <p className="text-cyan-400 font-mono text-sm break-all">{customer?.apiKey}</p>
+            </div>
+            <div className="bg-slate-900/50 rounded-xl p-4">
+              <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Customer ID</p>
+              <p className="text-white font-medium">{customer?.id}</p>
+            </div>
           </div>
-          <div style={{ marginTop: 24 }}>
-            <Button type="primary" href="/customer">
-              Go to Full Dashboard
-            </Button>
-          </div>
-        </Card>
-      </Content>
-    </Layout>
+          <a
+            href="/customer"
+            className="inline-block px-6 py-3 bg-gradient-to-r from-cyan-500 to-violet-500 text-white rounded-xl font-semibold hover:shadow-[0_0_20px_rgba(6,182,212,0.4)] transition-all"
+          >
+            Go to Full Dashboard
+          </a>
+        </motion.div>
+      </div>
+    </div>
   );
 }

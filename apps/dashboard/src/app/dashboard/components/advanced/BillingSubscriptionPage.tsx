@@ -12,7 +12,6 @@ import {
   BoltIcon,
   ShieldCheckIcon,
 } from "@heroicons/react/24/outline";
-import { message, Spin, Tag, Tabs, Progress } from "antd";
 
 interface UsageStats {
   apis_monitored: number;
@@ -36,6 +35,13 @@ export function BillingSubscriptionPage({ companyId }: { companyId: string }) {
     null,
   );
   const [currentPlan] = useState("professional");
+  const [activeTab, setActiveTab] = useState("plans");
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+
+  const showToast = (message: string, type: "success" | "error") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   const fetchBillingData = async () => {
     setLoading(true);
@@ -82,10 +88,10 @@ export function BillingSubscriptionPage({ companyId }: { companyId: string }) {
       if (data.success && data.checkout.url) {
         window.location.href = data.checkout.url;
       } else {
-        message.error(data.error || "Failed to start checkout");
+        showToast(data.error || "Failed to start checkout", "error");
       }
     } catch (error) {
-      message.error("Failed to upgrade plan");
+      showToast("Failed to upgrade plan", "error");
     }
   };
 
@@ -102,6 +108,7 @@ export function BillingSubscriptionPage({ companyId }: { companyId: string }) {
         "30-day data retention",
       ],
       color: "blue",
+      btnClasses: "bg-blue-500 hover:bg-blue-600",
     },
     {
       id: "professional",
@@ -118,6 +125,7 @@ export function BillingSubscriptionPage({ companyId }: { companyId: string }) {
       ],
       color: "cyan",
       popular: true,
+      btnClasses: "bg-cyan-500 hover:bg-cyan-600",
     },
     {
       id: "enterprise",
@@ -134,19 +142,39 @@ export function BillingSubscriptionPage({ companyId }: { companyId: string }) {
         "SLA guarantee",
       ],
       color: "purple",
+      btnClasses: "bg-purple-500 hover:bg-purple-600",
     },
   ];
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <Spin size="large" />
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400" />
       </div>
     );
   }
 
+  const tabs = [
+    { key: "plans", label: "Plans & Pricing" },
+    { key: "usage", label: "Usage & Breakdown" },
+    { key: "billing", label: "Billing History" },
+  ];
+
   return (
     <div className="space-y-6">
+      {/* Toast */}
+      {toast && (
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`fixed top-6 right-6 z-50 px-6 py-3 rounded-xl text-white font-medium shadow-lg backdrop-blur-xl border border-white/10 ${
+            toast.type === "success" ? "bg-emerald-500/90" : "bg-red-500/90"
+          }`}
+        >
+          {toast.message}
+        </motion.div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -183,7 +211,9 @@ export function BillingSubscriptionPage({ companyId }: { companyId: string }) {
               </p>
             </div>
           </div>
-          <Progress percent={33} strokeColor="#06b6d4" showInfo={false} />
+          <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
+            <div className="h-full rounded-full bg-cyan-500 transition-all duration-500" style={{ width: "33%" }} />
+          </div>
           <p className="text-xs text-slate-400 mt-2">33% of your budget</p>
         </motion.div>
 
@@ -225,200 +255,201 @@ export function BillingSubscriptionPage({ companyId }: { companyId: string }) {
       </div>
 
       {/* Tabs */}
-      <Tabs
-        defaultActiveKey="plans"
-        items={[
-          {
-            key: "plans",
-            label: "💳 Plans & Pricing",
-            children: (
-              <div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {plans.map((plan, index) => (
-                    <motion.div
-                      key={plan.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                      className={`relative bg-slate-800/50 border ${
-                        plan.popular ? "border-cyan-500" : "border-slate-700"
-                      } rounded-2xl p-6 ${
-                        currentPlan === plan.id ? "ring-2 ring-cyan-500" : ""
-                      }`}
+      <div>
+        <div className="flex gap-2 mb-6">
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`px-5 py-2.5 rounded-xl font-medium text-sm transition-all ${
+                activeTab === tab.key
+                  ? "bg-cyan-500 text-white shadow-lg shadow-cyan-500/25"
+                  : "bg-slate-800/50 text-slate-400 hover:text-white hover:bg-slate-700 border border-white/10"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === "plans" && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {plans.map((plan, index) => (
+              <motion.div
+                key={plan.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.1 }}
+                className={`relative bg-slate-800/50 backdrop-blur-xl border ${
+                  plan.popular ? "border-cyan-500" : "border-white/10"
+                } rounded-2xl p-6 ${
+                  currentPlan === plan.id ? "ring-2 ring-cyan-500" : ""
+                }`}
+              >
+                {plan.popular && (
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2">
+                    <span className="px-4 py-1 rounded-full text-xs font-medium bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
+                      Most Popular
+                    </span>
+                  </div>
+                )}
+
+                {currentPlan === plan.id && (
+                  <div className="absolute -top-4 right-4">
+                    <span className="px-4 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-400 border border-green-500/30">
+                      Current Plan
+                    </span>
+                  </div>
+                )}
+
+                <h3 className="text-2xl font-bold text-white mb-2">
+                  {plan.name}
+                </h3>
+                <div className="mb-6">
+                  <span className="text-4xl font-bold text-white">
+                    ${plan.price}
+                  </span>
+                  <span className="text-slate-400">/month</span>
+                </div>
+
+                <ul className="space-y-3 mb-6">
+                  {plan.features.map((feature, idx) => (
+                    <li
+                      key={idx}
+                      className="flex items-center gap-2 text-sm text-slate-400"
                     >
-                      {plan.popular && (
-                        <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                          <Tag color="cyan" className="px-4 py-1">
-                            Most Popular
-                          </Tag>
-                        </div>
-                      )}
-
-                      {currentPlan === plan.id && (
-                        <div className="absolute -top-4 right-4">
-                          <Tag color="green" className="px-4 py-1">
-                            Current Plan
-                          </Tag>
-                        </div>
-                      )}
-
-                      <h3 className="text-2xl font-bold text-white mb-2">
-                        {plan.name}
-                      </h3>
-                      <div className="mb-6">
-                        <span className="text-4xl font-bold text-white">
-                          ${plan.price}
-                        </span>
-                        <span className="text-slate-400">/month</span>
-                      </div>
-
-                      <ul className="space-y-3 mb-6">
-                        {plan.features.map((feature, idx) => (
-                          <li
-                            key={idx}
-                            className="flex items-center gap-2 text-sm text-slate-400"
-                          >
-                            <CheckCircleIcon className="w-5 h-5 text-green-500 flex-shrink-0" />
-                            <span>{feature}</span>
-                          </li>
-                        ))}
-                      </ul>
-
-                      {currentPlan === plan.id ? (
-                        <button
-                          disabled
-                          className="w-full px-6 py-3 bg-slate-700 text-slate-400 rounded-xl font-semibold cursor-not-allowed"
-                        >
-                          Current Plan
-                        </button>
-                      ) : (
-                        <motion.button
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          onClick={() => handleUpgrade(plan.id)}
-                          className={`w-full px-6 py-3 bg-${plan.color}-500 hover:bg-${plan.color}-600 text-white rounded-xl font-semibold`}
-                        >
-                          {plans.findIndex((p) => p.id === currentPlan) < index
-                            ? "Upgrade"
-                            : "Downgrade"}
-                        </motion.button>
-                      )}
-                    </motion.div>
+                      <CheckCircleIcon className="w-5 h-5 text-green-500 flex-shrink-0" />
+                      <span>{feature}</span>
+                    </li>
                   ))}
-                </div>
-              </div>
-            ),
-          },
-          {
-            key: "usage",
-            label: "📊 Usage & Breakdown",
-            children: (
-              <div className="space-y-6">
-                <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
-                  <h3 className="text-xl font-bold text-white mb-6">
-                    Current Usage
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="p-4 bg-slate-900/50 rounded-xl">
-                      <p className="text-slate-400 text-sm mb-2">
-                        APIs Monitored
-                      </p>
-                      <p className="text-3xl font-bold text-white">
-                        {usageStats?.apis_monitored || 0}
-                      </p>
-                      <p className="text-xs text-slate-500 mt-1">of 50 limit</p>
-                    </div>
+                </ul>
 
-                    <div className="p-4 bg-slate-900/50 rounded-xl">
-                      <p className="text-slate-400 text-sm mb-2">
-                        Scans Performed
-                      </p>
-                      <p className="text-3xl font-bold text-white">
-                        {usageStats?.scans_performed || 0}
-                      </p>
-                      <p className="text-xs text-slate-500 mt-1">unlimited</p>
-                    </div>
+                {currentPlan === plan.id ? (
+                  <button
+                    disabled
+                    className="w-full px-6 py-3 bg-slate-700 text-slate-400 rounded-xl font-semibold cursor-not-allowed"
+                  >
+                    Current Plan
+                  </button>
+                ) : (
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => handleUpgrade(plan.id)}
+                    className={`w-full px-6 py-3 ${plan.btnClasses} text-white rounded-xl font-semibold`}
+                  >
+                    {plans.findIndex((p) => p.id === currentPlan) < index
+                      ? "Upgrade"
+                      : "Downgrade"}
+                  </motion.button>
+                )}
+              </motion.div>
+            ))}
+          </div>
+        )}
 
-                    <div className="p-4 bg-slate-900/50 rounded-xl">
-                      <p className="text-slate-400 text-sm mb-2">
-                        API Requests
-                      </p>
-                      <p className="text-3xl font-bold text-white">
-                        {usageStats?.total_requests || 0}
-                      </p>
-                      <p className="text-xs text-slate-500 mt-1">this month</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
-                  <h3 className="text-xl font-bold text-white mb-6">
-                    Cost Breakdown
-                  </h3>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between p-4 bg-slate-900/50 rounded-xl">
-                      <div className="flex items-center gap-3">
-                        <BoltIcon className="w-6 h-6 text-cyan-500" />
-                        <span className="text-white">API Monitoring</span>
-                      </div>
-                      <span className="text-white font-semibold">
-                        ${costBreakdown?.api_monitoring?.toFixed(2) || "0.00"}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between p-4 bg-slate-900/50 rounded-xl">
-                      <div className="flex items-center gap-3">
-                        <ShieldCheckIcon className="w-6 h-6 text-green-500" />
-                        <span className="text-white">Security Scanning</span>
-                      </div>
-                      <span className="text-white font-semibold">
-                        $
-                        {costBreakdown?.security_scanning?.toFixed(2) || "0.00"}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between p-4 bg-slate-900/50 rounded-xl">
-                      <div className="flex items-center gap-3">
-                        <ChartBarIcon className="w-6 h-6 text-purple-500" />
-                        <span className="text-white">API Requests</span>
-                      </div>
-                      <span className="text-white font-semibold">
-                        ${costBreakdown?.api_requests?.toFixed(2) || "0.00"}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between p-4 bg-cyan-500/10 border border-cyan-500/30 rounded-xl">
-                      <span className="text-white font-bold">
-                        Total Monthly Cost
-                      </span>
-                      <span className="text-2xl text-cyan-400 font-bold">
-                        ${monthlyCost.toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ),
-          },
-          {
-            key: "billing",
-            label: "🧾 Billing History",
-            children: (
-              <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
-                <div className="text-center py-16">
-                  <DocumentTextIcon className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-                  <p className="text-xl text-white font-semibold mb-2">
-                    No Billing History
+        {activeTab === "usage" && (
+          <div className="space-y-6">
+            <div className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
+              <h3 className="text-xl font-bold text-white mb-6">
+                Current Usage
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="p-4 bg-slate-900/50 rounded-xl">
+                  <p className="text-slate-400 text-sm mb-2">
+                    APIs Monitored
                   </p>
-                  <p className="text-slate-400">
-                    Your invoices will appear here
+                  <p className="text-3xl font-bold text-white">
+                    {usageStats?.apis_monitored || 0}
                   </p>
+                  <p className="text-xs text-slate-500 mt-1">of 50 limit</p>
+                </div>
+
+                <div className="p-4 bg-slate-900/50 rounded-xl">
+                  <p className="text-slate-400 text-sm mb-2">
+                    Scans Performed
+                  </p>
+                  <p className="text-3xl font-bold text-white">
+                    {usageStats?.scans_performed || 0}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">unlimited</p>
+                </div>
+
+                <div className="p-4 bg-slate-900/50 rounded-xl">
+                  <p className="text-slate-400 text-sm mb-2">
+                    API Requests
+                  </p>
+                  <p className="text-3xl font-bold text-white">
+                    {usageStats?.total_requests || 0}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">this month</p>
                 </div>
               </div>
-            ),
-          },
-        ]}
-      />
+            </div>
+
+            <div className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
+              <h3 className="text-xl font-bold text-white mb-6">
+                Cost Breakdown
+              </h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 bg-slate-900/50 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <BoltIcon className="w-6 h-6 text-cyan-500" />
+                    <span className="text-white">API Monitoring</span>
+                  </div>
+                  <span className="text-white font-semibold">
+                    ${costBreakdown?.api_monitoring?.toFixed(2) || "0.00"}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between p-4 bg-slate-900/50 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <ShieldCheckIcon className="w-6 h-6 text-green-500" />
+                    <span className="text-white">Security Scanning</span>
+                  </div>
+                  <span className="text-white font-semibold">
+                    $
+                    {costBreakdown?.security_scanning?.toFixed(2) || "0.00"}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between p-4 bg-slate-900/50 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <ChartBarIcon className="w-6 h-6 text-purple-500" />
+                    <span className="text-white">API Requests</span>
+                  </div>
+                  <span className="text-white font-semibold">
+                    ${costBreakdown?.api_requests?.toFixed(2) || "0.00"}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between p-4 bg-cyan-500/10 border border-cyan-500/30 rounded-xl">
+                  <span className="text-white font-bold">
+                    Total Monthly Cost
+                  </span>
+                  <span className="text-2xl text-cyan-400 font-bold">
+                    ${monthlyCost.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "billing" && (
+          <div className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
+            <div className="text-center py-16">
+              <DocumentTextIcon className="w-16 h-16 text-slate-600 mx-auto mb-4" />
+              <p className="text-xl text-white font-semibold mb-2">
+                No Billing History
+              </p>
+              <p className="text-slate-400">
+                Your invoices will appear here
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
