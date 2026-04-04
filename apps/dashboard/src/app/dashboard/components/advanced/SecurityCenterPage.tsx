@@ -116,7 +116,7 @@ export function SecurityCenterPage({ company, onNavigate }: any) {
     } catch { flash("PDF export failed", false); }
   };
 
-  const scoreColor = (s: number) => s >= 80 ? "#10b981" : s >= 60 ? "#f59e0b" : "#ef4444";
+  const scoreColor = (s: number) => s >= 70 ? "#10b981" : s >= 40 ? "#f59e0b" : "#ef4444";
 
   return (
     <FadeIn><div>

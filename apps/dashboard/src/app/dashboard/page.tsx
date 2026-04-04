@@ -362,7 +362,7 @@ export default function AdvancedDashboard() {
             threatsBlocked={dashboardStats.overview.blockedThreats}
           />
 
-          {/* Metric Cards — all real data, no hardcoded percentages */}
+          {/* Metric Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <MetricCard icon={ShieldCheckIcon} label="Protected Endpoints" value={dashboardStats.overview.totalApis} delay={0.1} />
             <MetricCard icon={BoltIcon} label="Threats Blocked" value={dashboardStats.overview.blockedThreats} delay={0.15} />
@@ -370,67 +370,84 @@ export default function AdvancedDashboard() {
             <MetricCard icon={ChartBarIcon} label="Total Scans" value={dashboardStats.overview.totalScans} delay={0.25} />
           </div>
 
-          {/* Threat Detection Timeline — real data from DB */}
-          <ThreatTimeline companyId={company?.id?.toString()} />
-
-          {/* Recent Activity — real data from DB */}
-          <div className="bg-slate-800/50 border border-white/[0.06] rounded-2xl p-6">
-            <h3 className="text-[13px] font-medium text-gray-400 mb-4">Recent Activity</h3>
-            {dashboardStats.recentActivity && dashboardStats.recentActivity.length > 0 ? (
-              <div className="space-y-2">
-                {dashboardStats.recentActivity.map((activity: any, i: number) => (
-                  <div key={i} className="flex items-center justify-between py-2 border-b border-white/[0.04] last:border-0">
-                    <div className="flex items-center gap-3">
-                      <span className={`w-2 h-2 rounded-full shrink-0 ${
-                        activity.type === "scan" ? "bg-cyan-400" :
-                        activity.type === "threat" ? "bg-red-400" :
-                        activity.type === "block" ? "bg-amber-400" :
-                        "bg-gray-500"
-                      }`} />
-                      <div>
-                        <span className="text-[13px] text-white">{activity.subject || activity.message}</span>
-                        {activity.status && <span className="ml-2 text-[11px] text-gray-500">{activity.status}</span>}
-                      </div>
-                    </div>
-                    <span className="text-[11px] text-gray-600 shrink-0">{activity.timeAgo || activity.time}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-10">
-                <p className="text-[13px] text-gray-600">No activity yet</p>
-                <p className="text-[11px] text-gray-700 mt-1">Activity will appear here as you scan APIs and detect threats</p>
-              </div>
-            )}
-          </div>
-
-          {/* Alerts & Recommendations — real data from DB */}
-          {((dashboardStats.alerts && dashboardStats.alerts.length > 0) ||
-            (dashboardStats.recommendations && dashboardStats.recommendations.length > 0)) && (
+          {/* Top Vulnerabilities — critical findings from latest scans */}
+          {dashboardStats.topVulnerabilities && dashboardStats.topVulnerabilities.length > 0 && (
             <div className="bg-slate-800/50 border border-white/[0.06] rounded-2xl p-6">
-              <h3 className="text-[13px] font-medium text-gray-400 mb-4">Recommendations</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-[13px] font-medium text-gray-400">Top Vulnerabilities</h3>
+                <button onClick={() => setActiveFeature("vulnerability-scanner")} className="text-[11px] text-gray-500 hover:text-white transition-colors">View all →</button>
+              </div>
               <div className="space-y-2">
-                {(dashboardStats.alerts || []).map((alert: any, i: number) => (
-                  <div key={`a-${i}`} className="flex items-start gap-3 py-2 border-b border-white/[0.04] last:border-0">
-                    <span className="w-2 h-2 rounded-full bg-red-400 mt-1.5 shrink-0" />
-                    <div>
-                      <span className="text-[13px] text-white">{alert.message || alert.title}</span>
-                      {alert.action && <span className="ml-2 text-[11px] text-cyan-400">{alert.action}</span>}
-                    </div>
-                  </div>
-                ))}
-                {(dashboardStats.recommendations || []).map((rec: any, i: number) => (
-                  <div key={`r-${i}`} className="flex items-start gap-3 py-2 border-b border-white/[0.04] last:border-0">
-                    <span className="w-2 h-2 rounded-full bg-cyan-400 mt-1.5 shrink-0" />
-                    <div>
-                      <span className="text-[13px] text-white">{rec.message}</span>
-                      {rec.action && <span className="ml-2 text-[11px] text-gray-500">{rec.action}</span>}
+                {dashboardStats.topVulnerabilities.slice(0, 3).map((v: any, i: number) => (
+                  <div key={v.id || i} className="flex items-center justify-between py-2.5 px-3 rounded-xl bg-white/[0.02] border border-white/[0.03]">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className={`shrink-0 px-2 py-0.5 text-[10px] font-bold rounded-full ${
+                        v.severity === "CRITICAL" ? "bg-red-500/15 text-red-400" :
+                        v.severity === "HIGH" ? "bg-amber-500/15 text-amber-400" :
+                        "bg-yellow-500/15 text-yellow-400"
+                      }`}>{v.severity}</span>
+                      <div className="min-w-0">
+                        <div className="text-[13px] text-white truncate">{v.title}</div>
+                        {v.affectedUrl && <div className="text-[11px] text-gray-600 truncate">{v.affectedUrl}</div>}
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
           )}
+
+          {/* Quick Actions */}
+          {dashboardStats.overview.totalScans > 0 && (
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => setActiveFeature("security-center")} className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-white/[0.04] text-gray-400 border border-white/[0.06] hover:bg-white/[0.08] hover:text-white transition-colors">View Full Report</button>
+              {dashboardStats.topVulnerabilities?.length > 0 && (
+                <button onClick={() => setActiveFeature("vulnerability-scanner")} className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-white/[0.04] text-gray-400 border border-white/[0.06] hover:bg-white/[0.08] hover:text-white transition-colors">Fix Top Issue</button>
+              )}
+              <button onClick={() => setActiveFeature("security-center")} className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-white/[0.04] text-gray-400 border border-white/[0.06] hover:bg-white/[0.08] hover:text-white transition-colors">Schedule Daily Scan</button>
+              <button onClick={() => setActiveFeature("security-center")} className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-white/[0.04] text-gray-400 border border-white/[0.06] hover:bg-white/[0.08] hover:text-white transition-colors">Export PDF</button>
+            </div>
+          )}
+
+          {/* Threat Detection Timeline */}
+          <ThreatTimeline companyId={company?.id?.toString()} />
+
+          {/* Recent Activity — with score + issue count */}
+          <div className="bg-slate-800/50 border border-white/[0.06] rounded-2xl p-6">
+            <h3 className="text-[13px] font-medium text-gray-400 mb-4">Recent Activity</h3>
+            {dashboardStats.recentActivity && dashboardStats.recentActivity.length > 0 ? (
+              <div className="space-y-2">
+                {dashboardStats.recentActivity.map((activity: any, i: number) => {
+                  const url = activity.subject || "";
+                  const host = (() => { try { return new URL(url).hostname; } catch { return url; } })();
+                  return (
+                    <div key={i} className="flex items-center justify-between py-2 border-b border-white/[0.04] last:border-0">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${
+                          activity.score >= 80 ? "bg-emerald-400" : activity.score >= 50 ? "bg-amber-400" : activity.score ? "bg-red-400" : "bg-gray-500"
+                        }`} />
+                        <div className="min-w-0">
+                          <span className="text-[13px] text-white">{host}</span>
+                          {activity.score != null && (
+                            <span className="ml-2 text-[11px] text-gray-500">
+                              Score: {activity.score}
+                              {activity.vulnCount > 0 && ` · ${activity.vulnCount} issue${activity.vulnCount > 1 ? "s" : ""} found`}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <span className="text-[11px] text-gray-600 shrink-0 ml-2">{activity.timeAgo}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-10">
+                <p className="text-[13px] text-gray-600">No activity yet</p>
+                <p className="text-[11px] text-gray-700 mt-1">Scan an API to see activity here</p>
+              </div>
+            )}
+          </div>
         </div>
       );
     }

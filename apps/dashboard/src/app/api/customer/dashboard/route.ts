@@ -55,6 +55,7 @@ export async function GET(request: NextRequest) {
       threatStats,
       recentActivity,
       upcomingScans,
+      topVulnerabilities,
     ] = await Promise.all([
       // API statistics
       database.queryOne(
@@ -111,15 +112,14 @@ export async function GET(request: NextRequest) {
         [tenantId]
       ),
 
-      // Recent activity
+      // Recent activity — scans with score + vuln count
       database.queryMany(
-        `SELECT 'scan' as activity_type, url as subject, status, created_at
-         FROM security_scans WHERE tenant_id = $1
-         UNION ALL
-         SELECT 'threat' as activity_type, CAST(source_ip AS TEXT) as subject,
-                CASE WHEN blocked THEN 'blocked' ELSE 'detected' END as status, created_at
-         FROM threat_events WHERE tenant_id = $1
-         ORDER BY created_at DESC LIMIT 10`,
+        `SELECT 'scan' as activity_type, s.url as subject, s.status,
+                s.security_score as score,
+                (SELECT COUNT(*) FROM vulnerabilities v WHERE v.scan_id = s.id) as vuln_count,
+                s.created_at
+         FROM security_scans s WHERE s.tenant_id = $1
+         ORDER BY s.created_at DESC LIMIT 10`,
         [tenantId]
       ),
 
@@ -129,6 +129,20 @@ export async function GET(request: NextRequest) {
          FROM scheduled_scans
          WHERE tenant_id = $1 AND is_active = true AND next_run > NOW()
          ORDER BY next_run ASC LIMIT 5`,
+        [tenantId]
+      ),
+
+      // Top vulnerabilities (most critical, most recent)
+      database.queryMany(
+        `SELECT v.id, v.title, v.severity, v.status, v.affected_url, v.vulnerability_type, v.created_at,
+                s.url as scan_url
+         FROM vulnerabilities v
+         LEFT JOIN security_scans s ON v.scan_id = s.id
+         WHERE v.tenant_id = $1 AND v.status = 'open'
+         ORDER BY
+           CASE v.severity WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'MEDIUM' THEN 3 ELSE 4 END,
+           v.created_at DESC
+         LIMIT 5`,
         [tenantId]
       ),
     ]);
@@ -273,7 +287,7 @@ export async function GET(request: NextRequest) {
           threatsLast24Hours: parseInt(threatStats?.threats_24h || "0"),
         },
         security: {
-          overallScore: Math.round(postureScore),
+          overallScore: avgScanScore,
           averageScanScore: avgScanScore,
           totalVulnerabilities: parseInt(vulnStats?.total || "0"),
           criticalVulnerabilities: critVulns,
@@ -283,8 +297,18 @@ export async function GET(request: NextRequest) {
           type: activity.activity_type,
           subject: activity.subject,
           status: activity.status,
+          score: activity.score ? parseInt(activity.score) : null,
+          vulnCount: activity.vuln_count ? parseInt(activity.vuln_count) : 0,
           timestamp: activity.created_at,
           timeAgo: getTimeAgo(activity.created_at),
+        })),
+        topVulnerabilities: topVulnerabilities.map((v: any) => ({
+          id: v.id,
+          title: v.title,
+          severity: v.severity,
+          status: v.status,
+          affectedUrl: v.affected_url || v.scan_url,
+          type: v.vulnerability_type,
         })),
         upcomingScans: upcomingScans.map((scan: any) => ({
           id: scan.id,
