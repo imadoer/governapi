@@ -2,35 +2,78 @@ import { NextRequest, NextResponse } from "next/server";
 import { database } from "../../../../infrastructure/database";
 import { logger } from "../../../../utils/logging/logger";
 
-// POST - Credential storage disabled until encryption is implemented
-export async function POST(request: NextRequest) {
-  return NextResponse.json(
-    {
-      error: "Coming soon",
-      message:
-        "External integration credential storage is temporarily disabled while we implement end-to-end encryption. Use webhook-based integrations in the meantime.",
-    },
-    { status: 501 },
-  );
+// Webhook-only integration types (outbound URLs only, no stored credentials)
+const WEBHOOK_TYPES = ["slack", "pagerduty", "webhook"];
 
-  // TODO: Re-enable once field-level encryption is implemented for the
-  // credentials column. The code below stores credentials as plaintext JSON
-  // which is a data-breach liability.
-  //
-  // const tenantId = request.headers.get("x-tenant-id");
-  // if (!tenantId) {
-  //   return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-  // }
-  // const { integrationType, integrationName, credentials } = await request.json();
-  // if (!integrationType || !integrationName || !credentials) {
-  //   return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
-  // }
-  // const integration = await database.queryOne(
-  //   `INSERT INTO external_integrations (tenant_id, integration_type, integration_name, credentials, created_at)
-  //    VALUES ($1, $2, $3, $4, NOW()) RETURNING id, integration_type, integration_name, is_active, created_at`,
-  //   [tenantId, integrationType, integrationName, JSON.stringify(credentials)],
-  // );
-  // return NextResponse.json({ success: true, integration });
+export async function POST(request: NextRequest) {
+  const tenantId = request.headers.get("x-tenant-id");
+  if (!tenantId) {
+    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  }
+
+  try {
+    const body = await request.json();
+    const integrationType = body.type || body.integrationType;
+    const integrationName = body.name || body.integrationName;
+    const credentials = body.credentials || {};
+
+    if (!integrationType || !integrationName) {
+      return NextResponse.json({ error: "Type and name are required" }, { status: 400 });
+    }
+
+    // Only allow webhook-based integrations (outbound URLs)
+    if (!WEBHOOK_TYPES.includes(integrationType)) {
+      return NextResponse.json(
+        { error: "Coming soon", message: `${integrationType} integration requires OAuth and is not yet available.` },
+        { status: 501 },
+      );
+    }
+
+    // Validate webhook URL is present
+    const webhookUrl = credentials.webhook_url || credentials.integration_key;
+    if (!webhookUrl) {
+      return NextResponse.json({ error: "Webhook URL or integration key is required" }, { status: 400 });
+    }
+
+    const integration = await database.queryOne(
+      `INSERT INTO external_integrations (tenant_id, integration_type, integration_name, credentials, is_active, created_at)
+       VALUES ($1, $2, $3, $4, true, NOW())
+       RETURNING id, integration_type, integration_name, is_active, created_at`,
+      [tenantId, integrationType, integrationName, JSON.stringify(credentials)],
+    );
+
+    return NextResponse.json({
+      success: true,
+      integration: {
+        id: integration.id,
+        type: integration.integration_type,
+        name: integration.integration_name,
+        isActive: integration.is_active,
+        createdAt: integration.created_at,
+      },
+    });
+  } catch (error) {
+    logger.error("Failed to create integration", { error: error instanceof Error ? error.message : String(error) });
+    return NextResponse.json({ error: "Failed to create integration" }, { status: 500 });
+  }
+}
+
+// DELETE - Remove integration
+export async function DELETE(request: NextRequest) {
+  const tenantId = request.headers.get("x-tenant-id");
+  if (!tenantId) {
+    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  }
+  try {
+    const { id } = await request.json();
+    await database.query(
+      `DELETE FROM external_integrations WHERE id = $1 AND tenant_id = $2`,
+      [id, tenantId],
+    );
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return NextResponse.json({ error: "Failed to delete" }, { status: 500 });
+  }
 }
 
 // GET - List integrations (without exposing credentials)

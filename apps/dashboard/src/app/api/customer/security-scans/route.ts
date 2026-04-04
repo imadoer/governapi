@@ -1,6 +1,7 @@
 import { logger } from "../../../../utils/logging/logger";
 import { NextRequest, NextResponse } from "next/server";
 import { database } from "../../../../infrastructure/database";
+import { dispatchWebhooks } from "../../../../lib/webhook-dispatch";
 
 export async function GET(request: NextRequest) {
   const tenantId = request.headers.get("x-tenant-id");
@@ -318,6 +319,11 @@ async function startSecurityScan(
       `UPDATE scan_queue SET status = 'completed', processed_at = NOW() WHERE scan_id = $1`,
       [scanId]
     );
+
+    // Dispatch webhook notifications (fire-and-forget)
+    dispatchWebhooks(tenantId, "scan.completed", {
+      scanId, url: targetUrl, securityScore, vulnerabilityCount: vulnerabilities.length, scanType,
+    }).catch(() => {});
 
   } catch (error) {
     logger.error("Security scan execution failed:", error);
