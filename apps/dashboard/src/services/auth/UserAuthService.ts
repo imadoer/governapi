@@ -221,7 +221,7 @@ export class UserAuthService {
 
   private static formatCompany(company: any): Company {
     return {
-      id: company.id || company.company_id,
+      id: company.company_id || company.id,
       companyName: company.company_name,
       domain: company.domain,
       subscriptionPlan: company.subscription_plan,
