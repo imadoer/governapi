@@ -43,14 +43,14 @@ export async function GET(request: NextRequest) {
 
   try {
     const rules = await database.queryMany(
-      `SELECT 
-        id, name, description, enabled, priority,
-        conditions, action, action_params,
+      `SELECT
+        id, name, rule_type, is_active, priority,
+        conditions, action,
         created_at, updated_at
        FROM bot_rules
        WHERE tenant_id = $1
        ORDER BY priority DESC, created_at DESC`,
-      [parseInt(tenantId)]
+      [tenantId]
     );
 
     return NextResponse.json({
@@ -58,12 +58,11 @@ export async function GET(request: NextRequest) {
       rules: rules.map(row => ({
         id: row.id,
         name: row.name,
-        description: row.description,
-        enabled: row.enabled,
+        description: row.rule_type,
+        enabled: row.is_active,
         priority: row.priority,
         conditions: row.conditions,
         action: row.action,
-        actionParams: row.action_params,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       })),
@@ -103,20 +102,19 @@ export async function POST(request: NextRequest) {
 
     // Insert rule
     const result = await database.queryOne(
-      `INSERT INTO bot_rules 
-        (tenant_id, name, description, enabled, priority, conditions, action, action_params, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `INSERT INTO bot_rules
+        (tenant_id, name, rule_type, is_active, priority, conditions, action, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id, created_at`,
       [
-        parseInt(tenantId),
+        tenantId,
         rule.name,
         rule.description || null,
         rule.enabled !== false,
         rule.priority || 0,
-        JSON.stringify(rule.conditions),
+        JSON.stringify(rule.conditions || {}),
         rule.action,
-        JSON.stringify(rule.actionParams || {}),
-        'admin', // TODO: get from session
+        'admin',
       ]
     );
 
@@ -163,19 +161,18 @@ export async function PUT(request: NextRequest) {
     // Update rule
     await database.query(
       `UPDATE bot_rules
-       SET name = $1, description = $2, enabled = $3, priority = $4,
-           conditions = $5, action = $6, action_params = $7, updated_at = NOW()
-       WHERE id = $8 AND tenant_id = $9`,
+       SET name = $1, rule_type = $2, is_active = $3, priority = $4,
+           conditions = $5, action = $6, updated_at = NOW()
+       WHERE id = $7 AND tenant_id = $8`,
       [
         rule.name,
         rule.description || null,
         rule.enabled,
         rule.priority,
-        JSON.stringify(rule.conditions),
+        JSON.stringify(rule.conditions || {}),
         rule.action,
-        JSON.stringify(rule.actionParams || {}),
         rule.id,
-        parseInt(tenantId),
+        tenantId,
       ]
     );
 
@@ -209,7 +206,7 @@ export async function DELETE(request: NextRequest) {
   try {
     await database.query(
       `DELETE FROM bot_rules WHERE id = $1 AND tenant_id = $2`,
-      [parseInt(ruleId), parseInt(tenantId)]
+      [parseInt(ruleId), tenantId]
     );
 
     return NextResponse.json({
