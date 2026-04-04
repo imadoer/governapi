@@ -33,7 +33,7 @@ const VulnerabilitiesPage = dynamic(() => import("./components/advanced/Vulnerab
 const ExternalIntegrationsPage = dynamic(() => import("./components/advanced/ExternalIntegrationsPage").then(m => ({ default: m.ExternalIntegrationsPage })), { loading: () => <PageSkeleton /> });
 const ApiManagementPage = dynamic(() => import("./components/advanced/ApiManagementPage").then(m => ({ default: m.ApiManagementPage })), { loading: () => <PageSkeleton /> });
 const ThreatIntelligencePage = dynamic(() => import("./components/advanced/ThreatIntelligencePage").then(m => ({ default: m.ThreatIntelligencePage })), { loading: () => <PageSkeleton /> });
-const BotProtectionPage = dynamic(() => import("./components/advanced/BotProtectionPage"), { loading: () => <PageSkeleton /> });
+const ApiDiscoveryPage = dynamic(() => import("./components/advanced/ApiDiscoveryPage"), { loading: () => <PageSkeleton /> });
 const CustomRulesPage = dynamic(() => import("./components/advanced/CustomRulesPage").then(m => ({ default: m.CustomRulesPage })), { loading: () => <PageSkeleton /> });
 const PerformanceMonitorPage = dynamic(() => import("./components/advanced/PerformanceMonitorPage").then(m => ({ default: m.PerformanceMonitorPage })), { loading: () => <PageSkeleton /> });
 const ComplianceHubPage = dynamic(() => import("./components/advanced/ComplianceHubPage").then(m => ({ default: m.ComplianceHubPage })), { loading: () => <PageSkeleton /> });
@@ -72,7 +72,7 @@ const SIDEBAR_ITEMS = [
         label: "Threat Intelligence",
         icon: BoltIcon,
       },
-      { id: "bot-protection", label: "Bot Protection", icon: BugAntIcon },
+      { id: "api-discovery", label: "API Discovery", icon: GlobeAltIcon },
     ],
   },
   {
@@ -481,8 +481,8 @@ export default function AdvancedDashboard() {
         return <RateLimitingPage companyId={company?.id.toString()} />;
       case "threat-intelligence":
         return <ThreatIntelligencePage companyId={company?.id.toString()} />;
-      case "bot-protection":
-        return <BotProtectionPage companyId={company?.id.toString()} />;
+      case "api-discovery":
+        return <ApiDiscoveryPage companyId={company?.id.toString()} />;
       case "custom-rules":
         return <CustomRulesPage companyId={company?.id.toString()} />;
       case "performance-monitor":
