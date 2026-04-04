@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
 
       // Recent scans for time-decay calculation (last 30 days)
       database.queryMany(
-        `SELECT security_score as score, created_at as date
+        `SELECT id, url, security_score as score, completed_at, created_at as date
          FROM security_scans
          WHERE tenant_id = $1 AND created_at >= NOW() - INTERVAL '30 days'
          ORDER BY created_at DESC`,
@@ -146,6 +146,33 @@ export async function GET(request: NextRequest) {
         [tenantId]
       ),
     ]);
+
+    // Get latest scan's full vulnerability details (for score breakdown)
+    let latestScanReport = null;
+    if (recentScans.length > 0) {
+      const latestScan = recentScans[0];
+      const scanVulns = await database.queryMany(
+        `SELECT id, title, description, severity, vulnerability_type, remediation, affected_url
+         FROM vulnerabilities WHERE scan_id = $1
+         ORDER BY CASE severity WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'MEDIUM' THEN 3 ELSE 4 END`,
+        [latestScan.id]
+      );
+      latestScanReport = {
+        scanId: latestScan.id,
+        url: latestScan.url || latestScan.target,
+        score: parseInt(latestScan.score || "0"),
+        completedAt: latestScan.completed_at || latestScan.created_at,
+        vulnerabilities: scanVulns.map((v: any) => ({
+          id: v.id,
+          title: v.title,
+          description: v.description,
+          severity: v.severity,
+          type: v.vulnerability_type,
+          remediation: v.remediation,
+          affectedUrl: v.affected_url,
+        })),
+      };
+    }
 
     // Calculate Average Scan Score (simple mean)
     const avgScanScore = scanStats?.avg_security_score
@@ -317,6 +344,7 @@ export async function GET(request: NextRequest) {
           scanType: scan.scan_type,
           scheduledFor: scan.next_run,
         })),
+        latestScanReport,
         alerts,
         recommendations,
       },

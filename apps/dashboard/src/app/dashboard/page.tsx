@@ -24,6 +24,7 @@ import { HeaderBar } from "./components/advanced/HeaderBar";
 import { SecurityScore } from "./components/advanced/SecurityScore";
 import { MetricCard } from "./components/advanced/MetricCard";
 import { ThreatTimeline } from "./components/advanced/ThreatTimeline";
+import { ScoreBreakdown } from "./components/advanced/ScoreBreakdown";
 import { PageSkeleton } from "./components/advanced/PageSkeleton";
 
 // Lazy-load feature pages — only loaded when navigated to
@@ -395,6 +396,16 @@ export default function AdvancedDashboard() {
                 ))}
               </div>
             </div>
+          )}
+
+          {/* Score Breakdown + Fix Instructions */}
+          {dashboardStats.latestScanReport && dashboardStats.latestScanReport.vulnerabilities.length > 0 && (
+            <ScoreBreakdown
+              score={dashboardStats.security.overallScore}
+              url={dashboardStats.latestScanReport.url}
+              vulnerabilities={dashboardStats.latestScanReport.vulnerabilities}
+              onNavigate={setActiveFeature}
+            />
           )}
 
           {/* Quick Actions */}
