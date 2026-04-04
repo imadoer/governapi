@@ -41,9 +41,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                COUNT(*) as bot_count,
                COUNT(*) FILTER (WHERE blocked = true) as bot_blocked
         FROM bot_detection_events
-        WHERE detected_at >= NOW() - INTERVAL '${interval}'
+        WHERE tenant_id = $1 AND detected_at >= NOW() - INTERVAL '${interval}'
         GROUP BY 1 ORDER BY 1
-      `, []),
+      `, [tenantId]),
     ]);
 
     const map = new Map<string, any>();

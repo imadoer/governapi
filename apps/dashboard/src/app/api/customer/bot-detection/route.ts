@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Get real bot detection statistics using only confirmed columns
+    // Get real bot detection statistics — filtered by tenant
     const botStats = await database.queryOne(
       `SELECT
          COUNT(*) as total_requests,
@@ -36,38 +36,37 @@ export async function GET(request: NextRequest) {
          50 as avg_confidence_score,
          COUNT(DISTINCT source_ip) as unique_ips
        FROM bot_detection_events
-       WHERE detected_at >= NOW() - INTERVAL '24 hours'`,
-      [],
+       WHERE tenant_id = $1 AND detected_at >= NOW() - INTERVAL '24 hours'`,
+      [tenantId],
     );
 
-    // Bot detection rules - return empty array since table may not exist
     const detectionRules = [];
 
-    // Get recent bot detections using only confirmed columns
+    // Recent bot detections — filtered by tenant
     const recentDetections = await database.queryMany(
       `SELECT id, source_ip, blocked, detected_at
        FROM bot_detection_events
-       WHERE blocked = true
+       WHERE tenant_id = $1 AND blocked = true
        ORDER BY detected_at DESC
        LIMIT 20`,
-      [],
+      [tenantId],
     );
 
-    // Get top bot sources using only confirmed columns
+    // Top bot sources — filtered by tenant
     const topBotSources = await database.queryMany(
       `SELECT source_ip, COUNT(*) as detection_count,
               75 as avg_confidence,
               MAX(detected_at) as last_detected,
               COUNT(CASE WHEN blocked = true THEN 1 END) as blocked_count
        FROM bot_detection_events
-       WHERE blocked = true AND detected_at >= NOW() - INTERVAL '7 days'
+       WHERE tenant_id = $1 AND blocked = true AND detected_at >= NOW() - INTERVAL '7 days'
        GROUP BY source_ip
        ORDER BY detection_count DESC
        LIMIT 10`,
-      [],
+      [tenantId],
     );
 
-    // Get hourly bot activity trends using only confirmed columns
+    // Hourly bot activity — filtered by tenant
     const hourlyTrends = await database.queryMany(
       `SELECT
          DATE_TRUNC('hour', detected_at) as hour,
@@ -75,10 +74,10 @@ export async function GET(request: NextRequest) {
          COUNT(CASE WHEN blocked = true THEN 1 END) as bot_requests,
          COUNT(CASE WHEN blocked = true THEN 1 END) as blocked_requests
        FROM bot_detection_events
-       WHERE detected_at >= NOW() - INTERVAL '24 hours'
+       WHERE tenant_id = $1 AND detected_at >= NOW() - INTERVAL '24 hours'
        GROUP BY DATE_TRUNC('hour', detected_at)
        ORDER BY hour ASC`,
-      [],
+      [tenantId],
     );
 
     const totalRequests = parseInt(botStats?.total_requests || "0");

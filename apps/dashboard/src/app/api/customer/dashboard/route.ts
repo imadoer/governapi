@@ -314,11 +314,11 @@ export async function GET(request: NextRequest) {
           threatsLast24Hours: parseInt(threatStats?.threats_24h || "0"),
         },
         security: {
-          // Weighted composite score — same formula as /api/customer/security-metrics
-          overallScore: Math.round(
+          // Weighted composite score — 0 if no scans performed yet
+          overallScore: parseInt(scanStats?.total_scans || "0") === 0 ? 0 : Math.round(
             (Math.max(0, Math.min(100, 100 - critVulns * 10 - highVulns * 5 - medVulns * 2 - lowVulns * 0.5)) * 0.5) +
             (Math.max(0, Math.min(100, 100 - parseInt(threatStats?.total_threats || "0") * 2)) * 0.25) +
-            (0 * 0.15) + // compliance score — 0 until configured
+            (0 * 0.15) +
             ((scansLast7d > 0 ? 100 : 0) * 0.10)
           ),
           averageScanScore: avgScanScore,

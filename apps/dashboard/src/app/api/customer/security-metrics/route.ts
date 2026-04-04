@@ -135,8 +135,9 @@ export async function GET(request: NextRequest) {
       scanHygieneScore = 0; // No scans ever
     }
 
-    // FINAL WEIGHTED SCORE
-    const finalScore = Math.round(
+    // FINAL WEIGHTED SCORE — 0 if no scans performed yet
+    const hasScans = lastScanQuery?.last_scan != null;
+    const finalScore = !hasScans ? 0 : Math.round(
       (vulnScore * 0.5) +
       (threatScore * 0.25) +
       (complianceScore * 0.15) +
