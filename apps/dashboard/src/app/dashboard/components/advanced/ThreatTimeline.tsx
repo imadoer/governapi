@@ -1,112 +1,118 @@
 "use client";
 
-import { motion } from "framer-motion";
-import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-} from "recharts";
 import { useState } from "react";
+import useSWR from "swr";
+import {
+  AreaChart, Area, BarChart, Bar,
+  XAxis, YAxis, CartesianGrid,
+  Tooltip as RechartsTooltip, ResponsiveContainer, Legend,
+} from "recharts";
+import { ChartBarIcon } from "@heroicons/react/24/outline";
 
-interface ThreatTimelineProps {
-  data: any[];
-}
+const fetcher = (url: string, tid: string) =>
+  fetch(url, { headers: { "x-tenant-id": tid } }).then((r) => r.json());
 
-export function ThreatTimeline({ data }: ThreatTimelineProps) {
-  const [timeRange, setTimeRange] = useState<"24h" | "7d" | "30d">("24h");
+const tip = {
+  contentStyle: { background: "#111318", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, fontSize: 12 },
+  itemStyle: { color: "#e2e8f0" },
+  labelStyle: { color: "#64748b" },
+};
 
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-slate-900/90 backdrop-blur-xl border border-white/10 rounded-lg p-3">
-          <p className="text-white font-semibold">{payload[0].payload.hour}</p>
-          <p className="text-red-400">Threats: {payload[0].value}</p>
-          {payload[1] && (
-            <p className="text-green-400">Blocked: {payload[1].value}</p>
-          )}
-        </div>
-      );
-    }
-    return null;
-  };
+export function ThreatTimeline({ companyId }: { companyId: string }) {
+  const [range, setRange] = useState("7d");
+
+  const { data: raw } = useSWR(
+    companyId ? [`/api/customer/dashboard/timeline/${range}`, companyId] : null,
+    ([u, id]: [string, string]) => fetcher(u, id),
+    { refreshInterval: 60_000 },
+  );
+
+  const timeline = raw?.success ? raw.timeline ?? [] : [];
+  const hasData = raw?.hasData ?? false;
+
+  const formatted = timeline.map((t: any) => {
+    const d = new Date(t.bucket);
+    return {
+      ...t,
+      label: range === "24h"
+        ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        : d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    };
+  });
+
+  const ranges = [
+    { key: "24h", label: "24h" },
+    { key: "7d", label: "7d" },
+    { key: "30d", label: "30d" },
+  ];
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.6 }}
-      className="rounded-2xl p-6 backdrop-blur-xl bg-white/5 border border-white/10"
-    >
+    <div className="bg-slate-800/50 border border-white/[0.06] rounded-2xl p-6">
       <div className="flex items-center justify-between mb-6">
-        <h3 className="text-xl font-bold text-white">
-          Threat Detection Timeline
-        </h3>
-        <div className="flex gap-2">
-          {(["24h", "7d", "30d"] as const).map((range) => (
-            <motion.button
-              key={range}
-              onClick={() => setTimeRange(range)}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className={`px-4 py-2 rounded-lg font-semibold transition-all ${
-                timeRange === range
-                  ? "bg-cyan-500 text-white shadow-lg shadow-cyan-500/30"
-                  : "bg-white/5 text-gray-400 hover:bg-white/10"
+        <h3 className="text-[13px] font-medium text-gray-400">Threat Detection Timeline</h3>
+        <div className="flex gap-1">
+          {ranges.map((r) => (
+            <button
+              key={r.key}
+              onClick={() => setRange(r.key)}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors ${
+                range === r.key ? "bg-white/[0.08] text-white" : "text-gray-600 hover:text-gray-400"
               }`}
             >
-              {range}
-            </motion.button>
+              {r.label}
+            </button>
           ))}
         </div>
       </div>
 
-      <div className="h-80">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data}>
-            <defs>
-              <linearGradient id="threatGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id="blockedGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid
-              strokeDasharray="3 3"
-              stroke="rgba(255,255,255,0.1)"
-            />
-            <XAxis
-              dataKey="hour"
-              stroke="#94a3b8"
-              style={{ fontSize: "12px" }}
-            />
-            <YAxis stroke="#94a3b8" style={{ fontSize: "12px" }} />
-            <Tooltip content={<CustomTooltip />} />
-            <Area
-              type="monotone"
-              dataKey="threats"
-              stroke="#ef4444"
-              fill="url(#threatGradient)"
-              strokeWidth={3}
-              name="Threats Detected"
-            />
-            <Area
-              type="monotone"
-              dataKey="blocked"
-              stroke="#10b981"
-              fill="url(#blockedGradient)"
-              strokeWidth={3}
-              name="Threats Blocked"
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
-    </motion.div>
+      {hasData ? (
+        <div className="space-y-6">
+          {/* Scan scores area chart */}
+          {formatted.some((d: any) => d.avgScore != null) && (
+            <div>
+              <div className="text-[11px] text-gray-600 mb-2">Scan Scores</div>
+              <ResponsiveContainer width="100%" height={160}>
+                <AreaChart data={formatted}>
+                  <defs>
+                    <linearGradient id="tl-score" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#06b6d4" stopOpacity={0.25} />
+                      <stop offset="100%" stopColor="#06b6d4" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                  <XAxis dataKey="label" stroke="#4b5563" tick={{ fontSize: 10 }} />
+                  <YAxis domain={[0, 100]} stroke="#4b5563" tick={{ fontSize: 10 }} />
+                  <RechartsTooltip {...tip} />
+                  <Area type="monotone" dataKey="avgScore" name="Avg Score" stroke="#06b6d4" fill="url(#tl-score)" strokeWidth={1.5} connectNulls />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Scans + threats bar chart */}
+          <div>
+            <div className="text-[11px] text-gray-600 mb-2">Activity</div>
+            <ResponsiveContainer width="100%" height={140}>
+              <BarChart data={formatted} barSize={range === "24h" ? 8 : 14}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                <XAxis dataKey="label" stroke="#4b5563" tick={{ fontSize: 10 }} />
+                <YAxis allowDecimals={false} stroke="#4b5563" tick={{ fontSize: 10 }} />
+                <RechartsTooltip {...tip} />
+                <Legend wrapperStyle={{ fontSize: 11, color: "#9ca3af" }} />
+                <Bar dataKey="scans" name="Scans" fill="#06b6d4" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="threats" name="Threats" fill="#ef4444" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="blocked" name="Blocked" fill="#10b981" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <ChartBarIcon className="w-8 h-8 text-gray-700 mb-3" />
+          <p className="text-[13px] text-gray-500">No threat data yet</p>
+          <p className="text-[11px] text-gray-600 mt-1">Add an API endpoint to start monitoring</p>
+        </div>
+      )}
+    </div>
   );
 }

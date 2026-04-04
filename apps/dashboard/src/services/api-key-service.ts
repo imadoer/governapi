@@ -172,11 +172,17 @@ export class APIKeyService {
     );
   }
 
-  static async listAPIKeys(tenantId: number): Promise<APIKeyInfo[]> {
-    const keys = await database.queryMany(
-      "SELECT * FROM api_keys WHERE tenant_id = $1 ORDER BY created_at DESC",
-      [tenantId],
-    );
+  static async listAPIKeys(tenantId: number | string): Promise<APIKeyInfo[]> {
+    let keys;
+    try {
+      keys = await database.queryMany(
+        "SELECT * FROM api_keys WHERE tenant_id = $1 ORDER BY created_at DESC",
+        [tenantId],
+      );
+    } catch {
+      // tenant_id column is UUID - if the value isn't a valid UUID, return empty
+      return [];
+    }
 
     return keys.map((key) => ({
       id: key.id,

@@ -1,6 +1,7 @@
 import { Queue, Worker } from "bullmq";
 import Redis from "ioredis";
-import { prisma } from "@governapi/database";
+// @governapi/database not available — this module is unused legacy code
+const prisma: any = null;
 
 const connection = new Redis(process.env.REDIS_URL || "redis://localhost:6379");
 

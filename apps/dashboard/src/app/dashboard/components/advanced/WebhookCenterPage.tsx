@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { PageSkeleton, FadeIn } from "./PageSkeleton";
 import {
   PlusIcon,
   ArrowPathIcon,
@@ -11,7 +12,6 @@ import {
   TrashIcon,
   PencilIcon,
   BeakerIcon,
-  LinkIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 
@@ -142,11 +142,7 @@ export function WebhookCenterPage({ companyId }: { companyId: string }) {
   }, {} as Record<string, typeof AVAILABLE_EVENTS>);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400" />
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   return (
@@ -175,27 +171,19 @@ export function WebhookCenterPage({ companyId }: { companyId: string }) {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "Total Webhooks", value: webhooks.length, icon: LinkIcon, color: "text-cyan-500" },
-          { label: "Active", value: webhooks.filter((w) => w.enabled).length, icon: CheckCircleIcon, color: "text-green-500" },
-          { label: "Total Deliveries", value: webhooks.reduce((s, w) => s + w.deliveryCount, 0), icon: BoltIcon, color: "text-cyan-400" },
-          { label: "Success Rate", value: `${webhooks.length > 0 ? Math.round(webhooks.reduce((s, w) => s + getSuccessRate(w), 0) / webhooks.length) : 0}%`, icon: CheckCircleIcon, color: "text-green-500" },
-        ].map((stat, i) => {
-          const Icon = stat.icon;
-          return (
-            <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}
-              className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-slate-400">{stat.label}</p>
-                  <p className={`text-3xl font-bold mt-1 ${stat.color}`}>{stat.value}</p>
-                </div>
-                <Icon className={`w-10 h-10 ${stat.color}`} />
-              </div>
-            </motion.div>
-          );
-        })}
+          { label: "Total Webhooks", value: webhooks.length },
+          { label: "Active", value: webhooks.filter((w) => w.enabled).length },
+          { label: "Total Deliveries", value: webhooks.reduce((s, w) => s + w.deliveryCount, 0) },
+          { label: "Success Rate", value: `${webhooks.length > 0 ? Math.round(webhooks.reduce((s, w) => s + getSuccessRate(w), 0) / webhooks.length) : 0}%` },
+        ].map((stat, i) => (
+          <motion.div key={stat.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
+            className="bg-slate-800/50 border border-white/[0.06] rounded-2xl p-5">
+            <div className="text-[12px] text-gray-500 mb-2">{stat.label}</div>
+            <div className="text-2xl font-semibold text-white tracking-tight">{stat.value}</div>
+          </motion.div>
+        ))}
       </div>
 
       {/* Webhooks List */}

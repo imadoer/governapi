@@ -12,78 +12,72 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Get real performance metrics from API usage logs
-    const performanceStats = await database.queryOne(
-      `SELECT 
-         COUNT(*) as total_requests,
-         AVG(response_time) as avg_response_time,
-         MIN(response_time) as min_response_time,
-         MAX(response_time) as max_response_time,
-         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY response_time) as median_response_time,
-         PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY response_time) as p95_response_time,
-         COUNT(CASE WHEN response_time > 1000 THEN 1 END) as slow_requests,
-         COUNT(CASE WHEN status_code >= 200 AND status_code < 300 THEN 1 END) as successful_requests
-       FROM api_usage 
-       WHERE tenant_id = $1 AND timestamp >= NOW() - INTERVAL '24 hours'`,
-      [tenantId],
-    );
-
-    // Get performance trends by hour
-    const hourlyTrends = await database.queryMany(
-      `SELECT 
-         DATE_TRUNC('hour', timestamp) as hour,
-         AVG(response_time) as avg_response_time,
-         COUNT(*) as request_count,
-         COUNT(CASE WHEN response_time > 1000 THEN 1 END) as slow_requests
-       FROM api_usage 
-       WHERE tenant_id = $1 AND timestamp >= NOW() - INTERVAL '24 hours'
-       GROUP BY DATE_TRUNC('hour', timestamp)
-       ORDER BY hour DESC`,
-      [tenantId],
-    );
-
-    // Get performance by endpoint
-    const endpointPerformance = await database.queryMany(
-      `SELECT 
-         endpoint,
-         COUNT(*) as request_count,
-         AVG(response_time) as avg_response_time,
-         PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY response_time) as p95_response_time,
-         COUNT(CASE WHEN response_time > 1000 THEN 1 END) as slow_requests
-       FROM api_usage 
-       WHERE tenant_id = $1 AND timestamp >= NOW() - INTERVAL '24 hours'
-       GROUP BY endpoint
-       ORDER BY request_count DESC
-       LIMIT 10`,
-      [tenantId],
-    );
-
-    // Get error rate analysis
-    const errorAnalysis = await database.queryOne(
-      `SELECT 
-         COUNT(CASE WHEN status_code >= 400 AND status_code < 500 THEN 1 END) as client_errors,
-         COUNT(CASE WHEN status_code >= 500 THEN 1 END) as server_errors,
-         COUNT(CASE WHEN status_code = 429 THEN 1 END) as rate_limit_errors,
-         COUNT(CASE WHEN status_code = 503 THEN 1 END) as service_unavailable
-       FROM api_usage 
-       WHERE tenant_id = $1 AND timestamp >= NOW() - INTERVAL '24 hours'`,
-      [tenantId],
-    );
-
-    // Get slowest endpoints
-    const slowestEndpoints = await database.queryMany(
-      `SELECT 
-         endpoint,
-         AVG(response_time) as avg_response_time,
-         COUNT(*) as request_count
-       FROM api_usage 
-       WHERE tenant_id = $1 AND timestamp >= NOW() - INTERVAL '24 hours'
-       GROUP BY endpoint
-       HAVING COUNT(*) >= 10
-       ORDER BY avg_response_time DESC
-       LIMIT 5`,
-      [tenantId],
-    );
+    // Run all queries in parallel
+    const [performanceStats, hourlyTrends, endpointPerformance, errorAnalysis, slowestEndpoints] = await Promise.all([
+      database.queryOne(
+        `SELECT
+           COUNT(*) as total_requests,
+           AVG(response_time) as avg_response_time,
+           MIN(response_time) as min_response_time,
+           MAX(response_time) as max_response_time,
+           PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY response_time) as median_response_time,
+           PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY response_time) as p95_response_time,
+           COUNT(CASE WHEN response_time > 1000 THEN 1 END) as slow_requests,
+           COUNT(CASE WHEN status_code >= 200 AND status_code < 300 THEN 1 END) as successful_requests
+         FROM api_usage
+         WHERE tenant_id = $1 AND timestamp >= NOW() - INTERVAL '24 hours'`,
+        [tenantId],
+      ),
+      database.queryMany(
+        `SELECT
+           DATE_TRUNC('hour', timestamp) as hour,
+           AVG(response_time) as avg_response_time,
+           COUNT(*) as request_count,
+           COUNT(CASE WHEN response_time > 1000 THEN 1 END) as slow_requests
+         FROM api_usage
+         WHERE tenant_id = $1 AND timestamp >= NOW() - INTERVAL '24 hours'
+         GROUP BY DATE_TRUNC('hour', timestamp)
+         ORDER BY hour DESC`,
+        [tenantId],
+      ),
+      database.queryMany(
+        `SELECT
+           endpoint,
+           COUNT(*) as request_count,
+           AVG(response_time) as avg_response_time,
+           PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY response_time) as p95_response_time,
+           COUNT(CASE WHEN response_time > 1000 THEN 1 END) as slow_requests
+         FROM api_usage
+         WHERE tenant_id = $1 AND timestamp >= NOW() - INTERVAL '24 hours'
+         GROUP BY endpoint
+         ORDER BY request_count DESC
+         LIMIT 10`,
+        [tenantId],
+      ),
+      database.queryOne(
+        `SELECT
+           COUNT(CASE WHEN status_code >= 400 AND status_code < 500 THEN 1 END) as client_errors,
+           COUNT(CASE WHEN status_code >= 500 THEN 1 END) as server_errors,
+           COUNT(CASE WHEN status_code = 429 THEN 1 END) as rate_limit_errors,
+           COUNT(CASE WHEN status_code = 503 THEN 1 END) as service_unavailable
+         FROM api_usage
+         WHERE tenant_id = $1 AND timestamp >= NOW() - INTERVAL '24 hours'`,
+        [tenantId],
+      ),
+      database.queryMany(
+        `SELECT
+           endpoint,
+           AVG(response_time) as avg_response_time,
+           COUNT(*) as request_count
+         FROM api_usage
+         WHERE tenant_id = $1 AND timestamp >= NOW() - INTERVAL '24 hours'
+         GROUP BY endpoint
+         HAVING COUNT(*) >= 10
+         ORDER BY avg_response_time DESC
+         LIMIT 5`,
+        [tenantId],
+      ),
+    ]);
 
     const totalRequests = parseInt(performanceStats?.total_requests || "0");
     const successfulRequests = parseInt(
@@ -91,7 +85,7 @@ export async function GET(request: NextRequest) {
     );
     const slowRequests = parseInt(performanceStats?.slow_requests || "0");
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       success: true,
       performance: {
         summary: {
@@ -156,12 +150,14 @@ export async function GET(request: NextRequest) {
         })),
       },
     });
+    res.headers.set("Cache-Control", "private, max-age=5, stale-while-revalidate=30");
+    return res;
   } catch (error) {
     logger.error("Performance API error:", {
       error: error instanceof Error ? error.message : String(error),
     });
     return NextResponse.json(
-      { error: "Failed to fetch performance data" },
+      { success: false, error: "Failed to fetch performance data" },
       { status: 500 },
     );
   }

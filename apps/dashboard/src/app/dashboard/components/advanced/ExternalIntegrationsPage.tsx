@@ -2,19 +2,16 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { PageSkeleton, FadeIn } from "./PageSkeleton";
 import {
   PlusIcon,
   CheckCircleIcon,
   XCircleIcon,
-  LinkIcon,
-  BoltIcon,
   BeakerIcon,
   TrashIcon,
-  BellAlertIcon,
-  ShieldCheckIcon,
-  SignalIcon,
   ClockIcon,
   XMarkIcon,
+  BellAlertIcon,
 } from "@heroicons/react/24/outline";
 
 interface Integration {
@@ -50,8 +47,8 @@ const INTEGRATION_TYPES = [
     name: "Slack",
     icon: "\u{1F4AC}",
     color: "#4A154B",
-    gradient: "from-purple-600/20 to-purple-900/10",
-    borderColor: "border-purple-500/30",
+    gradient: "",
+    borderColor: "",
     description: "Send security alerts to Slack channels",
     fields: ["webhook_url"],
     fieldLabels: { webhook_url: "Webhook URL" } as Record<string, string>,
@@ -64,8 +61,8 @@ const INTEGRATION_TYPES = [
     name: "PagerDuty",
     icon: "\u{1F6A8}",
     color: "#06AC38",
-    gradient: "from-green-600/20 to-green-900/10",
-    borderColor: "border-green-500/30",
+    gradient: "",
+    borderColor: "",
     description: "Critical alerts to on-call teams",
     fields: ["integration_key"],
     fieldLabels: { integration_key: "Integration Key" } as Record<string, string>,
@@ -78,8 +75,8 @@ const INTEGRATION_TYPES = [
     name: "Custom Webhook",
     icon: "\u{1F517}",
     color: "#6366f1",
-    gradient: "from-indigo-600/20 to-indigo-900/10",
-    borderColor: "border-indigo-500/30",
+    gradient: "",
+    borderColor: "",
     description: "HMAC-signed webhooks to any endpoint",
     fields: ["webhook_url", "secret"],
     fieldLabels: { webhook_url: "Webhook URL", secret: "Signing Secret (optional)" } as Record<string, string>,
@@ -322,14 +319,7 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
   );
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-center">
-          <div className="w-10 h-10 border-4 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin mx-auto" />
-          <p className="text-slate-400 mt-4">Loading integrations...</p>
-        </div>
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   const activeCount = integrations.filter((i) => i.isActive).length;
@@ -345,181 +335,66 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
         </AnimatePresence>
       </div>
 
-      {/* Hero Header with Gradient Background */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-800/80 via-slate-800/60 to-cyan-900/30 border border-white/10 backdrop-blur-xl p-8"
-      >
-        <div className="absolute inset-0 opacity-5">
-          <div className="absolute inset-0" style={{
-            backgroundImage: `radial-gradient(circle at 2px 2px, cyan 1px, transparent 0)`,
-            backgroundSize: '32px 32px'
-          }} />
+      {/* Header */}
+      <div className="flex items-end justify-between mb-2">
+        <div>
+          <h1 className="text-2xl font-semibold text-white tracking-tight">Notification Integrations</h1>
+          <p className="text-sm text-gray-500 mt-1">Security alerts delivered to your team&apos;s tools</p>
         </div>
-
-        <div className="absolute -top-20 -right-20 w-64 h-64 bg-cyan-500/10 rounded-full blur-3xl" />
-        <div className="absolute -bottom-20 -left-20 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl" />
-
-        <div className="relative flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <div className="p-4 bg-gradient-to-br from-cyan-500/20 to-cyan-600/10 rounded-2xl border border-cyan-500/30">
-              <BellAlertIcon className="w-10 h-10 text-cyan-400" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold text-white mb-2">
-                Notification Integrations
-              </h1>
-              <p className="text-slate-400 text-lg">
-                Real-time security alerts delivered to your team's tools
-              </p>
-              <div className="flex items-center gap-4 mt-3">
-                <div className="flex items-center gap-2 text-sm">
-                  <ShieldCheckIcon className="w-4 h-4 text-emerald-400" />
-                  <span className="text-slate-300">Outbound only</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <SignalIcon className="w-4 h-4 text-cyan-400" />
-                  <span className="text-slate-300">HMAC signed</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <motion.button
-            whileHover={{ scale: 1.02, boxShadow: "0 0 30px rgba(6, 182, 212, 0.3)" }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => setIsModalOpen(true)}
-            className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-400 hover:to-cyan-500 text-white rounded-xl font-semibold flex items-center gap-2 shadow-lg shadow-cyan-500/25 transition-all duration-300"
-          >
-            <PlusIcon className="w-5 h-5" />
-            Add Integration
-          </motion.button>
-        </div>
-      </motion.div>
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-white text-black hover:bg-gray-200 transition-colors flex items-center gap-1.5"
+        >
+          <PlusIcon className="w-3.5 h-3.5" />
+          Add Integration
+        </button>
+      </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="group relative bg-slate-800/40 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:border-cyan-500/30 transition-all duration-300"
-        >
-          <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
-          <div className="relative flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-400 font-medium">Connected</p>
-              <p className="text-4xl font-bold text-white mt-2">{integrations.length}</p>
-              <p className="text-xs text-slate-500 mt-1">Total integrations</p>
-            </div>
-            <div className="p-3 bg-cyan-500/10 rounded-xl">
-              <LinkIcon className="w-8 h-8 text-cyan-400" />
-            </div>
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="group relative bg-slate-800/40 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:border-emerald-500/30 transition-all duration-300"
-        >
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
-          <div className="relative flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-400 font-medium">Active</p>
-              <p className="text-4xl font-bold text-emerald-400 mt-2">{activeCount}</p>
-              <p className="text-xs text-slate-500 mt-1">Receiving alerts</p>
-            </div>
-            <div className="p-3 bg-emerald-500/10 rounded-xl">
-              <CheckCircleIcon className="w-8 h-8 text-emerald-400" />
-            </div>
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="group relative bg-slate-800/40 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:border-purple-500/30 transition-all duration-300"
-        >
-          <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
-          <div className="relative flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-400 font-medium">Available</p>
-              <p className="text-4xl font-bold text-purple-400 mt-2">{INTEGRATION_TYPES.length}</p>
-              <p className="text-xs text-slate-500 mt-1">Integration types</p>
-            </div>
-            <div className="p-3 bg-purple-500/10 rounded-xl">
-              <BoltIcon className="w-8 h-8 text-purple-400" />
-            </div>
-          </div>
-        </motion.div>
+      <div className="grid grid-cols-3 gap-4">
+        {[
+          { label: "Connected", value: integrations.length, sub: "Total integrations" },
+          { label: "Active", value: activeCount, sub: "Receiving alerts" },
+          { label: "Available", value: INTEGRATION_TYPES.length, sub: "Integration types" },
+        ].map((s, i) => (
+          <motion.div key={s.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
+            className="bg-slate-800/50 border border-white/[0.06] rounded-2xl p-5">
+            <div className="text-[12px] text-gray-500 mb-2">{s.label}</div>
+            <div className="text-2xl font-semibold text-white tracking-tight">{s.value}</div>
+            <div className="text-[11px] text-gray-600 mt-1">{s.sub}</div>
+          </motion.div>
+        ))}
       </div>
 
       {/* Available Integrations */}
       <div>
-        <div className="flex items-center gap-3 mb-6">
-          <h2 className="text-xl font-bold text-white">Available Integrations</h2>
-          <div className="h-px flex-1 bg-gradient-to-r from-slate-700 to-transparent" />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <h2 className="text-[13px] font-medium text-gray-400 mb-4">Available Integrations</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {INTEGRATION_TYPES.map((type, index) => {
             const isConnected = integrations.some((i) => i.type === type.id);
-
             return (
               <motion.div
                 key={type.id}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: index * 0.1 }}
-                whileHover={{ scale: 1.02, y: -4 }}
-                onClick={() => {
-                  setSelectedType(type.id);
-                  setIsModalOpen(true);
-                }}
-                className={`relative bg-gradient-to-br ${type.gradient} border ${type.borderColor} rounded-2xl p-6 cursor-pointer transition-all duration-300 overflow-hidden`}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.04 }}
+                onClick={() => { setSelectedType(type.id); setIsModalOpen(true); }}
+                className="bg-slate-800/50 border border-white/[0.06] rounded-2xl p-5 cursor-pointer hover:border-white/[0.12] transition-colors"
               >
-                <div className="absolute inset-0 opacity-[0.03]">
-                  <div className="absolute inset-0" style={{
-                    backgroundImage: `linear-gradient(45deg, white 25%, transparent 25%), linear-gradient(-45deg, white 25%, transparent 25%)`,
-                    backgroundSize: '8px 8px'
-                  }} />
-                </div>
-
-                <div className="relative">
-                  <div className="flex items-start justify-between mb-4">
-                    <div
-                      className="text-4xl p-3 rounded-xl backdrop-blur-sm"
-                      style={{ backgroundColor: `${type.color}30` }}
-                    >
-                      {type.icon}
-                    </div>
-                    {isConnected && (
-                      <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/20 rounded-full border border-emerald-500/30">
-                        <CheckCircleIcon className="w-3.5 h-3.5 text-emerald-400" />
-                        <span className="text-xs font-medium text-emerald-400">Connected</span>
-                      </div>
-                    )}
-                  </div>
-
-                  <h3 className="text-xl font-bold text-white mb-2">{type.name}</h3>
-                  <p className="text-sm text-slate-400 leading-relaxed">{type.description}</p>
-
-                  {type.docsUrl && (
-                    <a
-                      href={type.docsUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="inline-flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300 mt-3 transition-colors"
-                    >
-                      View setup docs →
-                    </a>
+                <div className="flex items-start justify-between mb-3">
+                  <span className="text-2xl">{type.icon}</span>
+                  {isConnected && (
+                    <span className="text-[10px] font-medium text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">Connected</span>
                   )}
                 </div>
+                <h3 className="text-[14px] font-medium text-white mb-1">{type.name}</h3>
+                <p className="text-[12px] text-gray-500 leading-relaxed">{type.description}</p>
+                {type.docsUrl && (
+                  <a href={type.docsUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
+                    className="inline-block text-[11px] text-gray-500 hover:text-white mt-2 transition-colors">
+                    Setup docs →
+                  </a>
+                )}
               </motion.div>
             );
           })}
@@ -529,12 +404,9 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
       {/* Your Integrations */}
       {integrations.length > 0 && (
         <div>
-          <div className="flex items-center gap-3 mb-6">
-            <h2 className="text-xl font-bold text-white">Your Integrations</h2>
-            <div className="px-2.5 py-0.5 bg-cyan-500/20 rounded-full">
-              <span className="text-xs font-medium text-cyan-400">{integrations.length}</span>
-            </div>
-            <div className="h-px flex-1 bg-gradient-to-r from-slate-700 to-transparent" />
+          <div className="flex items-center gap-2 mb-4">
+            <h2 className="text-[13px] font-medium text-gray-400">Your Integrations</h2>
+            <span className="text-[11px] text-gray-600">{integrations.length}</span>
           </div>
 
           <div className="space-y-4">
@@ -550,19 +422,14 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 20 }}
                     transition={{ delay: index * 0.05 }}
-                    className="group relative bg-slate-800/40 backdrop-blur-xl border border-white/10 rounded-2xl p-5 hover:border-slate-600 transition-all duration-300"
+                    className="bg-slate-800/50 border border-white/[0.06] rounded-2xl p-5 hover:border-white/[0.12] transition-colors"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4 flex-1">
-                        <div
-                          className="text-3xl p-3 rounded-xl transition-transform group-hover:scale-105"
-                          style={{ backgroundColor: `${type.color}20` }}
-                        >
-                          {type.icon}
-                        </div>
+                        <span className="text-2xl">{type.icon}</span>
                         <div className="flex-1">
                           <div className="flex items-center gap-3">
-                            <h3 className="text-lg font-semibold text-white">{integration.name}</h3>
+                            <h3 className="text-[14px] font-medium text-white">{integration.name}</h3>
                             {integration.isActive ? (
                               <span className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-500/20 rounded-full border border-emerald-500/30">
                                 <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
@@ -764,7 +631,7 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
                 <button
                   onClick={handleAddIntegration}
                   disabled={submitting}
-                  className="px-5 py-2.5 rounded-xl text-sm font-medium text-white bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-400 hover:to-cyan-500 shadow-lg shadow-cyan-500/25 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all"
+                  className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-white text-black hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {submitting && (
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -844,7 +711,7 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
               <div className="flex items-center justify-end px-6 py-4 border-t border-white/10">
                 <button
                   onClick={() => setShowTestResult(false)}
-                  className="px-5 py-2.5 rounded-xl text-sm font-medium text-white bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-400 hover:to-cyan-500 shadow-lg shadow-cyan-500/25 transition-all"
+                  className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-white text-black hover:bg-gray-200 transition-colors"
                 >
                   Close
                 </button>

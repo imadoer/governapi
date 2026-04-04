@@ -2,17 +2,15 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { PageSkeleton, FadeIn } from "./PageSkeleton";
 import {
   PlusIcon,
   ArrowPathIcon,
   BoltIcon,
-  ShieldExclamationIcon,
   ClockIcon,
-  ExclamationTriangleIcon,
   CheckCircleIcon,
   TrashIcon,
   PencilIcon,
-  ChartBarIcon,
 } from "@heroicons/react/24/outline";
 import {
   LineChart,
@@ -168,11 +166,7 @@ export function RateLimitingPage({ companyId }: { companyId: string }) {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400" />
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   const tabs = [
@@ -228,83 +222,20 @@ export function RateLimitingPage({ companyId }: { companyId: string }) {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <BoltIcon className="w-10 h-10 text-cyan-500" />
-            <div className="text-right">
-              <p className="text-sm text-slate-400">Total Requests</p>
-              <p className="text-3xl font-bold text-white">
-                {stats?.totalRequests || 0}
-              </p>
-            </div>
-          </div>
-          <div className="text-sm text-slate-400">
-            Average: {stats?.averageRPS || 0} req/s
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-gradient-to-br from-red-500/10 to-red-600/5 border border-red-500/30 rounded-2xl p-6"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <ShieldExclamationIcon className="w-10 h-10 text-red-500" />
-            <div className="text-right">
-              <p className="text-sm text-red-300">Rate Limited</p>
-              <p className="text-3xl font-bold text-red-500">
-                {stats?.rateLimitedRequests || 0}
-              </p>
-            </div>
-          </div>
-          <div className="text-sm text-red-300">
-            Block Rate: {stats?.blockRate || 0}%
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <ChartBarIcon className="w-10 h-10 text-orange-500" />
-            <div className="text-right">
-              <p className="text-sm text-slate-400">Peak RPS</p>
-              <p className="text-3xl font-bold text-orange-500">
-                {stats?.peakRPS || 0}
-              </p>
-            </div>
-          </div>
-          <div className="text-sm text-slate-400">Requests per second</div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <ExclamationTriangleIcon className="w-10 h-10 text-purple-500" />
-            <div className="text-right">
-              <p className="text-sm text-slate-400">Blocked IPs</p>
-              <p className="text-3xl font-bold text-purple-500">
-                {stats?.blockedIps || 0}
-              </p>
-            </div>
-          </div>
-          <div className="text-sm text-slate-400">
-            Out of {stats?.uniqueIps || 0} unique
-          </div>
-        </motion.div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: "Total Requests", value: stats?.totalRequests || 0, sub: `Avg: ${stats?.averageRPS || 0} req/s` },
+          { label: "Rate Limited", value: stats?.rateLimitedRequests || 0, sub: `Block rate: ${stats?.blockRate || 0}%` },
+          { label: "Peak RPS", value: stats?.peakRPS || 0, sub: "Requests per second" },
+          { label: "Blocked IPs", value: stats?.blockedIps || 0, sub: `Of ${stats?.uniqueIps || 0} unique` },
+        ].map((s, i) => (
+          <motion.div key={s.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
+            className="bg-slate-800/50 border border-white/[0.06] rounded-2xl p-5">
+            <div className="text-[12px] text-gray-500 mb-2">{s.label}</div>
+            <div className="text-2xl font-semibold text-white tracking-tight">{s.value}</div>
+            {s.sub && <div className="text-[11px] text-gray-600 mt-1">{s.sub}</div>}
+          </motion.div>
+        ))}
       </div>
 
       {/* Rate Limit Rules */}

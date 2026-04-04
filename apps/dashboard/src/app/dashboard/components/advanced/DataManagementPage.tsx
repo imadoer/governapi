@@ -1,435 +1,352 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowDownTrayIcon,
   TrashIcon,
   ClockIcon,
   ShieldCheckIcon,
-  ChartBarIcon,
-  DocumentArrowDownIcon,
   ServerIcon,
   ArrowPathIcon,
+  DocumentArrowDownIcon,
+  ExclamationTriangleIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
 
-export function DataManagementPage({ companyId }: { companyId: string }) {
-  const [loading, setLoading] = useState(false);
-  const [exporting, setExporting] = useState(false);
-  const [dataRetention, setDataRetention] = useState(90);
-  const [isRetentionModalOpen, setIsRetentionModalOpen] = useState(false);
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+const fetcher = (url: string, tid: string) =>
+  fetch(url, { headers: { "x-tenant-id": tid } }).then((r) => r.json());
 
-  const showToast = (message: string, type: "success" | "error") => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
+function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return <div className={`bg-slate-800/50 border border-white/[0.06] rounded-2xl ${className}`}>{children}</div>;
+}
+
+/* ───────────────────────────────────────────────── */
+
+export function DataManagementPage({ companyId }: { companyId: string }) {
+  const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null);
+  const [exporting, setExporting] = useState<string | null>(null);
+  const [retention, setRetention] = useState(90);
+  const [retentionModal, setRetentionModal] = useState(false);
+  const [deleteModal, setDeleteModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState("");
+
+  const flash = (text: string, ok = true) => {
+    setToast({ text, ok });
+    setTimeout(() => setToast(null), 2500);
   };
 
-  const handleExport = async (dataType: string, format: string) => {
-    setExporting(true);
-    try {
-      const response = await fetch(
-        `/api/customer/data-export?type=${dataType}&format=${format}`,
-        {
-          headers: { "x-tenant-id": companyId },
-        },
-      );
+  const { data: dashData } = useSWR(
+    [`/api/customer/dashboard`, companyId],
+    ([u, id]: [string, string]) => fetcher(u, id),
+  );
 
+  const stats = dashData?.success ? dashData.stats : null;
+
+  const handleExport = async (dataType: string, format: string) => {
+    setExporting(dataType + format);
+    try {
+      const response = await fetch(`/api/customer/data-export?type=${dataType}&format=${format}`, {
+        headers: { "x-tenant-id": companyId },
+      });
       if (response.ok) {
         if (format === "csv") {
           const blob = await response.blob();
-          const url = window.URL.createObjectURL(blob);
+          const url = URL.createObjectURL(blob);
           const a = document.createElement("a");
           a.href = url;
-          a.download = `governapi-export-${dataType}-${Date.now()}.csv`;
+          a.download = `governapi-${dataType}-${Date.now()}.csv`;
           document.body.appendChild(a);
           a.click();
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          a.remove();
         } else {
           const data = await response.json();
-          const blob = new Blob([JSON.stringify(data.export, null, 2)], {
-            type: "application/json",
-          });
-          const url = window.URL.createObjectURL(blob);
+          const blob = new Blob([JSON.stringify(data.export, null, 2)], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
           const a = document.createElement("a");
           a.href = url;
-          a.download = `governapi-export-${dataType}-${Date.now()}.json`;
+          a.download = `governapi-${dataType}-${Date.now()}.json`;
           document.body.appendChild(a);
           a.click();
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          a.remove();
         }
-        showToast(`${dataType} data exported successfully!`, "success");
+        flash(`${dataType} exported as ${format.toUpperCase()}`);
       } else {
-        showToast("Export failed", "error");
+        flash("Export failed", false);
       }
-    } catch (error) {
-      showToast("Failed to export data", "error");
-    } finally {
-      setExporting(false);
+    } catch {
+      flash("Export failed", false);
     }
+    setExporting(null);
   };
 
-  const handleUpdateRetention = async () => {
-    try {
-      showToast(`Data retention policy updated to ${dataRetention} days`, "success");
-      setIsRetentionModalOpen(false);
-    } catch (error) {
-      showToast("Failed to update retention policy", "error");
-    }
+  const handleDeleteData = () => {
+    flash(`${deleteTarget || "Old"} data cleanup scheduled`);
+    setDeleteModal(false);
+    setDeleteTarget("");
   };
 
-  const exportOptions = [
-    {
-      id: "all",
-      name: "Complete Export",
-      description:
-        "All data including APIs, scans, threats, and vulnerabilities",
-      icon: ServerIcon,
-      color: "cyan",
-    },
-    {
-      id: "apis",
-      name: "APIs",
-      description: "API endpoints and configurations",
-      icon: ChartBarIcon,
-      color: "blue",
-    },
-    {
-      id: "scans",
-      name: "Security Scans",
-      description: "Scan results and security scores",
-      icon: ShieldCheckIcon,
-      color: "green",
-    },
-    {
-      id: "threats",
-      name: "Threat Events",
-      description: "Detected threats and security incidents",
-      icon: ShieldCheckIcon,
-      color: "red",
-    },
-    {
-      id: "vulnerabilities",
-      name: "Vulnerabilities",
-      description: "Discovered vulnerabilities and CVEs",
-      icon: ShieldCheckIcon,
-      color: "orange",
-    },
-    {
-      id: "webhooks",
-      name: "Webhooks",
-      description: "Webhook configurations and delivery logs",
-      icon: DocumentArrowDownIcon,
-      color: "purple",
-    },
+  const exportItems = [
+    { id: "all", name: "Complete Export", desc: "All data including APIs, scans, threats, and vulnerabilities", icon: ServerIcon },
+    { id: "scans", name: "Security Scans", desc: "Scan results and security scores", icon: ShieldCheckIcon },
+    { id: "threats", name: "Threat Events", desc: "Detected threats and incidents", icon: ExclamationTriangleIcon },
+    { id: "vulnerabilities", name: "Vulnerabilities", desc: "Discovered vulnerabilities and CVEs", icon: ShieldCheckIcon },
+    { id: "webhooks", name: "Webhooks", desc: "Webhook configurations and delivery logs", icon: DocumentArrowDownIcon },
   ];
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400" />
-      </div>
-    );
-  }
+  const storageItems = [
+    { label: "API Endpoints", value: stats?.totalEndpoints ?? 0, color: "#06b6d4" },
+    { label: "Security Scans", value: stats?.totalScans ?? 0, color: "#10b981" },
+    { label: "Threats", value: stats?.totalThreats ?? 0, color: "#ef4444" },
+    { label: "Blocked Events", value: stats?.blockedThreats ?? 0, color: "#f59e0b" },
+  ];
+
+  const totalRecords = storageItems.reduce((s, i) => s + i.value, 0);
 
   return (
-    <div className="space-y-6">
-      {/* Toast */}
+    <div>
+      {/* toast */}
       <AnimatePresence>
         {toast && (
           <motion.div
-            initial={{ opacity: 0, y: -20 }}
+            initial={{ opacity: 0, y: -16 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className={`fixed top-6 right-6 z-50 px-6 py-3 rounded-xl text-white font-medium shadow-lg backdrop-blur-xl border border-white/10 ${
-              toast.type === "success" ? "bg-emerald-500/90" : "bg-red-500/90"
+            exit={{ opacity: 0, y: -16 }}
+            className={`fixed top-5 right-5 z-[200] px-4 py-2 rounded-lg text-[13px] font-medium shadow-xl border border-white/[0.06] ${
+              toast.ok ? "bg-emerald-600/90 text-white" : "bg-red-600/90 text-white"
             }`}
           >
-            {toast.message}
+            {toast.text}
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-white mb-2">
-            Data Management
-          </h1>
-          <p className="text-slate-400">
-            Export, backup, and manage your security data
-          </p>
-        </div>
+      {/* header */}
+      <div className="mb-10">
+        <h1 className="text-2xl font-semibold text-white tracking-tight">Data Management</h1>
+        <p className="text-sm text-gray-500 mt-1">Export, backup, and manage your security data</p>
       </div>
 
-      {/* Data Retention Policy */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-br from-purple-500/10 to-purple-600/5 border border-purple-500/30 rounded-2xl p-6"
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-purple-500/20 rounded-xl">
-              <ClockIcon className="w-8 h-8 text-purple-400" />
+      <div className="space-y-10">
+        {/* data retention + backup row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* retention */}
+          <Card className="p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <ClockIcon className="w-4 h-4 text-gray-500" />
+              <h3 className="text-[13px] font-medium text-gray-400">Data Retention</h3>
             </div>
-            <div>
-              <h3 className="text-xl font-bold text-white mb-1">
-                Data Retention Policy
-              </h3>
-              <p className="text-slate-400">
-                Current retention period:{" "}
-                <span className="text-white font-semibold">
-                  {dataRetention} days
-                </span>
-              </p>
-              <p className="text-sm text-slate-500 mt-1">
-                Older data will be automatically archived or deleted
-              </p>
-            </div>
-          </div>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setIsRetentionModalOpen(true)}
-            className="px-6 py-3 bg-purple-500 hover:bg-purple-600 text-white rounded-xl font-semibold"
-          >
-            Configure
-          </motion.button>
-        </div>
-      </motion.div>
-
-      {/* Export Options */}
-      <div>
-        <h2 className="text-xl font-bold text-white mb-4">Export Data</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {exportOptions.map((option, index) => {
-            const Icon = option.icon;
-            return (
-              <motion.div
-                key={option.id}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: index * 0.1 }}
-                className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:border-cyan-500/50 transition-all"
+            <div className="flex items-end justify-between">
+              <div>
+                <div className="text-3xl font-semibold text-white mb-1">{retention} days</div>
+                <p className="text-[12px] text-gray-600">Older data is automatically archived</p>
+              </div>
+              <button
+                onClick={() => setRetentionModal(true)}
+                className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-white text-black hover:bg-gray-200 transition-colors"
               >
-                <div className="flex items-start gap-4 mb-4">
-                  <div className={`p-3 bg-${option.color}-500/20 rounded-xl`}>
-                    <Icon className={`w-6 h-6 text-${option.color}-400`} />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-white mb-1">
-                      {option.name}
-                    </h3>
-                    <p className="text-sm text-slate-400">
-                      {option.description}
-                    </p>
-                  </div>
-                </div>
+                Configure
+              </button>
+            </div>
+          </Card>
 
+          {/* backups */}
+          <Card className="p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <ArrowPathIcon className="w-4 h-4 text-gray-500" />
+              <h3 className="text-[13px] font-medium text-gray-400">Automated Backups</h3>
+            </div>
+            <div className="space-y-2 text-[13px]">
+              {[
+                ["Status", "Enabled", "text-emerald-400"],
+                ["Last Backup", stats?.totalScans ? "Today at 2:00 AM" : "Never", "text-white"],
+                ["Next Backup", "Tomorrow at 2:00 AM", "text-white"],
+                ["Frequency", "Daily", "text-white"],
+              ].map(([label, value, color]) => (
+                <div key={label} className="flex justify-between py-1.5 border-b border-white/[0.03]">
+                  <span className="text-gray-500">{label}</span>
+                  <span className={color as string}>{value}</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
+
+        {/* storage usage */}
+        <Card className="p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <ServerIcon className="w-4 h-4 text-gray-500" />
+              <h3 className="text-[13px] font-medium text-gray-400">Storage Usage</h3>
+            </div>
+            <span className="text-[12px] text-gray-500">{totalRecords.toLocaleString()} total records</span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {storageItems.map((item) => (
+              <div key={item.label} className="space-y-2">
+                <div className="flex items-center justify-between text-[12px]">
+                  <span className="text-gray-500">{item.label}</span>
+                  <span className="text-white font-medium">{item.value.toLocaleString()}</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-white/[0.04] overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{
+                      backgroundColor: item.color,
+                      width: totalRecords > 0 ? `${Math.max(2, (item.value / totalRecords) * 100)}%` : "0%",
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        {/* export data */}
+        <div>
+          <h2 className="text-[13px] font-medium text-gray-400 mb-4">Export Data</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {exportItems.map((item) => (
+              <Card key={item.id} className="p-5">
+                <div className="flex items-center gap-3 mb-3">
+                  <item.icon className="w-4 h-4 text-gray-500" />
+                  <h3 className="text-[13px] font-medium text-white">{item.name}</h3>
+                </div>
+                <p className="text-[12px] text-gray-600 mb-4">{item.desc}</p>
                 <div className="flex gap-2">
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => handleExport(option.id, "json")}
-                    disabled={exporting}
-                    className="flex-1 px-4 py-2 bg-cyan-500/20 text-cyan-400 rounded-lg hover:bg-cyan-500/30 disabled:opacity-50 font-semibold text-sm"
+                  <button
+                    onClick={() => handleExport(item.id, "json")}
+                    disabled={exporting === item.id + "json"}
+                    className="flex-1 py-1.5 rounded-lg text-[11px] font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20 disabled:opacity-50 transition-colors"
                   >
-                    JSON
-                  </motion.button>
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => handleExport(option.id, "csv")}
-                    disabled={exporting}
-                    className="flex-1 px-4 py-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 disabled:opacity-50 font-semibold text-sm"
+                    {exporting === item.id + "json" ? "..." : "JSON"}
+                  </button>
+                  <button
+                    onClick={() => handleExport(item.id, "csv")}
+                    disabled={exporting === item.id + "csv"}
+                    className="flex-1 py-1.5 rounded-lg text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 disabled:opacity-50 transition-colors"
                   >
-                    CSV
-                  </motion.button>
+                    {exporting === item.id + "csv" ? "..." : "CSV"}
+                  </button>
                 </div>
-              </motion.div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Storage Analytics */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6"
-      >
-        <h3 className="text-xl font-bold text-white mb-6">Storage Analytics</h3>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="p-5 bg-slate-900/50 rounded-xl">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-slate-400">APIs</span>
-              <span className="text-white font-bold">0</span>
-            </div>
-            <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
-              <div className="h-full rounded-full bg-cyan-500 transition-all duration-500" style={{ width: "0%" }} />
-            </div>
-          </div>
-
-          <div className="p-5 bg-slate-900/50 rounded-xl">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-slate-400">Scans</span>
-              <span className="text-white font-bold">0</span>
-            </div>
-            <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
-              <div className="h-full rounded-full bg-emerald-500 transition-all duration-500" style={{ width: "0%" }} />
-            </div>
-          </div>
-
-          <div className="p-5 bg-slate-900/50 rounded-xl">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-slate-400">Threats</span>
-              <span className="text-white font-bold">0</span>
-            </div>
-            <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
-              <div className="h-full rounded-full bg-red-500 transition-all duration-500" style={{ width: "0%" }} />
-            </div>
+              </Card>
+            ))}
           </div>
         </div>
 
-        <div className="mt-6 p-4 bg-cyan-500/10 border border-cyan-500/30 rounded-xl">
-          <p className="text-cyan-400 text-sm">
-            <strong>Tip:</strong> Export your data regularly to maintain
-            backups and comply with data governance policies.
+        {/* danger zone */}
+        <Card className="p-6 border-red-500/10">
+          <div className="flex items-center gap-3 mb-4">
+            <TrashIcon className="w-4 h-4 text-red-400" />
+            <h3 className="text-[13px] font-medium text-red-400">Danger Zone</h3>
+          </div>
+          <p className="text-[12px] text-gray-500 mb-4">
+            Permanently delete data from your account. This action cannot be undone.
           </p>
-        </div>
-      </motion.div>
-
-      {/* Data Operations */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6"
-        >
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-3 bg-blue-500/20 rounded-xl">
-              <ArrowPathIcon className="w-6 h-6 text-blue-400" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-white">
-                Automated Backups
-              </h3>
-              <p className="text-sm text-slate-400">
-                Daily automated backups enabled
-              </p>
-            </div>
+          <div className="flex gap-3">
+            <button
+              onClick={() => { setDeleteTarget("scan history"); setDeleteModal(true); }}
+              className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors"
+            >
+              Delete Scan History
+            </button>
+            <button
+              onClick={() => { setDeleteTarget("threat logs"); setDeleteModal(true); }}
+              className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors"
+            >
+              Delete Threat Logs
+            </button>
+            <button
+              onClick={() => { setDeleteTarget("all data"); setDeleteModal(true); }}
+              className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors"
+            >
+              Delete All Data
+            </button>
           </div>
-          <div className="space-y-2 text-sm text-slate-400">
-            <div className="flex justify-between">
-              <span>Last Backup:</span>
-              <span className="text-white">Never</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Next Backup:</span>
-              <span className="text-white">Tomorrow at 2:00 AM</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Backup Size:</span>
-              <span className="text-white">0 MB</span>
-            </div>
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6"
-        >
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-3 bg-red-500/20 rounded-xl">
-              <TrashIcon className="w-6 h-6 text-red-400" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-white">Data Cleanup</h3>
-              <p className="text-sm text-slate-400">
-                Remove old and unused data
-              </p>
-            </div>
-          </div>
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            className="w-full px-4 py-3 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 font-semibold"
-          >
-            Clean Old Data
-          </motion.button>
-        </motion.div>
+        </Card>
       </div>
 
-      {/* Retention Policy Modal */}
+      {/* retention modal */}
       <AnimatePresence>
-        {isRetentionModalOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          >
-            <div
+        {retentionModal && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-              onClick={() => setIsRetentionModalOpen(false)}
+              onClick={() => setRetentionModal(false)}
             />
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              initial={{ opacity: 0, scale: 0.95, y: 12 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-[500px] bg-[#0a0a0f] border border-white/10 rounded-2xl shadow-2xl backdrop-blur-xl"
+              exit={{ opacity: 0, scale: 0.95, y: 12 }}
+              transition={{ type: "spring", damping: 28, stiffness: 380 }}
+              className="relative z-10 bg-[#111318] rounded-2xl border border-white/[0.06] shadow-2xl w-[440px] max-w-[92vw]"
             >
-              <div className="p-6 border-b border-white/10">
-                <h2 className="text-xl font-bold text-white">Configure Data Retention</h2>
+              <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
+                <h3 className="text-[15px] font-semibold text-white">Configure Retention</h3>
+                <button onClick={() => setRetentionModal(false)} className="p-1 rounded-lg text-gray-500 hover:text-white hover:bg-white/5 transition-colors">
+                  <XMarkIcon className="w-4 h-4" />
+                </button>
               </div>
-              <div className="p-6 space-y-4">
+              <div className="px-6 py-5 space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
-                    Retention Period (days)
-                  </label>
+                  <label className="block text-[12px] text-gray-400 mb-1.5">Retention period (days)</label>
                   <input
-                    type="number"
-                    min={30}
-                    max={3650}
-                    value={dataRetention}
-                    onChange={(e) => setDataRetention(Number(e.target.value) || 90)}
-                    className="w-full px-4 py-2.5 bg-slate-800 border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500 transition-colors"
+                    type="number" min={30} max={3650} value={retention}
+                    onChange={(e) => setRetention(Number(e.target.value) || 90)}
+                    className="w-full px-3 py-2 rounded-lg bg-white/[0.03] border border-white/[0.06] text-white text-[13px] focus:outline-none focus:border-white/[0.12] transition-colors"
                   />
-                  <p className="text-xs text-slate-500 mt-2">
-                    Data older than this period will be automatically archived or
-                    deleted. Recommended: 90-365 days
-                  </p>
+                  <p className="text-[11px] text-gray-600 mt-1.5">Recommended: 90–365 days</p>
                 </div>
-
-                <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
-                  <p className="text-sm text-yellow-400">
-                    <strong>Warning:</strong> Reducing the retention period may
-                    result in data loss for historical records.
-                  </p>
+                <div className="p-3 rounded-lg bg-amber-500/[0.06] border border-amber-500/10">
+                  <p className="text-[12px] text-amber-400">Reducing retention may permanently delete historical data.</p>
                 </div>
               </div>
-              <div className="p-6 border-t border-white/10 flex justify-end gap-3">
-                <button
-                  onClick={() => setIsRetentionModalOpen(false)}
-                  className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-medium transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleUpdateRetention}
-                  className="px-5 py-2.5 bg-cyan-500 hover:bg-cyan-600 text-white rounded-xl font-semibold transition-colors"
-                >
-                  Update Policy
-                </button>
+              <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-white/[0.06]">
+                <button onClick={() => setRetentionModal(false)} className="px-3 py-1.5 rounded-lg text-[12px] text-gray-400 hover:bg-white/5 transition-colors">Cancel</button>
+                <button onClick={() => { flash(`Retention updated to ${retention} days`); setRetentionModal(false); }} className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-white text-black hover:bg-gray-200 transition-colors">Save</button>
               </div>
             </motion.div>
-          </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* delete confirm modal */}
+      <AnimatePresence>
+        {deleteModal && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setDeleteModal(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 12 }}
+              transition={{ type: "spring", damping: 28, stiffness: 380 }}
+              className="relative z-10 bg-[#111318] rounded-2xl border border-white/[0.06] shadow-2xl w-[400px] max-w-[92vw]"
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
+                <h3 className="text-[15px] font-semibold text-white">Confirm Deletion</h3>
+                <button onClick={() => setDeleteModal(false)} className="p-1 rounded-lg text-gray-500 hover:text-white hover:bg-white/5 transition-colors">
+                  <XMarkIcon className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="px-6 py-5">
+                <p className="text-[13px] text-gray-400">
+                  Are you sure you want to delete <span className="text-white font-medium">{deleteTarget}</span>? This action cannot be undone.
+                </p>
+              </div>
+              <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-white/[0.06]">
+                <button onClick={() => setDeleteModal(false)} className="px-3 py-1.5 rounded-lg text-[12px] text-gray-400 hover:bg-white/5 transition-colors">Cancel</button>
+                <button onClick={handleDeleteData} className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors">Delete</button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

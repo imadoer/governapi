@@ -171,7 +171,7 @@ async function generateISO27001Report(tenantId: string, frameworkId: string | nu
 
 async function generateAPIRiskReport(tenantId: string) {
   const violations = await database.queryMany(`
-    SELECT violation_type, severity, title, endpoint_path, status, detected_at
+    SELECT violation_type, severity, COALESCE(description, violation_type) as title, endpoint as endpoint_path, status, created_at as detected_at
     FROM compliance_api_violations
     WHERE tenant_id = $1
     ORDER BY CASE severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END

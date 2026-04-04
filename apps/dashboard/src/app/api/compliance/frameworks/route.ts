@@ -11,28 +11,50 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get all frameworks with their latest assessment results for this tenant
+    // Get all frameworks with pre-aggregated counts (no correlated subqueries)
     const frameworks = await database.queryMany(
-      `SELECT DISTINCT ON (cf.id)
-        cf.id,
-        cf.framework_name as name,
-        cf.description,
-        cf.version,
-        cf.category,
-        COALESCE(ccr.compliance_percentage, 0) as score,
-        ccr.last_assessment as "lastAssessed",
-        ccr.next_assessment as "nextAssessment",
-        ccr.status,
-        (SELECT COUNT(*) FROM compliance_controls WHERE framework_id = cf.id) as total_controls,
-        (SELECT COUNT(*) FROM compliance_check_results 
-         WHERE framework_id = cf.id AND tenant_id = $1 AND status = 'passed') as passed_controls,
-        (SELECT COUNT(*) FROM compliance_check_results 
-         WHERE framework_id = cf.id AND tenant_id = $1 AND status = 'failed') as failed_controls,
-        (SELECT COUNT(*) FROM compliance_findings 
-         WHERE framework_name = cf.framework_name AND tenant_id = $1 AND status = 'open') as pending_controls
-      FROM compliance_frameworks cf
-      LEFT JOIN compliance_check_results ccr ON cf.id = ccr.framework_id AND ccr.tenant_id = $1
-      ORDER BY cf.id, ccr.last_assessment DESC NULLS LAST`,
+      `SELECT
+        fw.id,
+        fw.framework_name as name,
+        fw.description,
+        fw.version,
+        fw.category,
+        COALESCE(latest.compliance_percentage, 0) as score,
+        latest.last_assessment as "lastAssessed",
+        latest.next_assessment as "nextAssessment",
+        latest.status,
+        COALESCE(ctrl.total, 0) as total_controls,
+        COALESCE(cr.passed, 0) as passed_controls,
+        COALESCE(cr.failed, 0) as failed_controls,
+        COALESCE(fn.open_count, 0) as pending_controls
+      FROM compliance_frameworks fw
+      LEFT JOIN LATERAL (
+        SELECT compliance_percentage, last_assessment, next_assessment, status
+        FROM compliance_check_results
+        WHERE framework_id = fw.id AND tenant_id = $1
+        ORDER BY last_assessment DESC NULLS LAST
+        LIMIT 1
+      ) latest ON true
+      LEFT JOIN (
+        SELECT framework_id, COUNT(*) as total
+        FROM compliance_controls
+        GROUP BY framework_id
+      ) ctrl ON ctrl.framework_id = fw.id
+      LEFT JOIN (
+        SELECT framework_id,
+          COUNT(*) FILTER (WHERE status = 'passed') as passed,
+          COUNT(*) FILTER (WHERE status = 'failed') as failed
+        FROM compliance_check_results
+        WHERE tenant_id = $1
+        GROUP BY framework_id
+      ) cr ON cr.framework_id = fw.id
+      LEFT JOIN (
+        SELECT framework_name, COUNT(*) as open_count
+        FROM compliance_findings
+        WHERE tenant_id = $1 AND status = 'open'
+        GROUP BY framework_name
+      ) fn ON fn.framework_name = fw.framework_name
+      ORDER BY fw.framework_name`,
       [tenantId]
     );
 

@@ -2,8 +2,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
+import useSWR from "swr";
 import {
   ShieldCheckIcon,
   BoltIcon,
@@ -15,37 +17,31 @@ import {
   ClockIcon,
   Bars3Icon,
   XMarkIcon,
-  ChevronRightIcon,
 } from "@heroicons/react/24/outline";
 
-// Import all advanced components
+// Overview components (always visible on dashboard)
 import { HeaderBar } from "./components/advanced/HeaderBar";
 import { SecurityScore } from "./components/advanced/SecurityScore";
 import { MetricCard } from "./components/advanced/MetricCard";
 import { ThreatTimeline } from "./components/advanced/ThreatTimeline";
-import { ActivityFeed } from "./components/advanced/ActivityFeed";
-import { AiInsightPanel } from "./components/advanced/AiInsightPanel";
-import { ThreatMap } from "./components/advanced/ThreatMap";
+import { PageSkeleton } from "./components/advanced/PageSkeleton";
 
-// Import existing feature components
-import { SecurityCenterPage } from "./components/advanced/SecurityCenterPage";
-import { VulnerabilitiesPage } from "./components/advanced/VulnerabilitiesPage";
-import { ExternalIntegrationsPage } from "./components/advanced/ExternalIntegrationsPage";
-import { ApiManagementPage } from "./components/advanced/ApiManagementPage";
-import { ThreatIntelligencePage } from "./components/advanced/ThreatIntelligencePage";
-import BotProtectionPage from "./components/advanced/BotProtectionPage";
-import { CustomRulesPage } from "./components/advanced/CustomRulesPage";
-import { PerformanceMonitorPage } from "./components/advanced/PerformanceMonitorPage";
-import { ComplianceHubPage } from "./components/advanced/ComplianceHubPage";
-import { WebhookCenterPage } from "./components/advanced/WebhookCenterPage";
-import { RateLimitingPage } from "./components/advanced/RateLimitingPage";
-import { AnalyticsInsightsPage } from "./components/advanced/AnalyticsInsightsPage";
-import { DataManagementPage } from "./components/advanced/DataManagementPage";
-import { BillingSubscriptionPage } from "./components/advanced/BillingSubscriptionPage";
-import { EnterpriseSettingsPage } from "./components/advanced/EnterpriseSettingsPage";
-import { RealComplianceDashboard } from "./components/RealComplianceDashboard";
-import { WebhookIntegration } from "./components/WebhookIntegration";
-import { APIDiscovery } from "./components/APIDiscovery";
+// Lazy-load feature pages — only loaded when navigated to
+const SecurityCenterPage = dynamic(() => import("./components/advanced/SecurityCenterPage").then(m => ({ default: m.SecurityCenterPage })), { loading: () => <PageSkeleton /> });
+const VulnerabilitiesPage = dynamic(() => import("./components/advanced/VulnerabilitiesPage").then(m => ({ default: m.VulnerabilitiesPage })), { loading: () => <PageSkeleton /> });
+const ExternalIntegrationsPage = dynamic(() => import("./components/advanced/ExternalIntegrationsPage").then(m => ({ default: m.ExternalIntegrationsPage })), { loading: () => <PageSkeleton /> });
+const ApiManagementPage = dynamic(() => import("./components/advanced/ApiManagementPage").then(m => ({ default: m.ApiManagementPage })), { loading: () => <PageSkeleton /> });
+const ThreatIntelligencePage = dynamic(() => import("./components/advanced/ThreatIntelligencePage").then(m => ({ default: m.ThreatIntelligencePage })), { loading: () => <PageSkeleton /> });
+const BotProtectionPage = dynamic(() => import("./components/advanced/BotProtectionPage"), { loading: () => <PageSkeleton /> });
+const CustomRulesPage = dynamic(() => import("./components/advanced/CustomRulesPage").then(m => ({ default: m.CustomRulesPage })), { loading: () => <PageSkeleton /> });
+const PerformanceMonitorPage = dynamic(() => import("./components/advanced/PerformanceMonitorPage").then(m => ({ default: m.PerformanceMonitorPage })), { loading: () => <PageSkeleton /> });
+const ComplianceHubPage = dynamic(() => import("./components/advanced/ComplianceHubPage").then(m => ({ default: m.ComplianceHubPage })), { loading: () => <PageSkeleton /> });
+const WebhookCenterPage = dynamic(() => import("./components/advanced/WebhookCenterPage").then(m => ({ default: m.WebhookCenterPage })), { loading: () => <PageSkeleton /> });
+const RateLimitingPage = dynamic(() => import("./components/advanced/RateLimitingPage").then(m => ({ default: m.RateLimitingPage })), { loading: () => <PageSkeleton /> });
+const AnalyticsInsightsPage = dynamic(() => import("./components/advanced/AnalyticsInsightsPage").then(m => ({ default: m.AnalyticsInsightsPage })), { loading: () => <PageSkeleton /> });
+const DataManagementPage = dynamic(() => import("./components/advanced/DataManagementPage").then(m => ({ default: m.DataManagementPage })), { loading: () => <PageSkeleton /> });
+const BillingSubscriptionPage = dynamic(() => import("./components/advanced/BillingSubscriptionPage").then(m => ({ default: m.BillingSubscriptionPage })), { loading: () => <PageSkeleton /> });
+const EnterpriseSettingsPage = dynamic(() => import("./components/advanced/EnterpriseSettingsPage").then(m => ({ default: m.EnterpriseSettingsPage })), { loading: () => <PageSkeleton /> });
 
 const SIDEBAR_ITEMS = [
   {
@@ -143,122 +139,14 @@ export default function AdvancedDashboard() {
   const [activeFeature, setActiveFeature] = useState("overview");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [dashboardStats, setDashboardStats] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [onboardingStep, setOnboardingStep] = useState(0);
+  const [addApiUrl, setAddApiUrl] = useState("");
+  const [addApiName, setAddApiName] = useState("");
+  const [onboardingLoading, setOnboardingLoading] = useState(false);
+  const [onboardingDone, setOnboardingDone] = useState(false);
 
-  // Mock data generators
-  const generateSparklineData = () =>
-    Array.from({ length: 7 }, () => ({ value: Math.random() * 100 + 50 }));
-
-  const generateThreatData = () =>
-    Array.from({ length: 24 }, (_, i) => ({
-      hour: `${i}:00`,
-      threats: Math.floor(Math.random() * 50) + 10,
-      blocked: Math.floor(Math.random() * 45) + 5,
-    }));
-
-  const activityFeed = [
-    {
-      id: 1,
-      type: "block" as const,
-      message: "SQL Injection attempt blocked on /api/login",
-      ip: "192.168.1.45",
-      time: "2 min ago",
-      severity: "critical" as const,
-    },
-    {
-      id: 2,
-      type: "scan" as const,
-      message: "Security scan completed on /api/payments",
-      time: "5 min ago",
-      severity: "info" as const,
-    },
-    {
-      id: 3,
-      type: "threat" as const,
-      message: "Rate limit exceeded from IP 10.0.0.23",
-      time: "8 min ago",
-      severity: "warning" as const,
-    },
-    {
-      id: 4,
-      type: "block" as const,
-      message: "XSS attempt prevented on /api/user/profile",
-      ip: "45.33.22.11",
-      time: "12 min ago",
-      severity: "critical" as const,
-    },
-    {
-      id: 5,
-      type: "compliance" as const,
-      message: "SOC2 compliance check passed",
-      time: "15 min ago",
-      severity: "info" as const,
-    },
-    {
-      id: 6,
-      type: "threat" as const,
-      message: "DDoS mitigation activated",
-      ip: "203.0.113.0",
-      time: "18 min ago",
-      severity: "critical" as const,
-    },
-  ];
-
-  const aiInsights = [
-    {
-      type: "anomaly" as const,
-      title: "Unusual Traffic Spike Detected",
-      description:
-        "Traffic from Singapore increased 340% in the last hour. Possible credential stuffing attack.",
-      action: "Investigate now",
-    },
-    {
-      type: "recommendation" as const,
-      title: "Security Score Improvement",
-      description:
-        "Enable rate limiting on /api/auth/login to prevent brute force attacks. Expected score increase: +8 points.",
-      action: "Apply recommendation",
-    },
-    {
-      type: "alert" as const,
-      title: "New Vulnerability Pattern",
-      description:
-        "API endpoint /api/v2/users shows signs of NoSQL injection vulnerability based on recent traffic patterns.",
-      action: "Review endpoint",
-    },
-  ];
-
-  const threatLocations = [
-    {
-      lat: 1.3521,
-      lng: 103.8198,
-      city: "Singapore",
-      country: "SG",
-      threats: 234,
-    },
-    { lat: 51.5074, lng: -0.1278, city: "London", country: "UK", threats: 156 },
-    {
-      lat: 40.7128,
-      lng: -74.006,
-      city: "New York",
-      country: "USA",
-      threats: 189,
-    },
-    {
-      lat: 35.6762,
-      lng: 139.6503,
-      city: "Tokyo",
-      country: "Japan",
-      threats: 98,
-    },
-    {
-      lat: 37.7749,
-      lng: -122.4194,
-      city: "San Francisco",
-      country: "USA",
-      threats: 167,
-    },
-  ];
+  // All data comes from dashboardStats (fetched from /api/customer/dashboard)
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -274,61 +162,55 @@ export default function AdvancedDashboard() {
     }
   }, []);
 
+  // SWR fetcher — uses company.id as tenant header
+  const dashFetcher = (url: string) =>
+    fetch(url, { headers: { "x-tenant-id": company?.id?.toString() || "" } })
+      .then((r) => r.json())
+      .then((d) => (d.success ? d.dashboard : null));
+
+  const { data: swrDashboard, mutate: refreshDashboard } = useSWR(
+    company?.id ? "/api/customer/dashboard" : null,
+    dashFetcher,
+    { revalidateOnFocus: false, dedupingInterval: 5000 },
+  );
+
+  // Sync SWR data into state (keeps existing renderContent() working)
   useEffect(() => {
-    if (!company?.id) return;
-
-    const fetchDashboard = async () => {
-      setLoading(true);
-      try {
-        const response = await fetch("/api/customer/dashboard", {
-          headers: { "x-tenant-id": company.id.toString() },
-        });
-        const result = await response.json();
-        if (result.success) {
-          setDashboardStats(result.dashboard);
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchDashboard();
-  }, [company]);
+    if (swrDashboard) {
+      setDashboardStats(swrDashboard);
+      setInitialLoading(false);
+    }
+  }, [swrDashboard]);
 
   const handleLogout = () => {
     sessionStorage.clear();
     router.push("/login");
   };
 
-  const handleRefresh = () => {
-    if (company?.id) {
-      fetch("/api/customer/dashboard", {
-        headers: { "x-tenant-id": company.id.toString() },
-      })
-        .then((res) => res.json())
-        .then((result) => {
-          if (result.success) {
-            setDashboardStats(result.dashboard);
-          }
-        });
-    }
-  };
+  const handleRefresh = () => refreshDashboard();
 
-  if (loading || !dashboardStats) {
+  if (initialLoading || !dashboardStats) {
     return (
-      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400" />
+      <div className="min-h-screen bg-[#0a0a0f] flex">
+        {/* Static sidebar skeleton */}
+        <div className="w-[280px] border-r border-white/[0.06] bg-black/20 p-6">
+          <div className="h-7 w-32 bg-slate-700/30 rounded-lg animate-pulse mb-8" />
+          <div className="space-y-2">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="h-9 bg-slate-700/20 rounded-lg animate-pulse" />
+            ))}
+          </div>
+        </div>
+        {/* Content skeleton */}
+        <div className="flex-1 flex flex-col">
+          <div className="h-16 border-b border-white/[0.06] bg-black/10" />
+          <div className="flex-1 p-8">
+            <PageSkeleton />
+          </div>
+        </div>
       </div>
     );
   }
-
-  const [onboardingStep, setOnboardingStep] = useState(0);
-  const [addApiUrl, setAddApiUrl] = useState("");
-  const [addApiName, setAddApiName] = useState("");
-  const [onboardingLoading, setOnboardingLoading] = useState(false);
-  const [onboardingDone, setOnboardingDone] = useState(false);
 
   const handleOnboardingAddApi = async () => {
     if (!addApiUrl || !company?.id) return;
@@ -400,83 +282,76 @@ export default function AdvancedDashboard() {
         <div className="space-y-6">
           {/* Onboarding Card — shown when customer has no APIs and hasn't completed onboarding */}
           {dashboardStats.overview.totalApis === 0 && !onboardingDone && (
-            <div className="bg-gradient-to-r from-cyan-900/40 to-violet-900/40 border border-cyan-500/30 rounded-2xl p-8 shadow-lg shadow-cyan-500/10">
-              <div className="flex items-start gap-6">
-                <div className="w-14 h-14 bg-gradient-to-br from-cyan-500 to-violet-500 rounded-2xl flex items-center justify-center flex-shrink-0">
-                  <ShieldCheckIcon className="w-8 h-8 text-white" />
+            <div className="bg-slate-800/50 border border-white/[0.06] rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-[15px] font-semibold text-white">Get Started</h2>
+                  <p className="text-[12px] text-gray-500 mt-0.5">Add an API endpoint to run your first security scan</p>
                 </div>
-                <div className="flex-1">
-                  <h2 className="text-2xl font-bold text-white mb-2">Get Started with GovernAPI</h2>
-                  <p className="text-slate-300 mb-6">Add your API endpoint and we&apos;ll run a security scan immediately. Takes about 30 seconds.</p>
-
-                  {/* Step indicators */}
-                  <div className="flex items-center gap-3 mb-6">
-                    {["Add your API", "Running scan", "View results"].map((label, i) => (
-                      <div key={label} className="flex items-center gap-2">
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
-                          onboardingStep > i ? "bg-green-500 text-white" :
-                          onboardingStep === i ? "bg-cyan-500 text-white" :
-                          "bg-slate-700 text-slate-400"
-                        }`}>
-                          {onboardingStep > i ? "✓" : i + 1}
-                        </div>
-                        <span className={`text-sm ${onboardingStep >= i ? "text-white" : "text-slate-500"}`}>{label}</span>
-                        {i < 2 && <div className={`w-8 h-0.5 ${onboardingStep > i ? "bg-green-500" : "bg-slate-700"}`} />}
+                {/* Step indicators */}
+                <div className="flex items-center gap-2">
+                  {["Add API", "Scan", "Results"].map((label, i) => (
+                    <div key={label} className="flex items-center gap-1.5">
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                        onboardingStep > i ? "bg-emerald-500 text-white" :
+                        onboardingStep === i ? "bg-cyan-500 text-white" :
+                        "bg-slate-700 text-slate-500"
+                      }`}>
+                        {onboardingStep > i ? "✓" : i + 1}
                       </div>
-                    ))}
-                  </div>
-
-                  {onboardingStep === 0 && (
-                    <div className="flex flex-col gap-3 max-w-xl">
-                      <input
-                        type="text"
-                        value={addApiName}
-                        onChange={(e) => setAddApiName(e.target.value)}
-                        placeholder="API name (e.g. Users API)"
-                        className="px-4 py-3 bg-slate-800/80 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-                      />
-                      <div className="flex gap-3">
-                        <input
-                          type="url"
-                          value={addApiUrl}
-                          onChange={(e) => setAddApiUrl(e.target.value)}
-                          placeholder="https://api.yourcompany.com/endpoint"
-                          className="flex-1 px-4 py-3 bg-slate-800/80 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-                        />
-                        <button
-                          onClick={() => { setOnboardingStep(1); handleOnboardingAddApi(); }}
-                          disabled={!addApiUrl || onboardingLoading}
-                          className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-violet-500 text-white font-semibold rounded-xl hover:from-cyan-600 hover:to-violet-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                        >
-                          Scan My API
-                        </button>
-                      </div>
-                      <p className="text-xs text-slate-500">We&apos;ll check security headers, HTTPS, CORS, and common vulnerabilities on your public endpoint.</p>
+                      <span className={`text-[11px] ${onboardingStep >= i ? "text-gray-300" : "text-gray-600"}`}>{label}</span>
+                      {i < 2 && <div className={`w-4 h-px ${onboardingStep > i ? "bg-emerald-500" : "bg-slate-700"}`} />}
                     </div>
-                  )}
-
-                  {onboardingStep >= 1 && onboardingStep < 3 && (
-                    <div className="flex items-center gap-3 text-cyan-400">
-                      <div className="animate-spin w-5 h-5 border-2 border-cyan-400 border-t-transparent rounded-full" />
-                      <span>{onboardingStep === 1 ? "Registering your API..." : "Running security scan..."}</span>
-                    </div>
-                  )}
-
-                  {onboardingStep === 3 && onboardingDone && (
-                    <div className="flex items-center gap-3 text-green-400">
-                      <ShieldCheckIcon className="w-6 h-6" />
-                      <span className="font-medium">Scan complete! Your security score is ready below.</span>
-                    </div>
-                  )}
-
-                  {onboardingStep === 3 && !onboardingDone && (
-                    <div className="flex items-center gap-3 text-cyan-400">
-                      <div className="animate-spin w-5 h-5 border-2 border-cyan-400 border-t-transparent rounded-full" />
-                      <span>Analyzing results...</span>
-                    </div>
-                  )}
+                  ))}
                 </div>
               </div>
+
+              {onboardingStep === 0 && (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={addApiName}
+                    onChange={(e) => setAddApiName(e.target.value)}
+                    placeholder="API name"
+                    className="w-40 px-3 py-2 bg-white/[0.03] border border-white/[0.06] rounded-lg text-[13px] text-white placeholder-gray-600 focus:outline-none focus:border-white/[0.12]"
+                  />
+                  <input
+                    type="url"
+                    value={addApiUrl}
+                    onChange={(e) => setAddApiUrl(e.target.value)}
+                    placeholder="https://api.yourcompany.com/endpoint"
+                    className="flex-1 px-3 py-2 bg-white/[0.03] border border-white/[0.06] rounded-lg text-[13px] text-white placeholder-gray-600 focus:outline-none focus:border-white/[0.12]"
+                  />
+                  <button
+                    onClick={() => { setOnboardingStep(1); handleOnboardingAddApi(); }}
+                    disabled={!addApiUrl || onboardingLoading}
+                    className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 text-white text-[13px] font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                  >
+                    Scan
+                  </button>
+                </div>
+              )}
+
+              {onboardingStep >= 1 && onboardingStep < 3 && (
+                <div className="flex items-center gap-2 text-cyan-400 text-[13px]">
+                  <div className="animate-spin w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full" />
+                  <span>{onboardingStep === 1 ? "Registering..." : "Scanning..."}</span>
+                </div>
+              )}
+
+              {onboardingStep === 3 && onboardingDone && (
+                <div className="flex items-center gap-2 text-emerald-400 text-[13px]">
+                  <ShieldCheckIcon className="w-4 h-4" />
+                  <span>Scan complete — your score is ready below.</span>
+                </div>
+              )}
+
+              {onboardingStep === 3 && !onboardingDone && (
+                <div className="flex items-center gap-2 text-cyan-400 text-[13px]">
+                  <div className="animate-spin w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full" />
+                  <span>Analyzing...</span>
+                </div>
+              )}
             </div>
           )}
 
@@ -487,65 +362,75 @@ export default function AdvancedDashboard() {
             threatsBlocked={dashboardStats.overview.blockedThreats}
           />
 
-          {/* Metric Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <MetricCard
-              icon={ShieldCheckIcon}
-              label="Protected Endpoints"
-              value={dashboardStats.overview.totalApis}
-              change={12.5}
-              trend="up"
-              color="#06b6d4"
-              sparklineData={generateSparklineData()}
-              delay={0.1}
-            />
-            <MetricCard
-              icon={BoltIcon}
-              label="Threats Blocked"
-              value={dashboardStats.overview.blockedThreats}
-              change={8.3}
-              trend="up"
-              color="#10b981"
-              sparklineData={generateSparklineData()}
-              delay={0.2}
-            />
-            <MetricCard
-              icon={BugAntIcon}
-              label="Security Scans"
-              value={dashboardStats.overview.scansLast7Days}
-              change={-3.2}
-              trend="down"
-              color="#f59e0b"
-              sparklineData={generateSparklineData()}
-              delay={0.3}
-            />
-            <MetricCard
-              icon={ChartBarIcon}
-              label="API Requests/sec"
-              value={dashboardStats.overview.totalApis * 142}
-              change={15.7}
-              trend="up"
-              color="#8b5cf6"
-              sparklineData={generateSparklineData()}
-              delay={0.4}
-            />
+          {/* Metric Cards — all real data, no hardcoded percentages */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <MetricCard icon={ShieldCheckIcon} label="Protected Endpoints" value={dashboardStats.overview.totalApis} delay={0.1} />
+            <MetricCard icon={BoltIcon} label="Threats Blocked" value={dashboardStats.overview.blockedThreats} delay={0.15} />
+            <MetricCard icon={BugAntIcon} label="Scans (7 days)" value={dashboardStats.overview.scansLast7Days} delay={0.2} />
+            <MetricCard icon={ChartBarIcon} label="Total Scans" value={dashboardStats.overview.totalScans} delay={0.25} />
           </div>
 
-          {/* Threat Timeline & AI Insights */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-              <ThreatTimeline data={generateThreatData()} />
-            </div>
-            <div>
-              <AiInsightPanel insights={aiInsights} />
-            </div>
+          {/* Threat Detection Timeline — real data from DB */}
+          <ThreatTimeline companyId={company?.id?.toString()} />
+
+          {/* Recent Activity — real data from DB */}
+          <div className="bg-slate-800/50 border border-white/[0.06] rounded-2xl p-6">
+            <h3 className="text-[13px] font-medium text-gray-400 mb-4">Recent Activity</h3>
+            {dashboardStats.recentActivity && dashboardStats.recentActivity.length > 0 ? (
+              <div className="space-y-2">
+                {dashboardStats.recentActivity.map((activity: any, i: number) => (
+                  <div key={i} className="flex items-center justify-between py-2 border-b border-white/[0.04] last:border-0">
+                    <div className="flex items-center gap-3">
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${
+                        activity.type === "scan" ? "bg-cyan-400" :
+                        activity.type === "threat" ? "bg-red-400" :
+                        activity.type === "block" ? "bg-amber-400" :
+                        "bg-gray-500"
+                      }`} />
+                      <div>
+                        <span className="text-[13px] text-white">{activity.subject || activity.message}</span>
+                        {activity.status && <span className="ml-2 text-[11px] text-gray-500">{activity.status}</span>}
+                      </div>
+                    </div>
+                    <span className="text-[11px] text-gray-600 shrink-0">{activity.timeAgo || activity.time}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-10">
+                <p className="text-[13px] text-gray-600">No activity yet</p>
+                <p className="text-[11px] text-gray-700 mt-1">Activity will appear here as you scan APIs and detect threats</p>
+              </div>
+            )}
           </div>
 
-          {/* Activity Feed & Threat Map */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <ActivityFeed activities={activityFeed} />
-            <ThreatMap threats={threatLocations} />
-          </div>
+          {/* Alerts & Recommendations — real data from DB */}
+          {((dashboardStats.alerts && dashboardStats.alerts.length > 0) ||
+            (dashboardStats.recommendations && dashboardStats.recommendations.length > 0)) && (
+            <div className="bg-slate-800/50 border border-white/[0.06] rounded-2xl p-6">
+              <h3 className="text-[13px] font-medium text-gray-400 mb-4">Recommendations</h3>
+              <div className="space-y-2">
+                {(dashboardStats.alerts || []).map((alert: any, i: number) => (
+                  <div key={`a-${i}`} className="flex items-start gap-3 py-2 border-b border-white/[0.04] last:border-0">
+                    <span className="w-2 h-2 rounded-full bg-red-400 mt-1.5 shrink-0" />
+                    <div>
+                      <span className="text-[13px] text-white">{alert.message || alert.title}</span>
+                      {alert.action && <span className="ml-2 text-[11px] text-cyan-400">{alert.action}</span>}
+                    </div>
+                  </div>
+                ))}
+                {(dashboardStats.recommendations || []).map((rec: any, i: number) => (
+                  <div key={`r-${i}`} className="flex items-start gap-3 py-2 border-b border-white/[0.04] last:border-0">
+                    <span className="w-2 h-2 rounded-full bg-cyan-400 mt-1.5 shrink-0" />
+                    <div>
+                      <span className="text-[13px] text-white">{rec.message}</span>
+                      {rec.action && <span className="ml-2 text-[11px] text-gray-500">{rec.action}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       );
     }
@@ -556,7 +441,6 @@ export default function AdvancedDashboard() {
         return <ExternalIntegrationsPage companyId={company?.id.toString()} />;
       case "platform-api-keys":
         return <ApiManagementPage companyId={company?.id.toString()} />;
-        return <ExternalIntegrationsPage companyId={company?.id.toString()} />;
       case "security-center":
         return <SecurityCenterPage company={company} onNavigate={setActiveFeature} />
       case "vulnerability-scanner":
@@ -576,6 +460,7 @@ export default function AdvancedDashboard() {
       case "performance-monitor":
         return <PerformanceMonitorPage companyId={company?.id.toString()} />;
       case "analytics-insights":
+        return <AnalyticsInsightsPage companyId={company?.id.toString()} />;
       case "data-management":
         return <DataManagementPage companyId={company?.id.toString()} />;
       case "billing-subscription":
@@ -605,77 +490,59 @@ export default function AdvancedDashboard() {
       {/* Sidebar */}
       <motion.div
         initial={false}
-        animate={{ width: sidebarCollapsed ? 80 : 280 }}
-        className="relative border-r border-white/10 backdrop-blur-xl bg-black/20"
+        animate={{ width: sidebarCollapsed ? 64 : 260 }}
+        transition={{ duration: 0.15 }}
+        className="relative border-r border-white/[0.06] bg-[#0a0a0f] shrink-0 overflow-hidden"
       >
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-8">
+        <div className="p-4">
+          <div className="flex items-center justify-between mb-6">
             {!sidebarCollapsed && (
-              <motion.h1
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="text-xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent"
-              >
-                🛡️ GovernAPI
-              </motion.h1>
+              <span className="text-[15px] font-semibold text-white tracking-tight">GovernAPI</span>
             )}
-            <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
+            <button
               onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="p-2 rounded-lg hover:bg-white/10 transition-colors text-gray-400"
+              className="p-1.5 rounded-lg hover:bg-white/[0.06] transition-colors text-gray-500"
             >
               {sidebarCollapsed ? (
-                <Bars3Icon className="w-5 h-5" />
+                <Bars3Icon className="w-4 h-4" />
               ) : (
-                <XMarkIcon className="w-5 h-5" />
+                <XMarkIcon className="w-4 h-4" />
               )}
-            </motion.button>
+            </button>
           </div>
 
-          <div className="space-y-6">
+          <div className="space-y-5">
             {SIDEBAR_ITEMS.map((group, idx) => (
               <div key={idx}>
                 {!sidebarCollapsed && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 px-3"
-                  >
+                  <div className="text-[11px] font-medium text-gray-600 uppercase tracking-wider mb-1.5 px-3">
                     {group.category}
-                  </motion.div>
+                  </div>
                 )}
-                <div className="space-y-1">
+                <div className="space-y-0.5">
                   {group.items.map((item) => {
                     const Icon = item.icon;
                     const isActive = activeFeature === item.id;
                     return (
-                      <motion.button
+                      <button
                         key={item.id}
                         onClick={() => setActiveFeature(item.id)}
-                        whileHover={{ x: 4 }}
-                        whileTap={{ scale: 0.98 }}
                         className={`
-                          w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all
+                          w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors duration-100
                           ${
                             isActive
-                              ? "bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/50 text-cyan-400"
-                              : "text-gray-400 hover:bg-white/5 hover:text-white"
+                              ? "bg-white/[0.08] text-white"
+                              : "text-gray-500 hover:bg-white/[0.04] hover:text-gray-300"
                           }
                         `}
                       >
-                        <Icon className="w-5 h-5 flex-shrink-0" />
+                        <Icon className="w-4 h-4 flex-shrink-0" />
                         {!sidebarCollapsed && (
-                          <>
-                            <span className="flex-1 text-left text-sm font-medium">
-                              {item.label}
-                            </span>
-                            {isActive && (
-                              <ChevronRightIcon className="w-4 h-4" />
-                            )}
-                          </>
+                          <span className="flex-1 text-left text-[13px] font-medium">
+                            {item.label}
+                          </span>
                         )}
-                      </motion.button>
+                      </button>
                     );
                   })}
                 </div>
@@ -695,13 +562,14 @@ export default function AdvancedDashboard() {
         />
 
         <div className="flex-1 p-8 overflow-auto">
-          <AnimatePresence mode="wait">
+          <AnimatePresence mode="popLayout" initial={false}>
             <motion.div
               key={activeFeature}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15, ease: "easeOut" }}
+              style={{ willChange: "opacity" }}
             >
               {renderContent()}
             </motion.div>

@@ -201,10 +201,12 @@ export async function GET(request: NextRequest) {
       badBots: parseInt(botStats.blocked_bots || '0'),
     };
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       success: true,
       metrics,
     });
+    res.headers.set("Cache-Control", "private, max-age=5, stale-while-revalidate=30");
+    return res;
   } catch (error) {
     console.error('Error fetching security metrics:', error);
     return NextResponse.json(

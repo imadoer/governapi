@@ -236,7 +236,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       success: true,
       stats: {
         totalEndpoints: parseInt(apiStats?.total_apis || "0"),
@@ -297,6 +297,8 @@ export async function GET(request: NextRequest) {
         recommendations,
       },
     });
+    res.headers.set("Cache-Control", "private, max-age=5, stale-while-revalidate=30");
+    return res;
   } catch (error) {
     logger.error("Dashboard API error:", {
       error: error instanceof Error ? error.message : String(error),

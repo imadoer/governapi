@@ -6,6 +6,7 @@ import {
 
 export function useComplianceData(tenantId: string) {
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ type: "success" | "error" | "info" | "loading"; text: string } | null>(null);
 
@@ -29,163 +30,116 @@ export function useComplianceData(tenantId: string) {
 
   const showToast = (type: "success" | "error" | "info" | "loading", text: string) => {
     setToastMessage({ type, text });
-    if (type !== "loading") {
-      setTimeout(() => setToastMessage(null), 3000);
+    if (type !== "loading") setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  // Safe fetch helper — never throws, returns fallback on error. 15s timeout.
+  const safeFetch = async (url: string, fallback: any = null) => {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      const res = await fetch(url, { headers, signal: controller.signal });
+      clearTimeout(timeout);
+      const data = await res.json();
+      return data.success ? data : fallback;
+    } catch {
+      return fallback;
     }
   };
 
   const fetchDashboardData = useCallback(async () => {
-    try {
-      const res = await fetch("/api/compliance/executive-dashboard", { headers });
-      const data = await res.json();
-      if (data.success) setDashboardData(data.dashboard);
-    } catch (error) {
-      console.error("Error fetching dashboard:", error);
-    }
+    const data = await safeFetch("/api/compliance/executive-dashboard");
+    if (data) setDashboardData(data.dashboard);
+    return data;
   }, [tenantId]);
 
   const fetchFrameworks = useCallback(async () => {
-    try {
-      const res = await fetch("/api/compliance/frameworks", { headers });
-      const data = await res.json();
-      if (data.success) setFrameworks(data.frameworks || []);
-    } catch (error) {
-      console.error("Error fetching frameworks:", error);
-    }
+    const data = await safeFetch("/api/compliance/frameworks");
+    if (data) setFrameworks(data.frameworks || []);
+    return data;
   }, [tenantId]);
 
   const fetchControls = useCallback(async (frameworkId?: string) => {
-    try {
-      const url = frameworkId ? `/api/compliance/frameworks/${frameworkId}/controls` : "/api/compliance/controls";
-      const res = await fetch(url, { headers });
-      const data = await res.json();
-      if (data.success) setControls(data.controls || []);
-    } catch (error) {
-      console.error("Error fetching controls:", error);
-    }
+    const url = frameworkId ? `/api/compliance/frameworks/${frameworkId}/controls` : "/api/compliance/controls";
+    const data = await safeFetch(url);
+    if (data) setControls(data.controls || []);
   }, [tenantId]);
 
   const fetchControlEvidence = useCallback(async (controlId: number) => {
-    try {
-      const res = await fetch(`/api/compliance/evidence?controlId=${controlId}`, { headers });
-      const data = await res.json();
-      if (data.success) setControlEvidence(data.evidence || []);
-    } catch (error) {
-      console.error("Error fetching evidence:", error);
-    }
+    const data = await safeFetch(`/api/compliance/evidence?controlId=${controlId}`);
+    if (data) setControlEvidence(data.evidence || []);
   }, [tenantId]);
 
   const fetchPolicies = useCallback(async () => {
-    try {
-      const res = await fetch("/api/compliance/policies", { headers });
-      const data = await res.json();
-      if (data.success) setPolicies(data.policies || []);
-    } catch (error) {
-      console.error("Error fetching policies:", error);
-    }
+    const data = await safeFetch("/api/compliance/policies");
+    if (data) setPolicies(data.policies || []);
   }, [tenantId]);
 
   const fetchAttestations = useCallback(async (filter: string = "all") => {
-    try {
-      const params = filter !== "all" ? `?status=${filter}` : "";
-      const res = await fetch(`/api/compliance/attestations${params}`, { headers });
-      const data = await res.json();
-      if (data.success) {
-        setAttestations(data.attestations || []);
-        setAttestationStats(data.stats || {});
-      }
-    } catch (error) {
-      console.error("Error fetching attestations:", error);
-    }
+    const params = filter !== "all" ? `?status=${filter}` : "";
+    const data = await safeFetch(`/api/compliance/attestations${params}`);
+    if (data) { setAttestations(data.attestations || []); setAttestationStats(data.stats || {}); }
   }, [tenantId]);
 
   const fetchRemediation = useCallback(async (filters: { status: string; priority: string }) => {
-    try {
-      const params = new URLSearchParams();
-      if (filters.status !== "all") params.append("status", filters.status);
-      if (filters.priority !== "all") params.append("priority", filters.priority);
-      const res = await fetch(`/api/compliance/remediation?${params}`, { headers });
-      const data = await res.json();
-      if (data.success) {
-        setRemediationTasks(data.tasks || []);
-        setRemediationStats(data.stats || {});
-      }
-    } catch (error) {
-      console.error("Error fetching remediation:", error);
-    }
+    const params = new URLSearchParams();
+    if (filters.status !== "all") params.append("status", filters.status);
+    if (filters.priority !== "all") params.append("priority", filters.priority);
+    const data = await safeFetch(`/api/compliance/remediation?${params}`);
+    if (data) { setRemediationTasks(data.tasks || []); setRemediationStats(data.stats || {}); }
   }, [tenantId]);
 
   const fetchVendors = useCallback(async () => {
-    try {
-      const res = await fetch("/api/compliance/vendors", { headers });
-      const data = await res.json();
-      if (data.success) {
-        setVendors(data.vendors || []);
-        setVendorStats(data.stats || {});
-      }
-    } catch (error) {
-      console.error("Error fetching vendors:", error);
-    }
+    const data = await safeFetch("/api/compliance/vendors");
+    if (data) { setVendors(data.vendors || []); setVendorStats(data.stats || {}); }
   }, [tenantId]);
 
   const fetchViolations = useCallback(async (filters: { status: string; severity: string }) => {
-    try {
-      const params = new URLSearchParams();
-      if (filters.status !== "all") params.append("status", filters.status);
-      if (filters.severity !== "all") params.append("severity", filters.severity);
-      const res = await fetch(`/api/compliance/violations?${params}`, { headers });
-      const data = await res.json();
-      if (data.success) {
-        setViolations(data.violations || []);
-        setViolationStats(data.stats || {});
-      }
-    } catch (error) {
-      console.error("Error fetching violations:", error);
-    }
+    const params = new URLSearchParams();
+    if (filters.status !== "all") params.append("status", filters.status);
+    if (filters.severity !== "all") params.append("severity", filters.severity);
+    const data = await safeFetch(`/api/compliance/violations?${params}`);
+    if (data) { setViolations(data.violations || []); setViolationStats(data.stats || {}); }
   }, [tenantId]);
 
   const fetchAuditLogs = useCallback(async () => {
-    try {
-      const res = await fetch("/api/compliance/audit-log?limit=100", { headers });
-      const data = await res.json();
-      if (data.success) setAuditLogs(data.logs || []);
-    } catch (error) {
-      console.error("Error fetching audit logs:", error);
-    }
+    const data = await safeFetch("/api/compliance/audit-log?limit=50");
+    if (data) setAuditLogs(data.logs || []);
   }, [tenantId]);
 
   const fetchAuditReadiness = useCallback(async () => {
-    try {
-      const res = await fetch("/api/compliance/audit-readiness", { headers });
-      const data = await res.json();
-      if (data.success) setAuditReadiness(Array.isArray(data.readiness) ? data.readiness : [data.readiness].filter(Boolean));
-    } catch (error) {
-      console.error("Error fetching audit readiness:", error);
-    }
+    const data = await safeFetch("/api/compliance/audit-readiness");
+    if (data) setAuditReadiness(Array.isArray(data.readiness) ? data.readiness : [data.readiness].filter(Boolean));
   }, [tenantId]);
 
-  const fetchAllData = useCallback(async () => {
+  // Initial load: only dashboard + frameworks (2 calls instead of 9)
+  const fetchInitial = useCallback(async () => {
     setLoading(true);
-    try {
-      await Promise.all([
-        fetchDashboardData(),
-        fetchFrameworks(),
-        fetchPolicies(),
-        fetchAttestations(),
-        fetchRemediation({ status: "all", priority: "all" }),
-        fetchVendors(),
-        fetchViolations({ status: "all", severity: "all" }),
-        fetchAuditLogs(),
-        fetchAuditReadiness(),
-      ]);
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchDashboardData, fetchFrameworks, fetchPolicies, fetchAttestations, fetchRemediation, fetchVendors, fetchViolations, fetchAuditLogs, fetchAuditReadiness]);
+    setError(false);
+    const [dash, fw] = await Promise.all([fetchDashboardData(), fetchFrameworks()]);
+    // If both critical fetches returned nothing, mark as error
+    if (!dash && !fw) setError(true);
+    setLoading(false);
+  }, [fetchDashboardData, fetchFrameworks]);
+
+  // Background: load remaining data after initial render
+  const fetchBackground = useCallback(async () => {
+    // Fire all in parallel but don't block
+    Promise.all([
+      fetchPolicies(),
+      fetchAttestations(),
+      fetchRemediation({ status: "all", priority: "all" }),
+      fetchVendors(),
+      fetchViolations({ status: "all", severity: "all" }),
+      fetchAuditLogs(),
+      fetchAuditReadiness(),
+    ]);
+  }, [fetchPolicies, fetchAttestations, fetchRemediation, fetchVendors, fetchViolations, fetchAuditLogs, fetchAuditReadiness]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await fetchAllData();
+    await Promise.all([fetchDashboardData(), fetchFrameworks()]);
+    fetchBackground();
     setRefreshing(false);
     showToast("success", "Data refreshed");
   };
@@ -198,13 +152,8 @@ export function useComplianceData(tenantId: string) {
       body: JSON.stringify({ id: attestationId, attestationStatus: "attested", ...values, ...actorInfo }),
     });
     const data = await res.json();
-    if (data.success) {
-      showToast("success", "Attestation submitted successfully");
-      fetchAttestations();
-      fetchDashboardData();
-    } else {
-      showToast("error", data.error || "Failed to submit attestation");
-    }
+    if (data.success) { showToast("success", "Attestation submitted"); fetchAttestations(); fetchDashboardData(); }
+    else showToast("error", data.error || "Failed to submit");
     return data;
   };
 
@@ -215,12 +164,8 @@ export function useComplianceData(tenantId: string) {
       body: JSON.stringify(values),
     });
     const data = await res.json();
-    if (data.success) {
-      showToast("success", "Remediation task created");
-      fetchRemediation({ status: "all", priority: "all" });
-    } else {
-      showToast("error", data.error || "Failed to create task");
-    }
+    if (data.success) { showToast("success", "Remediation task created"); fetchRemediation({ status: "all", priority: "all" }); }
+    else showToast("error", data.error || "Failed to create task");
     return data;
   };
 
@@ -231,10 +176,7 @@ export function useComplianceData(tenantId: string) {
       body: JSON.stringify({ id: taskId, status }),
     });
     const data = await res.json();
-    if (data.success) {
-      showToast("success", `Task ${status}`);
-      fetchRemediation({ status: "all", priority: "all" });
-    }
+    if (data.success) { showToast("success", `Task ${status}`); fetchRemediation({ status: "all", priority: "all" }); }
     return data;
   };
 
@@ -245,12 +187,8 @@ export function useComplianceData(tenantId: string) {
       body: JSON.stringify(values),
     });
     const data = await res.json();
-    if (data.success) {
-      showToast("success", "Vendor added successfully");
-      fetchVendors();
-    } else {
-      showToast("error", data.error || "Failed to add vendor");
-    }
+    if (data.success) { showToast("success", "Vendor added"); fetchVendors(); }
+    else showToast("error", data.error || "Failed to add vendor");
     return data;
   };
 
@@ -261,12 +199,8 @@ export function useComplianceData(tenantId: string) {
       body: JSON.stringify(values),
     });
     const data = await res.json();
-    if (data.success) {
-      showToast("success", "Evidence uploaded successfully");
-      if (values.controlId) fetchControlEvidence(values.controlId);
-    } else {
-      showToast("error", data.error || "Failed to upload evidence");
-    }
+    if (data.success) { showToast("success", "Evidence uploaded"); if (values.controlId) fetchControlEvidence(values.controlId); }
+    else showToast("error", data.error || "Failed to upload");
     return data;
   };
 
@@ -277,12 +211,8 @@ export function useComplianceData(tenantId: string) {
       body: JSON.stringify(values),
     });
     const data = await res.json();
-    if (data.success) {
-      showToast("success", "Policy created successfully");
-      fetchPolicies();
-    } else {
-      showToast("error", data.error || "Failed to create policy");
-    }
+    if (data.success) { showToast("success", "Policy created"); fetchPolicies(); }
+    else showToast("error", data.error || "Failed to create policy");
     return data;
   };
 
@@ -293,11 +223,7 @@ export function useComplianceData(tenantId: string) {
       body: JSON.stringify({ id: violationId, status: "resolved", resolvedBy, resolutionNotes: notes }),
     });
     const data = await res.json();
-    if (data.success) {
-      showToast("success", "Violation resolved");
-      fetchViolations({ status: "all", severity: "all" });
-      fetchDashboardData();
-    }
+    if (data.success) { showToast("success", "Violation resolved"); fetchViolations({ status: "all", severity: "all" }); fetchDashboardData(); }
     return data;
   };
 
@@ -305,41 +231,31 @@ export function useComplianceData(tenantId: string) {
     showToast("loading", `Generating ${reportType} report...`);
     try {
       const res = await fetch(`/api/compliance/reports/generate?type=${reportType}&format=${format}`, { headers });
-      if (!res.ok) throw new Error("Failed to generate report");
+      if (!res.ok) throw new Error();
       if (format === "pdf") {
         const blob = await res.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${reportType}_report_${Date.now()}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-      } else if (format === "json") {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a"); a.href = url; a.download = `${reportType}_report_${Date.now()}.pdf`;
+        document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      } else {
         const data = await res.json();
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${reportType}_report_${Date.now()}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a"); a.href = url; a.download = `${reportType}_report_${Date.now()}.json`;
+        document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
       }
-      showToast("success", "Report generated successfully!");
-    } catch (error) {
-      showToast("error", "Failed to generate report");
+      showToast("success", "Report generated");
+    } catch {
+      showToast("error", "Report generation failed");
     }
   };
 
   useEffect(() => {
-    fetchAllData();
-  }, [fetchAllData]);
+    fetchInitial().then(() => fetchBackground());
+  }, [fetchInitial, fetchBackground]);
 
   return {
-    loading, refreshing, handleRefresh, toastMessage,
+    loading, error, refreshing, handleRefresh, toastMessage,
     dashboardData, frameworks, controls, controlEvidence, policies,
     attestations, attestationStats, remediationTasks, remediationStats,
     vendors, vendorStats, violations, violationStats, auditLogs, auditReadiness,

@@ -20,14 +20,24 @@ export async function GET(request: NextRequest) {
 
     // Build dynamic query with filters
     let query = `
-      SELECT a.*, 
-             COUNT(sr.id) as scan_count,
-             MAX(sr.created_at) as last_scan_date,
-             AVG(sr.security_score) as avg_security_score,
-             COUNT(v.id) as vulnerability_count
+      SELECT a.*,
+             COALESCE(sr_agg.scan_count, 0) as scan_count,
+             sr_agg.last_scan_date,
+             sr_agg.avg_security_score,
+             COALESCE(v_agg.vulnerability_count, 0) as vulnerability_count
       FROM apis a
-      LEFT JOIN scan_results sr ON a.id = sr.api_id
-      LEFT JOIN vulnerabilities v ON a.id = v.api_id AND v.status != 'resolved'
+      LEFT JOIN (
+        SELECT target, COUNT(*) as scan_count,
+               MAX(created_at) as last_scan_date,
+               AVG(security_score) as avg_security_score
+        FROM scan_results WHERE tenant_id = $1
+        GROUP BY target
+      ) sr_agg ON a.url = sr_agg.target
+      LEFT JOIN (
+        SELECT endpoint, COUNT(*) as vulnerability_count
+        FROM vulnerabilities WHERE tenant_id = $1 AND status != 'resolved'
+        GROUP BY endpoint
+      ) v_agg ON a.url = v_agg.endpoint
       WHERE a.tenant_id = $1`;
 
     const params: any[] = [tenantId];
@@ -45,20 +55,17 @@ export async function GET(request: NextRequest) {
       paramIndex++;
     }
 
-    query += ` GROUP BY a.id ORDER BY a.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    query += ` ORDER BY a.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
     params.push(limit.toString(), offset.toString());
 
     const endpoints = await database.queryMany(query, params);
 
     // Get endpoint statistics
     const endpointStats = await database.queryOne(
-      `SELECT 
+      `SELECT
          COUNT(*) as total_endpoints,
          COUNT(CASE WHEN status = 'active' THEN 1 END) as active_endpoints,
-         COUNT(CASE WHEN last_scanned IS NOT NULL THEN 1 END) as monitored_endpoints,
-         COUNT(DISTINCT method) as unique_methods,
-         AVG(uptime_percentage) as avg_uptime,
-         AVG(security_score) as avg_security_score
+         COUNT(DISTINCT method) as unique_methods
        FROM apis WHERE tenant_id = $1`,
       [tenantId],
     );
@@ -75,38 +82,32 @@ export async function GET(request: NextRequest) {
 
     // Get security status summary
     const securitySummary = await database.queryOne(
-      `SELECT 
-         COUNT(CASE WHEN v.severity = 'CRITICAL' THEN 1 END) as critical_vulns,
-         COUNT(CASE WHEN v.severity = 'HIGH' THEN 1 END) as high_vulns,
-         COUNT(CASE WHEN v.severity = 'MEDIUM' THEN 1 END) as medium_vulns,
-         COUNT(CASE WHEN v.severity = 'LOW' THEN 1 END) as low_vulns
-       FROM vulnerabilities v
-       JOIN apis a ON v.api_id = a.id
-       WHERE a.tenant_id = $1 AND v.status != 'resolved'`,
+      `SELECT
+         COUNT(CASE WHEN severity = 'CRITICAL' OR severity = 'critical' THEN 1 END) as critical_vulns,
+         COUNT(CASE WHEN severity = 'HIGH' OR severity = 'high' THEN 1 END) as high_vulns,
+         COUNT(CASE WHEN severity = 'MEDIUM' OR severity = 'medium' THEN 1 END) as medium_vulns,
+         COUNT(CASE WHEN severity = 'LOW' OR severity = 'low' THEN 1 END) as low_vulns
+       FROM vulnerabilities
+       WHERE tenant_id = $1 AND status != 'resolved'`,
       [tenantId],
     );
 
     const formattedEndpoints = endpoints.map((endpoint) => ({
       id: endpoint.id,
       name: endpoint.name,
+      path: endpoint.url,
       url: endpoint.url,
       method: endpoint.method,
       description: endpoint.description,
       status: endpoint.status,
-      securityScore: endpoint.security_score,
-      uptimePercentage: endpoint.uptime_percentage,
-      responseTime: endpoint.response_time,
-      lastScanned: endpoint.last_scanned,
       createdAt: endpoint.created_at,
       updatedAt: endpoint.updated_at,
-      analytics: {
-        scanCount: parseInt(endpoint.scan_count || "0"),
-        lastScanDate: endpoint.last_scan_date,
-        averageSecurityScore: endpoint.avg_security_score
-          ? Math.round(parseFloat(endpoint.avg_security_score))
-          : null,
-        vulnerabilityCount: parseInt(endpoint.vulnerability_count || "0"),
-      },
+      scan_count: parseInt(endpoint.scan_count || "0"),
+      last_scan_date: endpoint.last_scan_date,
+      avg_security_score: endpoint.avg_security_score
+        ? Math.round(parseFloat(endpoint.avg_security_score))
+        : null,
+      vulnerability_count: parseInt(endpoint.vulnerability_count || "0"),
     }));
 
     return NextResponse.json({
@@ -115,14 +116,7 @@ export async function GET(request: NextRequest) {
       statistics: {
         total: parseInt(endpointStats?.total_endpoints || "0"),
         active: parseInt(endpointStats?.active_endpoints || "0"),
-        monitored: parseInt(endpointStats?.monitored_endpoints || "0"),
         uniqueMethods: parseInt(endpointStats?.unique_methods || "0"),
-        averageUptime: endpointStats?.avg_uptime
-          ? Math.round(parseFloat(endpointStats.avg_uptime))
-          : null,
-        averageSecurityScore: endpointStats?.avg_security_score
-          ? Math.round(parseFloat(endpointStats.avg_security_score))
-          : null,
       },
       methodDistribution: methodDistribution.map((dist) => ({
         method: dist.method,
@@ -145,7 +139,7 @@ export async function GET(request: NextRequest) {
       error: error instanceof Error ? error.message : String(error),
     });
     return NextResponse.json(
-      { error: "Failed to fetch API endpoints" },
+      { success: false, error: "Failed to fetch API endpoints" },
       { status: 500 },
     );
   }

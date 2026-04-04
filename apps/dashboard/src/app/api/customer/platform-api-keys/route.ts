@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const apiKeys = await APIKeyService.listAPIKeys(parseInt(tenantId));
+    const apiKeys = await APIKeyService.listAPIKeys(tenantId);
 
     return NextResponse.json({
       success: true,
@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
       error: error instanceof Error ? error.message : String(error),
     });
     return NextResponse.json(
-      { error: "Failed to fetch API keys" },
+      { success: false, error: "Failed to fetch API keys" },
       { status: 500 },
     );
   }
@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
     }
 
     const apiKey = await APIKeyService.generateAPIKey(
-      parseInt(tenantId),
+      tenantId as any,
       {
         name,
         permissions,

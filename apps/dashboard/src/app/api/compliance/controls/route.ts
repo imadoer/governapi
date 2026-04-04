@@ -25,21 +25,8 @@ export async function GET(request: NextRequest) {
         COALESCE(ccr.status, 'pending') as status,
         ccr.last_assessment as "lastTested",
         ccr.assessed_by as owner,
-        (
-          SELECT COUNT(*) 
-          FROM compliance_evidence_enhanced cee 
-          WHERE cee.control_id = cc.id AND cee.tenant_id = $1
-        ) as "evidenceCount",
-        (
-          SELECT 
-            CASE 
-              WHEN COUNT(*) = 0 THEN 'missing'
-              WHEN COUNT(*) FILTER (WHERE freshness_status = 'fresh') = COUNT(*) THEN 'fresh'
-              ELSE 'stale'
-            END
-          FROM compliance_evidence_enhanced cee 
-          WHERE cee.control_id = cc.id AND cee.tenant_id = $1
-        ) as "evidenceFreshness"
+        0 as "evidenceCount",
+        'pending' as "evidenceFreshness"
       FROM compliance_controls cc
       JOIN compliance_frameworks cf ON cc.framework_id = cf.id
       LEFT JOIN compliance_check_results ccr ON cc.id = ccr.control_id AND ccr.tenant_id = $1

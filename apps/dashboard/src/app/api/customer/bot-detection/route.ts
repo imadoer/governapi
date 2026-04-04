@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
          50 as avg_confidence_score,
          COUNT(DISTINCT source_ip) as unique_ips
        FROM bot_detection_events
-       WHERE created_at >= NOW() - INTERVAL '24 hours'`,
+       WHERE detected_at >= NOW() - INTERVAL '24 hours'`,
       [],
     );
 
@@ -45,10 +45,10 @@ export async function GET(request: NextRequest) {
 
     // Get recent bot detections using only confirmed columns
     const recentDetections = await database.queryMany(
-      `SELECT id, source_ip, blocked, created_at
+      `SELECT id, source_ip, blocked, detected_at
        FROM bot_detection_events
        WHERE blocked = true
-       ORDER BY created_at DESC
+       ORDER BY detected_at DESC
        LIMIT 20`,
       [],
     );
@@ -57,10 +57,10 @@ export async function GET(request: NextRequest) {
     const topBotSources = await database.queryMany(
       `SELECT source_ip, COUNT(*) as detection_count,
               75 as avg_confidence,
-              MAX(created_at) as last_detected,
+              MAX(detected_at) as last_detected,
               COUNT(CASE WHEN blocked = true THEN 1 END) as blocked_count
        FROM bot_detection_events
-       WHERE blocked = true AND created_at >= NOW() - INTERVAL '7 days'
+       WHERE blocked = true AND detected_at >= NOW() - INTERVAL '7 days'
        GROUP BY source_ip
        ORDER BY detection_count DESC
        LIMIT 10`,
@@ -70,13 +70,13 @@ export async function GET(request: NextRequest) {
     // Get hourly bot activity trends using only confirmed columns
     const hourlyTrends = await database.queryMany(
       `SELECT
-         DATE_TRUNC('hour', created_at) as hour,
+         DATE_TRUNC('hour', detected_at) as hour,
          COUNT(*) as total_requests,
          COUNT(CASE WHEN blocked = true THEN 1 END) as bot_requests,
          COUNT(CASE WHEN blocked = true THEN 1 END) as blocked_requests
        FROM bot_detection_events
-       WHERE created_at >= NOW() - INTERVAL '24 hours'
-       GROUP BY DATE_TRUNC('hour', created_at)
+       WHERE detected_at >= NOW() - INTERVAL '24 hours'
+       GROUP BY DATE_TRUNC('hour', detected_at)
        ORDER BY hour ASC`,
       [],
     );
@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
     const fakeCrawlers = await getFakeCrawlers(database, parseInt(tenantId), 24);
     const scoreDistribution = await getScoreDistribution(database, parseInt(tenantId), 24);
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       success: true,
       botDetection: {
         statistics: {
@@ -139,7 +139,7 @@ export async function GET(request: NextRequest) {
           confidenceScore: 75,
           detectionReason: `${detection.status || "Bot"} behavior detected`,
           isBlocked: detection.blocked,
-          detectedAt: detection.created_at,
+          detectedAt: detection.detected_at,
         })),
         topBotSources: topBotSources.map((source) => ({
           sourceIp: source.source_ip,
@@ -175,6 +175,8 @@ export async function GET(request: NextRequest) {
         scoreDistribution: scoreDistribution || {},
       },
     });
+    res.headers.set("Cache-Control", "private, max-age=5, stale-while-revalidate=30");
+    return res;
   } catch (error) {
     logger.error("Bot detection API error:", {
       error: error instanceof Error ? error.message : String(error),

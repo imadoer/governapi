@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { PageSkeleton, FadeIn } from "./PageSkeleton";
 import {
   CogIcon,
   ShieldCheckIcon,
@@ -120,11 +121,7 @@ export function EnterpriseSettingsPage({ companyId }: { companyId: string }) {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400" />
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   if (!settings) {

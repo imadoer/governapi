@@ -5,7 +5,7 @@ import Stripe from "stripe";
 
 export async function GET(request: NextRequest) {
   // Initialize Stripe inside handler
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_placeholder", {
     apiVersion: "2025-08-27.basil",
   });
 

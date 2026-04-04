@@ -78,6 +78,24 @@ export function VulnerabilitiesPage({ company }: { company?: any }) {
   const [sortField, setSortField] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
+  const [fetchError, setFetchError] = useState(false);
+
+  const safeFetch = async (url: string) => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    try {
+      const response = await fetch(url, {
+        headers: { "x-tenant-id": company?.id || "1" },
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      return await response.json();
+    } catch {
+      clearTimeout(timeout);
+      return null;
+    }
+  };
+
   // ========== FETCH DATA ==========
   useEffect(() => {
     fetchVulnerabilities();
@@ -91,32 +109,22 @@ export function VulnerabilitiesPage({ company }: { company?: any }) {
   const fetchVulnerabilities = async () => {
     try {
       setLoading(true);
-      const response = await fetch("/api/customer/vulnerabilities", {
-        headers: { "x-tenant-id": company?.id || "1" },
-      });
-      const data = await response.json();
-      if (data.success) {
+      setFetchError(false);
+      const data = await safeFetch("/api/customer/vulnerabilities");
+      if (data?.success) {
         setVulnerabilities(data.vulnerabilities || []);
+      } else if (!data) {
+        setFetchError(true);
       }
-    } catch (error) {
-      console.error("Error fetching vulnerabilities:", error);
-      showToast("Failed to load vulnerabilities", "error");
     } finally {
       setLoading(false);
     }
   };
 
   const fetchOwaspData = async () => {
-    try {
-      const response = await fetch("/api/customer/vulnerabilities/owasp-breakdown", {
-        headers: { "x-tenant-id": company?.id || "1" },
-      });
-      const data = await response.json();
-      if (data.success) {
-        setOwaspData(data.owaspCategories || []);
-      }
-    } catch (error) {
-      console.error("Error fetching OWASP data:", error);
+    const data = await safeFetch("/api/customer/vulnerabilities/owasp-breakdown");
+    if (data?.success) {
+      setOwaspData(data.owaspCategories || data.breakdown || []);
     }
   };
 
@@ -402,6 +410,49 @@ export function VulnerabilitiesPage({ company }: { company?: any }) {
   ];
 
   // ========== RENDER ==========
+
+  if (loading && vulnerabilities.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <div className="h-8 w-56 bg-slate-700/30 rounded-lg animate-pulse mb-2" />
+          <div className="h-4 w-80 bg-slate-700/20 rounded animate-pulse" />
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="rounded-xl border border-white/[0.06] bg-slate-800/30 p-5 space-y-3">
+              <div className="h-3 w-16 bg-slate-700/30 rounded animate-pulse" />
+              <div className="h-7 w-12 bg-slate-700/30 rounded animate-pulse" />
+            </div>
+          ))}
+        </div>
+        <div className="h-64 bg-slate-800/30 rounded-xl border border-white/[0.06] animate-pulse" />
+      </div>
+    );
+  }
+
+  if (fetchError && vulnerabilities.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold text-white">Vulnerability Scanner</h2>
+          <p className="mt-2 text-slate-400 text-sm">Comprehensive vulnerability management and remediation tracking</p>
+        </div>
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <span className="text-4xl mb-4">🛡</span>
+          <p className="text-[15px] text-slate-400 mb-1">Unable to load vulnerability data</p>
+          <p className="text-[13px] text-slate-600 mb-6">This could be a temporary issue. Try refreshing.</p>
+          <button
+            onClick={fetchVulnerabilities}
+            className="px-4 py-2 text-[13px] font-medium text-white bg-white/[0.06] hover:bg-white/[0.1] rounded-lg border border-white/[0.06] transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       {/* HEADER */}

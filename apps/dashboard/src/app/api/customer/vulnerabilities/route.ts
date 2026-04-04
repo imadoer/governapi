@@ -76,7 +76,7 @@ export async function GET(request: NextRequest) {
         [tenantId],
       );
 
-      return NextResponse.json({
+      const res = NextResponse.json({
         success: true,
         vulnerabilities: updatedVulns,
         summary: {
@@ -94,9 +94,11 @@ export async function GET(request: NextRequest) {
               : 0,
         },
       });
+      res.headers.set("Cache-Control", "private, max-age=5, stale-while-revalidate=30");
+      return res;
     }
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       success: true,
       vulnerabilities,
       summary: {
@@ -114,12 +116,14 @@ export async function GET(request: NextRequest) {
             : 0,
       },
     });
+    res.headers.set("Cache-Control", "private, max-age=5, stale-while-revalidate=30");
+    return res;
   } catch (error) {
     logger.error("Vulnerabilities API error:", {
       error: error instanceof Error ? error.message : String(error),
     });
     return NextResponse.json(
-      { error: "Failed to get vulnerabilities" },
+      { success: false, error: "Failed to get vulnerabilities" },
       { status: 500 },
     );
   }

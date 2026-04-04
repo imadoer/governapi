@@ -14,12 +14,11 @@ export async function GET(request: NextRequest) {
     const violationType = searchParams.get('type');
 
     let query = `
-      SELECT 
+      SELECT
         cav.*,
-        crt.status as remediation_status,
-        crt.assigned_to_name as remediation_assignee
+        NULL as remediation_status,
+        NULL as remediation_assignee
       FROM compliance_api_violations cav
-      LEFT JOIN compliance_remediation_tasks crt ON cav.remediation_task_id = crt.id
       WHERE cav.tenant_id = $1
     `;
     const params: any[] = [tenantId];
@@ -43,14 +42,19 @@ export async function GET(request: NextRequest) {
       paramIndex++;
     }
 
-    query += ` ORDER BY 
-      CASE cav.severity 
-        WHEN 'critical' THEN 1 
-        WHEN 'high' THEN 2 
-        WHEN 'medium' THEN 3 
-        WHEN 'low' THEN 4 
+    query += ` ORDER BY
+      CASE cav.severity
+        WHEN 'critical' THEN 1
+        WHEN 'high' THEN 2
+        WHEN 'medium' THEN 3
+        WHEN 'low' THEN 4
       END,
-      cav.detected_at DESC`;
+      cav.created_at DESC`;
+
+    const limit = parseInt(searchParams.get('limit') || '100');
+    const offset = parseInt(searchParams.get('offset') || '0');
+    query += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    params.push(limit, offset);
 
     const violations = await database.queryMany(query, params);
 

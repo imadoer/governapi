@@ -32,6 +32,6 @@ export async function requireAdmin(request: NextRequest) {
  */
 export function isAuthError(
   result: Awaited<ReturnType<typeof requireAdmin>>,
-): result is NextResponse {
+): result is NextResponse<any> {
   return result instanceof NextResponse;
 }

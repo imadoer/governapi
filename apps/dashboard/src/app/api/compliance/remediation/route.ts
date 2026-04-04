@@ -14,14 +14,12 @@ export async function GET(request: NextRequest) {
     const assignedTo = searchParams.get('assignedTo');
 
     let query = `
-      SELECT 
+      SELECT
         crt.*,
-        cf.framework_name,
-        cfi.control_name as finding_control,
-        cfi.severity as finding_severity
+        'General' as framework_name,
+        NULL as finding_control,
+        NULL as finding_severity
       FROM compliance_remediation_tasks crt
-      LEFT JOIN compliance_frameworks cf ON crt.framework_id = cf.id
-      LEFT JOIN compliance_findings cfi ON crt.finding_id = cfi.id
       WHERE crt.tenant_id = $1
     `;
     const params: any[] = [tenantId];
@@ -45,26 +43,22 @@ export async function GET(request: NextRequest) {
       paramIndex++;
     }
 
-    query += ` ORDER BY 
-      CASE crt.priority 
-        WHEN 'critical' THEN 1 
-        WHEN 'high' THEN 2 
-        WHEN 'medium' THEN 3 
-        WHEN 'low' THEN 4 
+    query += ` ORDER BY
+      CASE crt.priority
+        WHEN 'critical' THEN 1
+        WHEN 'high' THEN 2
+        WHEN 'medium' THEN 3
+        WHEN 'low' THEN 4
       END,
-      crt.sla_deadline ASC NULLS LAST`;
+      crt.due_date ASC NULLS LAST`;
+
+    const limit = parseInt(searchParams.get('limit') || '100');
+    const offset = parseInt(searchParams.get('offset') || '0');
+    query += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    params.push(limit, offset);
+    paramIndex += 2;
 
     const tasks = await database.queryMany(query, params);
-
-    // Check for SLA breaches
-    await database.query(`
-      UPDATE compliance_remediation_tasks
-      SET sla_breached = true, updated_at = NOW()
-      WHERE tenant_id = $1 
-        AND sla_deadline < NOW()
-        AND status NOT IN ('completed', 'cancelled', 'closed')
-        AND sla_breached = false
-    `, [tenantId]);
 
     // Get stats
     const stats = await database.queryOne(`
@@ -72,8 +66,8 @@ export async function GET(request: NextRequest) {
         COUNT(*) FILTER (WHERE status = 'open') as open,
         COUNT(*) FILTER (WHERE status = 'in_progress') as in_progress,
         COUNT(*) FILTER (WHERE status = 'completed') as completed,
-        COUNT(*) FILTER (WHERE status = 'blocked') as blocked,
-        COUNT(*) FILTER (WHERE sla_breached = true AND status NOT IN ('completed', 'cancelled')) as sla_breached,
+        0 as blocked,
+        COUNT(*) FILTER (WHERE due_date < NOW() AND status NOT IN ('completed', 'cancelled')) as sla_breached,
         COUNT(*) FILTER (WHERE priority = 'critical' AND status NOT IN ('completed', 'cancelled')) as critical_open,
         COUNT(*) as total
       FROM compliance_remediation_tasks

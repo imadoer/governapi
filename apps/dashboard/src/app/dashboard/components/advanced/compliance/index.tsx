@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
+import { ArrowPathIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
 import { useComplianceData } from "./useComplianceData";
 import { ExecutiveDashboardTab } from "./ExecutiveDashboardTab";
 import { FrameworksControlsTab } from "./FrameworksControlsTab";
@@ -8,26 +9,67 @@ import { RiskViolationsTab } from "./RiskViolationsTab";
 import { AuditReportsTab } from "./AuditReportsTab";
 import { Framework } from "./types";
 
-interface Props {
-  company?: any;
-}
-
 const tabs = [
-  { key: "dashboard", label: "Executive Dashboard", icon: (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
-  )},
-  { key: "frameworks", label: "Frameworks & Controls", icon: (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
-  )},
-  { key: "risk", label: "Risk & Violations", icon: (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
-  )},
-  { key: "audit", label: "Audit & Reports", icon: (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-  )},
+  { key: "dashboard", label: "Dashboard" },
+  { key: "frameworks", label: "Frameworks" },
+  { key: "risk", label: "Risk & Violations" },
+  { key: "audit", label: "Audit" },
 ];
 
-export function ComplianceHubPage({ company }: Props) {
+function Skeleton({ className = "" }: { className?: string }) {
+  return <div className={`animate-pulse bg-slate-700/30 rounded-xl ${className}`} />;
+}
+
+function SkeletonPage() {
+  return (
+    <div className="space-y-6">
+      {/* KPI cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 space-y-3">
+            <Skeleton className="h-3 w-20" />
+            <Skeleton className="h-7 w-16" />
+            <Skeleton className="h-2 w-28" />
+          </div>
+        ))}
+      </div>
+      {/* Chart area */}
+      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 space-y-3">
+        <Skeleton className="h-3 w-32" />
+        <Skeleton className="h-40" />
+      </div>
+      {/* Two-column cards */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {[...Array(2)].map((_, i) => (
+          <div key={i} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 space-y-3">
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-4 w-5/6" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-24 text-center">
+      <ShieldCheckIcon className="w-10 h-10 text-gray-600 mb-4" />
+      <p className="text-[15px] text-gray-400 mb-1">Unable to load compliance data</p>
+      <p className="text-[13px] text-gray-600 mb-6">This could be a temporary issue. Try refreshing.</p>
+      <button
+        onClick={onRetry}
+        className="px-4 py-2 text-[13px] font-medium text-white bg-white/[0.06] hover:bg-white/[0.1] rounded-lg border border-white/[0.06] transition-colors"
+      >
+        Retry
+      </button>
+    </div>
+  );
+}
+
+export function ComplianceHubPage({ company }: { company?: any }) {
   const tenantId = company?.id || "1";
   const userName = company?.userName || "User";
 
@@ -39,172 +81,142 @@ export function ComplianceHubPage({ company }: Props) {
 
   const data = useComplianceData(tenantId);
 
-  useEffect(() => {
-    data.fetchViolations(violationFilter);
-  }, [violationFilter]);
-
-  useEffect(() => {
-    data.fetchRemediation(remediationFilter);
-  }, [remediationFilter]);
-
-  useEffect(() => {
-    data.fetchAttestations(attestationFilter);
-  }, [attestationFilter]);
-
-  if (data.loading) {
-    return (
-      <div className="flex items-center justify-center h-[400px]">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 border-2 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin" />
-          <span className="text-white/50 text-sm">Loading Compliance Hub...</span>
-        </div>
-      </div>
-    );
-  }
+  useEffect(() => { data.fetchViolations(violationFilter); }, [violationFilter]);
+  useEffect(() => { data.fetchRemediation(remediationFilter); }, [remediationFilter]);
+  useEffect(() => { data.fetchAttestations(attestationFilter); }, [attestationFilter]);
 
   const criticalCount = data.violationStats.bySeverity?.critical || 0;
 
   return (
     <div>
-      {/* Toast */}
+      {/* toast */}
       <AnimatePresence>
         {data.toastMessage && (
           <motion.div
-            initial={{ opacity: 0, y: -20 }}
+            initial={{ opacity: 0, y: -16 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="fixed top-6 right-6 z-50 px-5 py-3 rounded-xl backdrop-blur-xl border border-white/10 shadow-2xl text-sm font-medium"
-            style={{
-              background: data.toastMessage.type === "success" ? "rgba(6,182,212,0.15)" :
-                data.toastMessage.type === "error" ? "rgba(225,29,72,0.15)" : "rgba(139,92,246,0.15)",
-              color: data.toastMessage.type === "success" ? "#06b6d4" :
-                data.toastMessage.type === "error" ? "#e11d48" : "#8b5cf6",
-            }}
+            exit={{ opacity: 0, y: -16 }}
+            className={`fixed top-5 right-5 z-[200] px-4 py-2 rounded-lg text-[13px] font-medium shadow-xl border border-white/[0.06] ${
+              data.toastMessage.type === "success" ? "bg-emerald-600/90 text-white" :
+              data.toastMessage.type === "error" ? "bg-red-600/90 text-white" :
+              "bg-cyan-600/90 text-white"
+            }`}
           >
             {data.toastMessage.text}
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold text-white/90 flex items-center gap-3 m-0">
-              <svg className="w-7 h-7 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
-              Compliance Hub
-            </h2>
-            <p className="text-white/50 mt-2 mb-0">
-              Fortune 500-grade compliance management with continuous assurance
-            </p>
-          </div>
-          <div className="flex gap-3">
-            <button
-              onClick={data.handleRefresh}
-              disabled={data.refreshing}
-              className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white/80 hover:bg-white/10 transition-all flex items-center gap-2 text-sm disabled:opacity-50"
-            >
-              <svg className={`w-4 h-4 ${data.refreshing ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              Refresh
-            </button>
-          </div>
+      {/* header */}
+      <div className="flex items-end justify-between mb-10">
+        <div>
+          <h1 className="text-2xl font-semibold text-white tracking-tight">Compliance Hub</h1>
+          <p className="text-sm text-gray-500 mt-1">Compliance management and continuous assurance</p>
         </div>
+        <button
+          onClick={data.handleRefresh}
+          disabled={data.refreshing}
+          className="p-2 rounded-lg text-gray-500 hover:text-white hover:bg-white/5 transition-colors disabled:opacity-50"
+        >
+          <ArrowPathIcon className={`w-4 h-4 ${data.refreshing ? "animate-spin" : ""}`} />
+        </button>
       </div>
 
-      {/* Tab Bar */}
-      <div className="flex gap-1 mb-6 border-b border-white/10 pb-0">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`
-              relative flex items-center gap-2 px-5 py-3 text-sm font-medium transition-all rounded-t-xl
-              ${activeTab === tab.key
-                ? "text-cyan-400 bg-white/5"
-                : "text-white/50 hover:text-white/70 hover:bg-white/[0.03]"
-              }
-            `}
-          >
-            {tab.icon}
-            {tab.label}
-            {tab.key === "risk" && criticalCount > 0 && (
-              <span className="ml-1 px-1.5 py-0.5 text-[10px] font-bold bg-red-500/20 text-red-400 rounded-full min-w-[18px] text-center">
-                {criticalCount}
-              </span>
-            )}
-            {activeTab === tab.key && (
-              <motion.div
-                layoutId="activeTab"
-                className="absolute bottom-0 left-0 right-0 h-0.5 bg-cyan-500"
-                transition={{ type: "spring", stiffness: 500, damping: 30 }}
-              />
-            )}
-          </button>
-        ))}
-      </div>
+      {/* tabs — underline style */}
+      <LayoutGroup>
+        <div className="flex gap-6 border-b border-white/[0.06] mb-10">
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`relative pb-3 text-[13px] font-medium transition-colors flex items-center gap-2 ${
+                activeTab === tab.key ? "text-white" : "text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              {tab.label}
+              {tab.key === "risk" && criticalCount > 0 && (
+                <span className="px-1.5 py-0.5 text-[10px] font-bold bg-red-500/20 text-red-400 rounded-full">
+                  {criticalCount}
+                </span>
+              )}
+              {activeTab === tab.key && (
+                <motion.div
+                  layoutId="compliance-tab"
+                  className="absolute bottom-0 left-0 right-0 h-[2px] bg-white rounded-full"
+                  transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                />
+              )}
+            </button>
+          ))}
+        </div>
+      </LayoutGroup>
 
-      {/* Tab Content */}
-      {activeTab === "dashboard" && (
-        <ExecutiveDashboardTab
-          onExportPDF={() => data.generateReport("executive", "pdf")}
-          onRunAssessment={() => console.log("Running compliance assessment...")}
-          dashboardData={data.dashboardData}
-          onViewAllLogs={() => setActiveTab("audit")}
-          onViewViolations={() => setActiveTab("risk")}
-        />
-      )}
+      {/* content */}
+      {data.loading ? (
+        <SkeletonPage />
+      ) : data.error && !data.dashboardData ? (
+        <EmptyState onRetry={data.handleRefresh} />
+      ) : (
+        <>
+          {activeTab === "dashboard" && (
+            <ExecutiveDashboardTab
+              onExportPDF={() => data.generateReport("executive", "pdf")}
+              onRunAssessment={() => {}}
+              dashboardData={data.dashboardData}
+              onViewAllLogs={() => setActiveTab("audit")}
+              onViewViolations={() => setActiveTab("risk")}
+            />
+          )}
 
-      {activeTab === "frameworks" && (
-        <FrameworksControlsTab
-          frameworks={data.frameworks}
-          controls={data.controls}
-          controlEvidence={data.controlEvidence}
-          policies={data.policies}
-          attestations={data.attestations}
-          attestationStats={data.attestationStats}
-          selectedFramework={selectedFramework}
-          onSelectFramework={setSelectedFramework}
-          onFetchControls={data.fetchControls}
-          onFetchControlEvidence={data.fetchControlEvidence}
-          onSubmitAttestation={(id, values) => data.submitAttestation(id, values, { actorId: company?.userId, actorName: userName })}
-          onUploadEvidence={data.uploadEvidence}
-          onCreatePolicy={data.createPolicy}
-          attestationFilter={attestationFilter}
-          onAttestationFilterChange={setAttestationFilter}
-          userName={userName}
-        />
-      )}
+          {activeTab === "frameworks" && (
+            <FrameworksControlsTab
+              frameworks={data.frameworks}
+              controls={data.controls}
+              controlEvidence={data.controlEvidence}
+              policies={data.policies}
+              attestations={data.attestations}
+              attestationStats={data.attestationStats}
+              selectedFramework={selectedFramework}
+              onSelectFramework={setSelectedFramework}
+              onFetchControls={data.fetchControls}
+              onFetchControlEvidence={data.fetchControlEvidence}
+              onSubmitAttestation={(id: number, values: any) => data.submitAttestation(id, values, { actorId: company?.userId, actorName: userName })}
+              onUploadEvidence={data.uploadEvidence}
+              onCreatePolicy={data.createPolicy}
+              attestationFilter={attestationFilter}
+              onAttestationFilterChange={setAttestationFilter}
+              userName={userName}
+            />
+          )}
 
-      {activeTab === "risk" && (
-        <RiskViolationsTab
-          violations={data.violations}
-          violationStats={data.violationStats}
-          remediationTasks={data.remediationTasks}
-          remediationStats={data.remediationStats}
-          vendors={data.vendors}
-          vendorStats={data.vendorStats}
-          violationFilter={violationFilter}
-          remediationFilter={remediationFilter}
-          onViolationFilterChange={setViolationFilter}
-          onRemediationFilterChange={setRemediationFilter}
-          onCreateRemediation={data.createRemediation}
-          onUpdateRemediationStatus={data.updateRemediationStatus}
-          onCreateVendor={data.createVendor}
-          onResolveViolation={data.resolveViolation}
-          userName={userName}
-        />
-      )}
+          {activeTab === "risk" && (
+            <RiskViolationsTab
+              violations={data.violations}
+              violationStats={data.violationStats}
+              remediationTasks={data.remediationTasks}
+              remediationStats={data.remediationStats}
+              vendors={data.vendors}
+              vendorStats={data.vendorStats}
+              violationFilter={violationFilter}
+              remediationFilter={remediationFilter}
+              onViolationFilterChange={setViolationFilter}
+              onRemediationFilterChange={setRemediationFilter}
+              onCreateRemediation={data.createRemediation}
+              onUpdateRemediationStatus={data.updateRemediationStatus}
+              onCreateVendor={data.createVendor}
+              onResolveViolation={data.resolveViolation}
+              userName={userName}
+            />
+          )}
 
-      {activeTab === "audit" && (
-        <AuditReportsTab
-          auditLogs={data.auditLogs}
-          auditReadiness={data.auditReadiness}
-          onGenerateReport={data.generateReport}
-        />
+          {activeTab === "audit" && (
+            <AuditReportsTab
+              auditLogs={data.auditLogs}
+              auditReadiness={data.auditReadiness}
+              onGenerateReport={data.generateReport}
+            />
+          )}
+        </>
       )}
     </div>
   );

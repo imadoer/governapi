@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { PageSkeleton, FadeIn } from "./PageSkeleton";
 import {
   PlusIcon,
   ArrowPathIcon,
@@ -10,8 +11,6 @@ import {
   BoltIcon,
   TrashIcon,
   PencilIcon,
-  PlayIcon,
-  PauseIcon,
 } from "@heroicons/react/24/outline";
 
 interface CustomRule {
@@ -186,11 +185,7 @@ export function CustomRulesPage({ companyId }: { companyId: string }) {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400" />
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   return (
@@ -241,73 +236,19 @@ export function CustomRulesPage({ companyId }: { companyId: string }) {
       </div>
 
       {/* Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-400">Total Rules</p>
-              <p className="text-3xl font-bold text-white mt-1">
-                {stats?.totalRules || 0}
-              </p>
-            </div>
-            <ShieldCheckIcon className="w-10 h-10 text-cyan-500" />
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-400">Active Rules</p>
-              <p className="text-3xl font-bold text-green-500 mt-1">
-                {stats?.activeRules || 0}
-              </p>
-            </div>
-            <PlayIcon className="w-10 h-10 text-green-500" />
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-400">Total Triggers</p>
-              <p className="text-3xl font-bold text-orange-500 mt-1">
-                {stats?.totalTriggers || 0}
-              </p>
-            </div>
-            <BoltIcon className="w-10 h-10 text-orange-500" />
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-400">Most Triggered</p>
-              <p className="text-sm font-semibold text-white mt-1 truncate">
-                {stats?.mostTriggeredRule || "N/A"}
-              </p>
-            </div>
-            <FireIcon className="w-10 h-10 text-red-500" />
-          </div>
-        </motion.div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: "Total Rules", value: stats?.totalRules || 0 },
+          { label: "Active Rules", value: stats?.activeRules || 0 },
+          { label: "Total Triggers", value: stats?.totalTriggers || 0 },
+          { label: "Most Triggered", value: stats?.mostTriggeredRule || "N/A", small: true },
+        ].map((s, i) => (
+          <motion.div key={s.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
+            className="bg-slate-800/50 border border-white/[0.06] rounded-2xl p-5">
+            <div className="text-[12px] text-gray-500 mb-2">{s.label}</div>
+            <div className={`${s.small ? "text-[14px]" : "text-2xl"} font-semibold text-white tracking-tight truncate`}>{s.value}</div>
+          </motion.div>
+        ))}
       </div>
 
       {/* Rules List */}

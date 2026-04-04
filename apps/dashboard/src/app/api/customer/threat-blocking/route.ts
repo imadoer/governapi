@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
       ),
     ]);
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       success: true,
       threatBlocking: {
         recentBlocked: recentBlocked.map((threat: any) => ({
@@ -67,6 +67,8 @@ export async function GET(request: NextRequest) {
         effectiveness: [],
       },
     });
+    res.headers.set("Cache-Control", "private, max-age=5, stale-while-revalidate=30");
+    return res;
   } catch (error: any) {
     logger.error("Threat blocking API error:", { error: error.message });
     return NextResponse.json(

@@ -65,10 +65,12 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       success: true,
       trends: trendsData
     });
+    res.headers.set("Cache-Control", "private, max-age=5, stale-while-revalidate=30");
+    return res;
   } catch (error) {
     console.error('Error fetching security trends:', error);
     return NextResponse.json(

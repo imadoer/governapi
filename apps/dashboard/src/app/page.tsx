@@ -81,28 +81,30 @@ function SecurityGauge({ score, animating }: { score: number; animating: boolean
 /* ─────────────────────────────────────────────
    Scan Result Rows
    ───────────────────────────────────────────── */
-interface Finding { label: string; status: "pass" | "warn" | "fail" }
+interface Finding { label: string; status: "pass" | "warn" | "fail"; detail?: string }
 
 function ScanResults({ findings, visible }: { findings: Finding[]; visible: boolean }) {
   if (!visible) return null;
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-6 space-y-2.5 w-full">
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-6 space-y-2 w-full">
       {findings.map((f, i) => (
         <motion.div
           key={f.label}
           initial={{ opacity: 0, x: -8 }}
           animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.6 + i * 0.12 }}
-          className="flex items-center justify-between text-sm"
+          transition={{ delay: 0.6 + i * 0.1 }}
         >
-          <span className="text-slate-400">{f.label}</span>
-          {f.status === "pass" ? (
-            <span className="text-emerald-400 flex items-center gap-1 font-medium"><CheckCircleIcon className="w-4 h-4" /> Pass</span>
-          ) : f.status === "warn" ? (
-            <span className="text-amber-400 flex items-center gap-1 font-medium"><ExclamationTriangleIcon className="w-4 h-4" /> Warn</span>
-          ) : (
-            <span className="text-red-400 flex items-center gap-1 font-medium"><XMarkIcon className="w-4 h-4" /> Fail</span>
-          )}
+          <div className="flex items-center justify-between text-[13px]">
+            <span className="text-slate-400">{f.label}</span>
+            {f.status === "pass" ? (
+              <span className="text-emerald-400 flex items-center gap-1 font-medium"><CheckCircleIcon className="w-3.5 h-3.5" /> Pass</span>
+            ) : f.status === "warn" ? (
+              <span className="text-amber-400 flex items-center gap-1 font-medium"><ExclamationTriangleIcon className="w-3.5 h-3.5" /> Warn</span>
+            ) : (
+              <span className="text-red-400 flex items-center gap-1 font-medium"><XMarkIcon className="w-3.5 h-3.5" /> Fail</span>
+            )}
+          </div>
+          {f.detail && <div className="text-[11px] text-slate-600 mt-0.5">{f.detail}</div>}
         </motion.div>
       ))}
     </motion.div>
@@ -149,28 +151,31 @@ export default function LandingPage() {
 
       if (data.success) {
         const r = data.results;
-        setFindings([
-          { label: "HTTPS / TLS", status: r.https ? "pass" : "fail" },
-          { label: "Security Headers", status: r.securityHeaders.score >= 60 ? "pass" : r.securityHeaders.score >= 30 ? "warn" : "fail" },
-          { label: "CORS Policy", status: r.cors.safe ? "pass" : "warn" },
-          { label: "Server Info Leak", status: r.serverInfo.exposed ? "fail" : "pass" },
-          { label: "Response Time", status: (r.responseTime ?? 9999) < 500 ? "pass" : (r.responseTime ?? 9999) < 2000 ? "warn" : "fail" },
-        ]);
+        const f: Finding[] = [
+          { label: "HTTPS / TLS", status: r.https ? "pass" : "fail", detail: r.https ? undefined : "Not using HTTPS — data transmitted in plain text" },
+          {
+            label: "Security Headers",
+            status: r.securityHeaders.score >= 60 ? "pass" : r.securityHeaders.score >= 30 ? "warn" : "fail",
+            detail: r.securityHeaders.missing?.length > 0 ? `Missing: ${r.securityHeaders.missing.join(", ")}` : undefined,
+          },
+          { label: "CORS Policy", status: r.cors.safe ? "pass" : "warn", detail: !r.cors.safe ? "Access-Control-Allow-Origin is set to * (wildcard)" : undefined },
+          { label: "Server Info Leak", status: r.serverInfo.exposed ? "fail" : "pass", detail: r.serverInfo.exposed ? `Exposes: ${r.serverInfo.value}` : undefined },
+          { label: "Response Time", status: (r.responseTime ?? 9999) < 500 ? "pass" : (r.responseTime ?? 9999) < 2000 ? "warn" : "fail", detail: r.responseTime != null ? `${r.responseTime}ms` : undefined },
+        ];
+        setFindings(f);
         setScanScore(r.overallScore);
       } else {
-        // Endpoint error — give a basic fallback
         setFindings([
           { label: "HTTPS / TLS", status: url.startsWith("https") ? "pass" : "fail" },
-          { label: "Reachability", status: "fail" },
+          { label: "Reachability", status: "fail", detail: data.error || "Could not reach the URL" },
         ]);
         setScanScore(url.startsWith("https") ? 25 : 0);
       }
     } catch {
       setFindings([
-        { label: "HTTPS / TLS", status: scanUrl.startsWith("https") ? "pass" : "fail" },
-        { label: "Reachability", status: "fail" },
+        { label: "Reachability", status: "fail", detail: "Network error — could not connect" },
       ]);
-      setScanScore(scanUrl.startsWith("https") ? 25 : 0);
+      setScanScore(0);
     } finally {
       setScanning(false);
       setScanDone(true);
@@ -324,12 +329,13 @@ export default function LandingPage() {
                   <ScanResults findings={findings} visible={scanDone} />
 
                   {scanDone && (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.4 }} className="mt-7 w-full">
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.4 }} className="mt-6 w-full space-y-2">
                       <Link href="/login?mode=register">
-                        <button className="w-full py-2.5 text-sm font-medium border border-cyan-500/30 text-cyan-400 rounded-xl hover:bg-cyan-500/10 transition-all">
-                          Sign up for daily monitoring →
+                        <button className="w-full py-2.5 text-[13px] font-medium bg-white text-black rounded-xl hover:bg-gray-200 transition-colors">
+                          Want daily monitoring? Sign up free →
                         </button>
                       </Link>
+                      <p className="text-[10px] text-slate-600 text-center">Get alerts when your security score changes</p>
                     </motion.div>
                   )}
                 </div>

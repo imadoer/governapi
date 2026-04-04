@@ -138,40 +138,44 @@ export function ApiManagementPage({ companyId }: { companyId: string }) {
     [],
   );
 
-  const fetchPlatformKeys = async () => {
+  const [fetchError, setFetchError] = useState(false);
+
+  const safeFetch = async (url: string) => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
     try {
-      const response = await fetch("/api/customer/platform-api-keys", {
+      const response = await fetch(url, {
         headers: { "x-tenant-id": companyId },
+        signal: controller.signal,
       });
-      const data = await response.json();
-      if (data.success) {
-        setPlatformKeys(data.apiKeys || []);
-      }
-    } catch (error) {
-      console.error("Failed to fetch platform keys:", error);
+      clearTimeout(timeout);
+      return await response.json();
+    } catch {
+      clearTimeout(timeout);
+      return null;
+    }
+  };
+
+  const fetchPlatformKeys = async () => {
+    const data = await safeFetch("/api/customer/platform-api-keys");
+    if (data?.success) {
+      setPlatformKeys(data.apiKeys || []);
     }
   };
 
   const fetchApiEndpoints = async () => {
-    try {
-      const response = await fetch("/api/customer/api-endpoints", {
-        headers: { "x-tenant-id": companyId },
-      });
-      const data = await response.json();
-      if (data.success) {
-        setApiEndpoints(data.endpoints || []);
-      }
-    } catch (error) {
-      console.error("Failed to fetch endpoints:", error);
-    } finally {
-      setLoading(false);
+    const data = await safeFetch("/api/customer/api-endpoints");
+    if (data?.success) {
+      setApiEndpoints(data.endpoints || []);
     }
   };
 
   useEffect(() => {
     if (companyId) {
-      fetchPlatformKeys();
-      fetchApiEndpoints();
+      setFetchError(false);
+      Promise.all([fetchPlatformKeys(), fetchApiEndpoints()])
+        .catch(() => setFetchError(true))
+        .finally(() => setLoading(false));
     }
   }, [companyId]);
 
@@ -275,8 +279,39 @@ export function ApiManagementPage({ companyId }: { companyId: string }) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400" />
+      <div className="space-y-6">
+        <div>
+          <div className="h-8 w-48 bg-slate-700/30 rounded-lg animate-pulse mb-2" />
+          <div className="h-4 w-72 bg-slate-700/20 rounded animate-pulse" />
+        </div>
+        <div className="h-12 bg-slate-800/50 rounded-xl animate-pulse" />
+        <div className="space-y-3">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="h-28 bg-slate-800/30 rounded-xl border border-white/5 animate-pulse" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (fetchError && platformKeys.length === 0 && apiEndpoints.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold text-white mb-2">API Management</h1>
+          <p className="text-slate-400">Manage your GovernAPI platform keys and discover APIs to monitor</p>
+        </div>
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <KeyIcon className="w-10 h-10 text-slate-600 mb-4" />
+          <p className="text-[15px] text-slate-400 mb-1">Unable to load API management data</p>
+          <p className="text-[13px] text-slate-600 mb-6">This could be a temporary issue. Try refreshing.</p>
+          <button
+            onClick={() => { setLoading(true); setFetchError(false); fetchPlatformKeys(); fetchApiEndpoints().finally(() => setLoading(false)); }}
+            className="px-4 py-2 text-[13px] font-medium text-white bg-white/[0.06] hover:bg-white/[0.1] rounded-lg border border-white/[0.06] transition-colors"
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
