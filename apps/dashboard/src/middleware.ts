@@ -4,6 +4,7 @@ const authPublicRoutes = [
   "/login",
   "/api/public/",
   "/api/auth/",
+  "/api/badge/",
   // "/api/customer/", // ✅ Commented out so authentication will apply
 ];
 
