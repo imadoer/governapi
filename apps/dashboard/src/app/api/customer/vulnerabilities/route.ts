@@ -17,8 +17,11 @@ export async function GET(request: NextRequest) {
     const vulnerabilities = await database.queryMany(
       `SELECT
         v.id, v.severity, v.title, v.vulnerability_type,
-        v.status, v.created_at
+        v.status, v.description, v.remediation, v.affected_url,
+        v.scan_id, v.cwe_id, v.cvss_score, v.created_at,
+        s.url as scan_url
        FROM vulnerabilities v
+       LEFT JOIN security_scans s ON v.scan_id = s.id
        WHERE v.tenant_id = $1
        ORDER BY v.created_at DESC`,
       [tenantId],

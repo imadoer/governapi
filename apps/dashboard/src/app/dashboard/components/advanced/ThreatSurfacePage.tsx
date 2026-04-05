@@ -84,12 +84,16 @@ export default function ThreatSurfacePage({ companyId }: { companyId: string }) 
   const trends = trendsData?.success ? trendsData.trends ?? [] : [];
   const hasData = vulns.length > 0 || (metrics?.securityScore ?? 0) > 0;
 
-  // Group vulns by type to map to attack vectors
+  // Group vulns by type, deduplicate by endpoint URL
   const vulnsByType: Record<string, any[]> = {};
   for (const v of vulns) {
     const t = v.vulnerability_type || "Other";
     if (!vulnsByType[t]) vulnsByType[t] = [];
-    vulnsByType[t].push(v);
+    const url = v.affected_url || v.scan_url || v.endpoint;
+    const alreadyHas = vulnsByType[t].some((existing) =>
+      (existing.affected_url || existing.scan_url || existing.endpoint) === url
+    );
+    if (!alreadyHas) vulnsByType[t].push(v);
   }
 
   // Build attack surface from actual vulnerabilities
@@ -216,13 +220,16 @@ export default function ThreatSurfacePage({ companyId }: { companyId: string }) 
                                 <div>
                                   <div className="text-[11px] font-medium text-gray-400 mb-1">What our scan found</div>
                                   <div className="space-y-1">
-                                    {attack.vulns.slice(0, 5).map((v: any, i: number) => (
-                                      <div key={i} className="flex items-center gap-2 text-[12px] py-1 px-2 rounded bg-white/[0.02]">
-                                        <span className="text-red-400">●</span>
-                                        <span className="text-white">{v.title}</span>
-                                        {v.affected_url && <span className="text-gray-600 truncate">— {v.affected_url}</span>}
-                                      </div>
-                                    ))}
+                                    {attack.vulns.slice(0, 8).map((v: any, i: number) => {
+                                      const url = v.affected_url || v.scan_url || v.endpoint;
+                                      return (
+                                        <div key={i} className="flex items-center gap-2 text-[12px] py-1.5 px-2 rounded bg-white/[0.02]">
+                                          <span className="text-red-400 shrink-0">●</span>
+                                          <span className="text-white shrink-0">{v.title}</span>
+                                          {url && <span className="text-gray-500 truncate">— {url}</span>}
+                                        </div>
+                                      );
+                                    })}
                                   </div>
                                 </div>
                                 <div>
