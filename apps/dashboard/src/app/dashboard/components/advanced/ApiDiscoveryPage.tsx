@@ -57,18 +57,21 @@ export default function ApiDiscoveryPage({ companyId }: { companyId: string }) {
   const riskIcon = (risk: string) => {
     if (risk === "exposed") return "🔴";
     if (risk === "public") return "🟡";
+    if (risk === "redirect") return "↗️";
     return "🟢";
   };
 
   const riskLabel = (risk: string) => {
     if (risk === "exposed") return "Exposed";
     if (risk === "public") return "Public";
-    return "Authenticated";
+    if (risk === "redirect") return "Redirect";
+    return "Protected";
   };
 
   const riskColor = (risk: string) => {
     if (risk === "exposed") return "text-red-400";
     if (risk === "public") return "text-amber-400";
+    if (risk === "redirect") return "text-gray-500";
     return "text-emerald-400";
   };
 
@@ -127,15 +130,28 @@ export default function ApiDiscoveryPage({ companyId }: { companyId: string }) {
       {/* Results */}
       {results && !scanning && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-          {/* Summary stats */}
-          <div className="grid grid-cols-3 gap-4 mb-8">
+          {/* Verdict */}
+          {results.verdict && (
+            <div className={`p-4 rounded-xl mb-6 text-[13px] ${
+              results.criticalFindings > 0 ? "bg-red-500/[0.06] border border-red-500/15 text-red-300" : "bg-emerald-500/[0.06] border border-emerald-500/15 text-emerald-300"
+            }`}>
+              {results.verdict}
+            </div>
+          )}
+
+          {/* Stats */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             <Card className="p-5">
               <div className="text-[12px] text-gray-500 mb-2">Endpoints Found</div>
               <div className="text-2xl font-semibold text-white">{results.endpointsFound}</div>
             </Card>
             <Card className="p-5">
-              <div className="text-[12px] text-gray-500 mb-2">Critical Findings</div>
+              <div className="text-[12px] text-gray-500 mb-2">Critical</div>
               <div className="text-2xl font-semibold text-red-400">{results.criticalFindings}</div>
+            </Card>
+            <Card className="p-5">
+              <div className="text-[12px] text-gray-500 mb-2">Protected</div>
+              <div className="text-2xl font-semibold text-emerald-400">{results.protectedEndpoints}</div>
             </Card>
             <Card className="p-5">
               <div className="text-[12px] text-gray-500 mb-2">Paths Probed</div>
@@ -143,24 +159,22 @@ export default function ApiDiscoveryPage({ companyId }: { companyId: string }) {
             </Card>
           </div>
 
-          {/* Critical findings */}
+          {/* Critical alert */}
           {results.criticalFindings > 0 && (
             <Card className="p-5 mb-6 border-red-500/20">
               <div className="flex items-center gap-2 mb-3">
                 <ShieldExclamationIcon className="w-5 h-5 text-red-400" />
                 <h3 className="text-[14px] font-medium text-red-400">Critical: Exposed Endpoints</h3>
               </div>
-              <p className="text-[12px] text-gray-500 mb-3">These endpoints are publicly accessible and may expose sensitive data</p>
               <div className="space-y-1">
                 {results.endpoints.filter((e: any) => e.risk === "exposed").map((e: any) => (
-                  <div key={e.path} className="flex items-center justify-between py-2 px-3 rounded-lg bg-red-500/[0.05] border border-red-500/10">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-[13px] text-red-400">{e.path}</span>
-                      <span className="text-[11px] text-gray-500">HTTP {e.status}</span>
-                      {e.findings?.map((f: string) => (
-                        <span key={f} className="text-[10px] bg-red-500/15 text-red-400 px-1.5 py-0.5 rounded">{f}</span>
-                      ))}
-                    </div>
+                  <div key={e.path} className="flex items-center gap-2 py-2 px-3 rounded-lg bg-red-500/[0.05] border border-red-500/10">
+                    <span className="font-mono text-[13px] text-red-400">{e.path}</span>
+                    <span className="text-[11px] text-gray-500">HTTP {e.status}</span>
+                    {e.findings?.map((f: string) => (
+                      <span key={f} className="text-[10px] bg-red-500/15 text-red-400 px-1.5 py-0.5 rounded">{f}</span>
+                    ))}
+                    {e.responseTime && <span className="text-[10px] text-gray-600">{e.responseTime}ms</span>}
                   </div>
                 ))}
               </div>
@@ -176,17 +190,24 @@ export default function ApiDiscoveryPage({ companyId }: { companyId: string }) {
               {results.endpoints.map((ep: any) => (
                 <div key={ep.path} className="flex items-center justify-between px-5 py-3 hover:bg-white/[0.02] transition-colors">
                   <div className="flex items-center gap-3 min-w-0">
-                    <span className="text-[14px]">{riskIcon(ep.risk)}</span>
+                    <span className="text-[14px] shrink-0">{riskIcon(ep.risk)}</span>
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-mono text-[13px] text-white">{ep.path}</span>
-                        <span className="text-[11px] text-gray-600">HTTP {ep.status}</span>
-                        {ep.contentType && <span className="text-[10px] text-gray-600">{ep.contentType}</span>}
+                        <span className="text-[10px] text-gray-600">HTTP {ep.status}</span>
+                        {ep.contentType && <span className="text-[10px] text-gray-700">{ep.contentType}</span>}
+                        {ep.responseTime && <span className="text-[10px] text-gray-700">{ep.responseTime}ms</span>}
+                        {ep.size != null && <span className="text-[10px] text-gray-700">{ep.size > 1024 ? `${Math.round(ep.size/1024)}KB` : `${ep.size}B`}</span>}
                       </div>
-                      <div className="flex items-center gap-2 mt-0.5">
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                         <span className={`text-[11px] font-medium ${riskColor(ep.risk)}`}>{riskLabel(ep.risk)}</span>
-                        {ep.requiresAuth && <span className="text-[10px] text-gray-600">Auth required</span>}
-                        {ep.redirectsTo && <span className="text-[10px] text-gray-600">→ {ep.redirectsTo.substring(0, 40)}</span>}
+                        {ep.redirectsTo && <span className="text-[10px] text-gray-600">→ {ep.redirectsTo.substring(0, 50)}</span>}
+                        {ep.notableHeaders?.map((h: string) => (
+                          <span key={h} className="text-[10px] text-gray-600">{h}</span>
+                        ))}
+                        {ep.findings?.map((f: string) => (
+                          <span key={f} className="text-[10px] bg-red-500/15 text-red-400 px-1.5 py-0.5 rounded">{f}</span>
+                        ))}
                       </div>
                     </div>
                   </div>
@@ -221,4 +242,4 @@ export default function ApiDiscoveryPage({ companyId }: { companyId: string }) {
   );
 }
 
-const PROBE_COUNT = 48;
+const PROBE_COUNT = 120;
