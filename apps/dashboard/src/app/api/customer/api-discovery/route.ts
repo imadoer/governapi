@@ -1,17 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import { database } from "../../../../infrastructure/database";
 
-/* ── 120 probe paths ── */
+import { writeFileSync, appendFileSync } from "fs";
+
+function debugLog(msg: string) {
+  try { appendFileSync("/tmp/discovery-debug.log", msg + "\n"); } catch {}
+}
+
 const PROBE_PATHS = [
-  // Common API
-  "/api", "/api/v1", "/api/v2", "/api/v3", "/v1", "/v2", "/v3",
-  "/api/v1/", "/api/v2/", "/rest", "/rest/v1",
+  // Common API roots
+  "/", "/api", "/api/v1", "/api/v2", "/api/v3", "/v1", "/v2", "/v3",
+  "/rest", "/rest/v1",
   // Common resources
   "/users", "/repos", "/gists", "/feeds", "/emojis", "/events",
   "/rate_limit", "/meta", "/octocat", "/zen", "/licenses",
   "/organizations", "/search", "/marketplace_listing/plans",
   "/notifications", "/issues", "/accounts", "/products", "/orders",
   "/api/users", "/api/admin", "/api/config", "/api/debug", "/api/internal",
+  // Utility/test endpoints (httpbin-style)
+  "/get", "/post", "/put", "/delete", "/patch",
+  "/headers", "/ip", "/user-agent",
+  "/html", "/json", "/xml", "/anything",
+  "/cookies", "/cookies/set", "/redirect/1",
+  "/status/200", "/status/418",
+  "/response-headers", "/delay/0", "/base64/SFRUUEJJTg==",
+  "/image", "/image/png", "/image/jpeg",
+  "/encoding/utf8", "/forms/post", "/bytes/10",
   // User/account
   "/me", "/profile", "/settings", "/feed",
   "/webhook", "/webhooks", "/callback", "/ping", "/version",
@@ -28,7 +42,7 @@ const PROBE_PATHS = [
   // Docs
   "/graphql", "/graphiql", "/swagger", "/swagger-ui",
   "/swagger.json", "/swagger.yaml", "/openapi.json", "/openapi.yaml",
-  "/docs", "/api-docs", "/api/docs", "/redoc",
+  "/docs", "/api-docs", "/api/docs", "/redoc", "/spec",
   // Sensitive/dangerous
   "/.env", "/.git", "/.git/config", "/.git/HEAD",
   "/admin", "/admin/api", "/console", "/dashboard",
@@ -76,13 +90,19 @@ export async function POST(request: NextRequest) {
     const base = `https://${clean}`;
     const results: any[] = [];
 
+    // Clear debug log
+    try { writeFileSync("/tmp/discovery-debug.log", `=== Discovery scan: ${clean} at ${new Date().toISOString()} ===\nProbing ${PROBE_PATHS.length} paths...\n\n`); } catch {}
+
     // Probe in parallel batches of 10
     for (let i = 0; i < PROBE_PATHS.length; i += 10) {
       const batch = PROBE_PATHS.slice(i, i + 10);
       const settled = await Promise.allSettled(batch.map((p) => probe(base, p)));
-      for (const r of settled) {
+      for (let j = 0; j < settled.length; j++) {
+        const r = settled[j];
         if (r.status === "fulfilled" && r.value) {
           results.push(r.value);
+        } else if (r.status === "rejected") {
+          debugLog(`  REJECTED ${batch[j]}: ${r.reason}`);
         }
       }
     }
@@ -150,11 +170,12 @@ export async function PUT(request: NextRequest) {
 
 /* ── Probe a single endpoint ── */
 async function probe(base: string, path: string) {
+  const url = `${base}${path}`;
   const start = Date.now();
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 5000);
-    const res = await fetch(`${base}${path}`, {
+    const res = await fetch(url, {
       method: "GET", signal: ctrl.signal, redirect: "manual",
       headers: {
         "User-Agent": "GovernAPI-Scanner/1.0",
@@ -165,11 +186,16 @@ async function probe(base: string, path: string) {
 
     const status = res.status;
     const ms = Date.now() - start;
-
-    // Only hide true 404s and connection errors
-    if (status === 404) return { path, status, risk: "not_found" as const };
-
     const ct = res.headers.get("content-type") || "";
+
+    // Only hide true 404s
+    if (status === 404) {
+      debugLog(`  ${path.padEnd(40)} → ${status}  FILTERED (404)  ${ms}ms  ct=${ct}`);
+      return { path, status, risk: "not_found" as const };
+    }
+
+    debugLog(`  ${path.padEnd(40)} → ${status}  INCLUDED  ${ms}ms  ct=${ct}`);
+
     const loc = res.headers.get("location") || "";
     const server = res.headers.get("server") || null;
     const poweredBy = res.headers.get("x-powered-by") || null;
@@ -181,7 +207,7 @@ async function probe(base: string, path: string) {
     let risk: "exposed" | "public" | "protected" | "redirect";
     let findings: string[] = [];
 
-    if (status === 401 || status === 403) {
+    if (status === 401 || status === 403 || status === 429) {
       risk = "protected";
     } else if (status >= 300 && status < 400) {
       risk = "redirect";
@@ -222,7 +248,8 @@ async function probe(base: string, path: string) {
       findings: findings.length > 0 ? findings : undefined,
       redirectsTo: loc || undefined,
     };
-  } catch {
+  } catch (err: any) {
+    debugLog(`  ${path.padEnd(40)} → ERROR  ${err?.name || "Unknown"}: ${err?.message?.substring(0, 50) || "timeout/connection"}`);
     return { path, status: 0, risk: "not_found" as const };
   }
 }
