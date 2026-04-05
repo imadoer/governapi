@@ -7,6 +7,8 @@ function debugLog(msg: string) {
   try { appendFileSync("/tmp/discovery-debug.log", msg + "\n"); } catch {}
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 const PROBE_PATHS = [
   // Common API roots
   "/", "/api", "/api/v1", "/api/v2", "/api/v3", "/v1", "/v2", "/v3",
@@ -133,18 +135,46 @@ export async function POST(request: NextRequest) {
     debugLog(`Default reject: status=${defaultRejectStatus}, size=${defaultRejectSize}`);
     debugLog(`Probing ${PROBE_PATHS.length} paths...\n`);
 
-    // ── Phase 2: Probe all paths ──
+    // ── Phase 2: Probe all paths with adaptive rate limiting ──
     const results: any[] = [];
-    for (let i = 0; i < PROBE_PATHS.length; i += 10) {
-      const batch = PROBE_PATHS.slice(i, i + 10);
+    let delay = 150; // ms between batches
+    let consecutive429 = 0;
+    let rateLimitPauses = 0;
+
+    for (let i = 0; i < PROBE_PATHS.length; i += 5) {
+      // Smaller batches (5 instead of 10) for better rate control
+      const batch = PROBE_PATHS.slice(i, i + 5);
       const settled = await Promise.allSettled(batch.map((p) => probe(base, p)));
+
+      let batch429 = 0;
       for (let j = 0; j < settled.length; j++) {
         const r = settled[j];
         if (r.status === "fulfilled" && r.value) {
           results.push(r.value);
+          if (r.value.status === 429) batch429++;
         } else if (r.status === "rejected") {
           debugLog(`  REJECTED ${batch[j]}: ${r.reason}`);
         }
+      }
+
+      // Adaptive rate limit detection
+      if (batch429 >= 3) {
+        consecutive429 += batch429;
+        if (consecutive429 >= 6 && rateLimitPauses < 2) {
+          // Heavy rate limiting — pause 5s and slow down
+          debugLog(`  ⏸ Rate limited (${consecutive429} consecutive 429s). Pausing 5s...`);
+          await sleep(5000);
+          delay = 500;
+          rateLimitPauses++;
+          consecutive429 = 0;
+        }
+      } else {
+        consecutive429 = 0;
+      }
+
+      // Delay between batches
+      if (i + 5 < PROBE_PATHS.length) {
+        await sleep(delay);
       }
     }
 

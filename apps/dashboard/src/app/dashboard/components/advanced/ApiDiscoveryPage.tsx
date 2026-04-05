@@ -13,6 +13,7 @@ export default function ApiDiscoveryPage({ companyId }: { companyId: string }) {
   const [domain, setDomain] = useState("");
   const [scanning, setScanning] = useState(false);
   const [results, setResults] = useState<any>(null);
+  const [showRateLimited, setShowRateLimited] = useState(false);
   const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null);
   const [addingPaths, setAddingPaths] = useState<Set<string>>(new Set());
 
@@ -184,13 +185,26 @@ export default function ApiDiscoveryPage({ companyId }: { companyId: string }) {
             </Card>
           )}
 
+          {/* Rate limit banner */}
+          {(results.rateLimitedEndpoints ?? 0) > 0 && (
+            <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/[0.04] mb-6">
+              <span className="text-[12px] text-gray-500">
+                {results.rateLimitedEndpoints} endpoints could not be checked due to rate limiting. Re-scan later for complete results.
+              </span>
+              <button onClick={() => setShowRateLimited(!showRateLimited)}
+                className="text-[11px] text-gray-500 hover:text-white transition-colors shrink-0 ml-3">
+                {showRateLimited ? "Hide" : "Show"} rate-limited
+              </button>
+            </div>
+          )}
+
           {/* All endpoints */}
           <Card className="overflow-hidden">
             <div className="px-5 py-4 border-b border-white/[0.04]">
-              <h3 className="text-[13px] font-medium text-white">All Discovered Endpoints</h3>
+              <h3 className="text-[13px] font-medium text-white">Discovered Endpoints</h3>
             </div>
             <div className="divide-y divide-white/[0.03]">
-              {results.endpoints.map((ep: any) => (
+              {results.endpoints.filter((ep: any) => showRateLimited || ep.risk !== "rate_limited").map((ep: any) => (
                 <div key={ep.path} className="flex items-center justify-between px-5 py-3 hover:bg-white/[0.02] transition-colors">
                   <div className="flex items-center gap-3 min-w-0">
                     <span className="text-[14px] shrink-0">{riskIcon(ep.risk)}</span>
@@ -223,9 +237,11 @@ export default function ApiDiscoveryPage({ companyId }: { companyId: string }) {
                   </button>
                 </div>
               ))}
-              {results.endpoints.length === 0 && (
+              {results.endpoints.filter((ep: any) => showRateLimited || ep.risk !== "rate_limited").length === 0 && (
                 <div className="px-5 py-12 text-center text-gray-600 text-[13px]">
-                  No endpoints found. The domain may not have public APIs.
+                  {(results.rateLimitedEndpoints ?? 0) > 0
+                    ? "All discovered endpoints were rate-limited. Try scanning again later."
+                    : "No endpoints found. The domain may not have public APIs."}
                 </div>
               )}
             </div>
