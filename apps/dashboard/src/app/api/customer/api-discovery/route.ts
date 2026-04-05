@@ -88,12 +88,53 @@ export async function POST(request: NextRequest) {
 
     const clean = domain.replace(/^https?:\/\//, "").replace(/\/+$/, "");
     const base = `https://${clean}`;
-    const results: any[] = [];
 
     // Clear debug log
-    try { writeFileSync("/tmp/discovery-debug.log", `=== Discovery scan: ${clean} at ${new Date().toISOString()} ===\nProbing ${PROBE_PATHS.length} paths...\n\n`); } catch {}
+    try { writeFileSync("/tmp/discovery-debug.log", `=== Discovery scan: ${clean} at ${new Date().toISOString()} ===\n\n`); } catch {}
 
-    // Probe in parallel batches of 10
+    // ── Phase 1: Detect default reject pattern ──
+    // Probe 3 garbage paths to fingerprint how the server rejects unknown routes
+    debugLog("Phase 1: Fingerprinting default reject pattern...");
+    const garbagePaths = ["/asdfjkl12345_probe", "/thispathdoesnotexist99", "/randomprobe_xyz_test"];
+    const garbageResults = await Promise.allSettled(garbagePaths.map((p) => probe(base, p)));
+    const garbageResponses: any[] = [];
+    for (let i = 0; i < garbageResults.length; i++) {
+      const r = garbageResults[i];
+      if (r.status === "fulfilled" && r.value && r.value.status > 0) {
+        garbageResponses.push(r.value);
+        debugLog(`  Garbage probe ${garbagePaths[i]}: status=${r.value.status}, bodySize=${r.value._bodySize}`);
+      } else {
+        debugLog(`  Garbage probe ${garbagePaths[i]}: ${r.status === "rejected" ? "rejected: " + r.reason : "no response"}`);
+      }
+    }
+
+    // If all garbage probes return the same status + similar size, that's the "default reject"
+    let defaultRejectStatus: number | null = null;
+    let defaultRejectSize: number | null = null;
+
+    if (garbageResponses.length >= 2) {
+      const statuses = garbageResponses.map((r) => r.status);
+      const sizes = garbageResponses.map((r) => r._bodySize ?? -1).filter((s) => s >= 0);
+
+      if (statuses.every((s) => s === statuses[0])) {
+        defaultRejectStatus = statuses[0];
+        // If sizes are within 50 bytes of each other, use the average as the baseline
+        if (sizes.length >= 2) {
+          const minSize = Math.min(...sizes);
+          const maxSize = Math.max(...sizes);
+          if (maxSize - minSize < 50) {
+            defaultRejectSize = Math.round(sizes.reduce((a, b) => a + b, 0) / sizes.length);
+          }
+        }
+      }
+    }
+
+    const hasDefaultReject = defaultRejectStatus !== null;
+    debugLog(`Default reject: status=${defaultRejectStatus}, size=${defaultRejectSize}`);
+    debugLog(`Probing ${PROBE_PATHS.length} paths...\n`);
+
+    // ── Phase 2: Probe all paths ──
+    const results: any[] = [];
     for (let i = 0; i < PROBE_PATHS.length; i += 10) {
       const batch = PROBE_PATHS.slice(i, i + 10);
       const settled = await Promise.allSettled(batch.map((p) => probe(base, p)));
@@ -107,34 +148,71 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Separate found vs not-found
-    const found = results.filter((r) => r.risk !== "not_found");
-    const critical = found.filter((r) => r.risk === "exposed");
-    const publicEps = found.filter((r) => r.risk === "public");
-    const protectedEps = found.filter((r) => r.risk === "protected");
-    const redirects = found.filter((r) => r.risk === "redirect");
+    // ── Phase 3: Filter false positives ──
+    const isDefaultReject = (ep: any) => {
+      if (!hasDefaultReject) return false;
+      if (ep.status !== defaultRejectStatus) return false;
+      // If we have a size baseline, check if response is within 50 bytes
+      if (defaultRejectSize !== null && ep._bodySize !== undefined) {
+        return Math.abs(ep._bodySize - defaultRejectSize) < 50;
+      }
+      // No size data — match on status alone only if it's an error status
+      return ep.status >= 400 && ep.status !== 429;
+    };
 
-    // Sort: exposed → public → redirect → protected
-    const order: Record<string, number> = { exposed: 0, public: 1, redirect: 2, protected: 3 };
-    found.sort((a, b) => (order[a.risk] ?? 9) - (order[b.risk] ?? 9));
+    const real: any[] = [];
+    const rateLimited: any[] = [];
+    let filteredCount = 0;
+
+    for (const ep of results) {
+      if (ep.risk === "not_found") continue;
+      if (ep.status === 429) {
+        // Rate limited — we can't tell if endpoint exists
+        rateLimited.push({ ...ep, risk: "rate_limited" });
+        debugLog(`  ${ep.path.padEnd(40)} → ${ep.status}  RATE LIMITED`);
+      } else if (isDefaultReject(ep)) {
+        filteredCount++;
+        debugLog(`  ${ep.path.padEnd(40)} → ${ep.status}  FALSE POSITIVE (matches default reject ${defaultRejectStatus}/${defaultRejectSize}B)`);
+      } else {
+        real.push(ep);
+      }
+    }
+
+    debugLog(`\nResults: ${real.length} real, ${rateLimited.length} rate-limited, ${filteredCount} false positives filtered`);
+
+    const critical = real.filter((r) => r.risk === "exposed");
+    const publicEps = real.filter((r) => r.risk === "public");
+    const protectedEps = real.filter((r) => r.risk === "protected");
+    const redirects = real.filter((r) => r.risk === "redirect");
+
+    // Combine real + rate-limited (rate-limited shown last in gray)
+    const allEndpoints = [...real, ...rateLimited];
+
+    // Sort: exposed → public → redirect → protected → rate_limited
+    const order: Record<string, number> = { exposed: 0, public: 1, redirect: 2, protected: 3, rate_limited: 4 };
+    allEndpoints.sort((a, b) => (order[a.risk] ?? 9) - (order[b.risk] ?? 9));
 
     // Build verdict
-    let verdict = `Found ${found.length} endpoint${found.length !== 1 ? "s" : ""} on ${clean}`;
+    let verdict = `Found ${real.length} endpoint${real.length !== 1 ? "s" : ""} on ${clean}`;
     if (protectedEps.length > 0) verdict += ` — ${protectedEps.length} properly secured`;
     if (publicEps.length > 0) verdict += `, ${publicEps.length} public`;
+    if (rateLimited.length > 0) verdict += ` (${rateLimited.length} rate-limited, status unknown)`;
+    if (filteredCount > 0) verdict += `. ${filteredCount} false positives filtered.`;
     if (critical.length > 0) verdict = `⚠️ ALERT: ${critical.length} sensitive endpoint${critical.length > 1 ? "s" : ""} publicly accessible on ${clean}. ${verdict}`;
 
     return NextResponse.json({
       success: true,
       domain: clean,
       totalProbed: PROBE_PATHS.length,
-      endpointsFound: found.length,
+      endpointsFound: real.length,
       criticalFindings: critical.length,
       publicEndpoints: publicEps.length,
       protectedEndpoints: protectedEps.length,
       redirectEndpoints: redirects.length,
+      rateLimitedEndpoints: rateLimited.length,
+      falsePositivesFiltered: filteredCount,
       verdict,
-      endpoints: found,
+      endpoints: allEndpoints,
     });
   } catch (error) {
     console.error("Discovery error:", error);
@@ -194,42 +272,43 @@ async function probe(base: string, path: string) {
       return { path, status, risk: "not_found" as const };
     }
 
-    debugLog(`  ${path.padEnd(40)} → ${status}  INCLUDED  ${ms}ms  ct=${ct}`);
-
     const loc = res.headers.get("location") || "";
     const server = res.headers.get("server") || null;
     const poweredBy = res.headers.get("x-powered-by") || null;
     const framework = res.headers.get("x-framework") || null;
-    const cl = res.headers.get("content-length");
-    const size = cl ? parseInt(cl) : null;
+
+    // Always read body for size + sensitive content detection
+    let bodyText = "";
+    let bodySize = 0;
+    try {
+      bodyText = await res.text();
+      bodySize = bodyText.length;
+    } catch {}
+
+    debugLog(`  ${path.padEnd(40)} → ${status}  ${ms}ms  ${bodySize}B  ct=${ct}`);
 
     // Classify
     let risk: "exposed" | "public" | "protected" | "redirect";
     let findings: string[] = [];
 
-    if (status === 401 || status === 403 || status === 429) {
+    if (status === 401 || status === 403) {
+      risk = "protected";
+    } else if (status === 429) {
+      // Rate limited — handled separately by caller
       risk = "protected";
     } else if (status >= 300 && status < 400) {
       risk = "redirect";
     } else if (status === 405) {
-      // Method Not Allowed = endpoint exists
       risk = "protected";
     } else if (DANGEROUS.has(path) && status >= 200 && status < 300) {
       risk = "exposed";
-      // Check body for sensitive content
-      try {
-        const body = (await res.text()).substring(0, 2000);
-        for (const c of SENSITIVE_PATTERNS) {
-          if (c.pattern.test(body)) findings.push(c.label);
-        }
-        if (findings.length === 0 && body.length > 10) {
-          // Still exposed — dangerous path with real content
-        }
-      } catch {}
+      const snippet = bodyText.substring(0, 2000);
+      for (const c of SENSITIVE_PATTERNS) {
+        if (c.pattern.test(snippet)) findings.push(c.label);
+      }
     } else if (status >= 200 && status < 300) {
       risk = "public";
     } else {
-      // 5xx, other — still a valid finding
       risk = "public";
     }
 
@@ -240,9 +319,10 @@ async function probe(base: string, path: string) {
 
     return {
       path, status, risk,
+      _bodySize: bodySize, // used for false-positive detection, stripped from response
       responseTime: ms,
       contentType: ct.split(";")[0].trim() || null,
-      size,
+      size: bodySize,
       server,
       notableHeaders: notable.length > 0 ? notable : undefined,
       findings: findings.length > 0 ? findings : undefined,

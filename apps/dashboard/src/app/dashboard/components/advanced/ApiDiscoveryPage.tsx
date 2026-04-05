@@ -58,6 +58,7 @@ export default function ApiDiscoveryPage({ companyId }: { companyId: string }) {
     if (risk === "exposed") return "🔴";
     if (risk === "public") return "🟡";
     if (risk === "redirect") return "↗️";
+    if (risk === "rate_limited") return "⏳";
     return "🟢";
   };
 
@@ -65,6 +66,7 @@ export default function ApiDiscoveryPage({ companyId }: { companyId: string }) {
     if (risk === "exposed") return "Exposed";
     if (risk === "public") return "Public";
     if (risk === "redirect") return "Redirect";
+    if (risk === "rate_limited") return "Rate Limited";
     return "Protected";
   };
 
@@ -72,6 +74,7 @@ export default function ApiDiscoveryPage({ companyId }: { companyId: string }) {
     if (risk === "exposed") return "text-red-400";
     if (risk === "public") return "text-amber-400";
     if (risk === "redirect") return "text-gray-500";
+    if (risk === "rate_limited") return "text-gray-600";
     return "text-emerald-400";
   };
 
