@@ -1001,7 +1001,7 @@ export function VulnerabilitiesPage({ company }: { company?: any }) {
                         )}
                         {selectedVulnerability.cwe_id && (
                           <Pill className="bg-slate-700/50 text-slate-300 border-white/10">
-                            CWE-{selectedVulnerability.cwe_id}
+                            {String(selectedVulnerability.cwe_id).startsWith("CWE-") ? selectedVulnerability.cwe_id : `CWE-${selectedVulnerability.cwe_id}`}
                           </Pill>
                         )}
                       </div>
