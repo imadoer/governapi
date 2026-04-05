@@ -26,14 +26,14 @@ interface APIKeyInfo {
 
 export class APIKeyService {
   static async generateAPIKey(
-    tenantId: number,
+    tenantId: string,
     config: APIKeyConfig,
     createdBy?: string,
   ): Promise<APIKeyInfo> {
-    // Generate secure API key
+    // Generate secure API key with gov_live_ prefix
     const keyBytes = crypto.randomBytes(32);
-    const fullKey = `gapi_${keyBytes.toString("hex")}`;
-    const keyPrefix = `gapi_${fullKey.substring(5, 13)}...`;
+    const fullKey = `gov_live_${keyBytes.toString("hex")}`;
+    const keyPrefix = `gov_${fullKey.slice(9, 13)}...${fullKey.slice(-4)}`;
     const keyHash = crypto.createHash("sha256").update(fullKey).digest("hex");
 
     const expiresAt = config.expiresInDays
@@ -41,18 +41,16 @@ export class APIKeyService {
       : null;
 
     const apiKey = await database.queryOne(
-      `INSERT INTO api_keys (tenant_id, key, key_name, key_hash, key_prefix, permissions, 
-                             rate_limit_override, ip_whitelist, expires_at, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      `INSERT INTO api_keys (tenant_id, key_name, key_hash, key_prefix, permissions,
+                             rate_limit_override, expires_at, created_by)
+       VALUES ($1::uuid, $2, $3, $4, $5::jsonb, $6, $7, $8::uuid) RETURNING *`,
       [
         tenantId,
-        fullKey,
         config.name,
         keyHash,
         keyPrefix,
-        config.permissions,
+        JSON.stringify(config.permissions),
         config.rateLimit || null,
-        config.ipWhitelist || null,
         expiresAt,
         createdBy || null,
       ],
@@ -165,7 +163,7 @@ export class APIKeyService {
     };
   }
 
-  static async revokeAPIKey(keyId: string, tenantId: number): Promise<void> {
+  static async revokeAPIKey(keyId: string, tenantId: string): Promise<void> {
     await database.query(
       "UPDATE api_keys SET is_active = false, updated_at = NOW() WHERE id = $1 AND tenant_id = $2",
       [keyId, tenantId],

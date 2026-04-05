@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { validateApiRequest } from "../../../utils/auth-middleware";
+import { validateApiRequest } from "../../../utils/auth-middleware-enhanced";
 import { logger } from "../../../utils/logging/logger";
 import { checkRateLimit, logRequest } from "../../../utils/rate-limiting";
 import { isIPBlocked, blockIP } from "../../../utils/ip-blocking";

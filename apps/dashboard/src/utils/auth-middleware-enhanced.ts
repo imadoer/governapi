@@ -15,8 +15,8 @@ export async function validateApiRequest(request: NextRequest) {
     };
   }
 
-  // Check if it's an API key (starts with 'gapi_') or Bearer token
-  if (authHeader.startsWith("Bearer gapi_")) {
+  // Check if it's an API key (starts with 'gapi_' or 'gov_live_') or Bearer token
+  if (authHeader.startsWith("Bearer gapi_") || authHeader.startsWith("Bearer gov_live_")) {
     // API Key authentication
     const apiKey = authHeader.substring(7); // Remove 'Bearer '
     const validation = await APIKeyService.validateAPIKey(apiKey);

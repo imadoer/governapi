@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
     }
 
     const apiKey = await APIKeyService.generateAPIKey(
-      tenantId as any,
+      tenantId,
       {
         name,
         permissions,
