@@ -142,8 +142,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    let parsedUrl: URL;
     try {
-      const parsedUrl = new URL(url);
+      parsedUrl = new URL(url);
       if (!["http:", "https:"].includes(parsedUrl.protocol)) {
         return NextResponse.json(
           { error: "Invalid URL protocol. Only HTTP and HTTPS are allowed" },
@@ -153,6 +154,28 @@ export async function POST(request: NextRequest) {
     } catch {
       return NextResponse.json(
         { error: "Invalid target URL format" },
+        { status: 400 },
+      );
+    }
+
+    // Block scanning of webhook/integration URLs
+    const blockedDomains = ["hooks.slack.com", "events.pagerduty.com", "discord.com/api/webhooks"];
+    // Also check tenant's own webhook URLs
+    try {
+      const integrations = await database.queryMany(
+        `SELECT credentials->>'webhook_url' as url FROM external_integrations WHERE tenant_id = $1 AND is_active = true`,
+        [tenantId],
+      );
+      for (const i of integrations) {
+        if (i.url) {
+          try { blockedDomains.push(new URL(i.url).hostname); } catch {}
+        }
+      }
+    } catch {}
+
+    if (blockedDomains.some((d) => parsedUrl.hostname.includes(d))) {
+      return NextResponse.json(
+        { error: "Cannot scan webhook or integration URLs. These are for sending notifications, not for security scanning." },
         { status: 400 },
       );
     }
