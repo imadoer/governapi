@@ -1,164 +1,123 @@
-import { logger } from "../../../../utils/logging/logger";
 import { NextRequest, NextResponse } from "next/server";
 import { database } from "../../../../infrastructure/database";
 
 export async function GET(request: NextRequest) {
   const tenantId = request.headers.get("x-tenant-id");
   if (!tenantId) {
-    return NextResponse.json(
-      { error: "Authentication required" },
-      { status: 401 },
-    );
+    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   }
 
   try {
-    // Run all queries in parallel
-    const [performanceStats, hourlyTrends, endpointPerformance, errorAnalysis, slowestEndpoints] = await Promise.all([
+    // Performance data derived from security scans (not real-time monitoring)
+    const [summary, hourlyTrends, endpoints, slowest] = await Promise.all([
+      // Summary stats from scan durations
       database.queryOne(
         `SELECT
-           COUNT(*) as total_requests,
-           AVG(response_time) as avg_response_time,
-           MIN(response_time) as min_response_time,
-           MAX(response_time) as max_response_time,
-           PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY response_time) as median_response_time,
-           PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY response_time) as p95_response_time,
-           COUNT(CASE WHEN response_time > 1000 THEN 1 END) as slow_requests,
-           COUNT(CASE WHEN status_code >= 200 AND status_code < 300 THEN 1 END) as successful_requests
-         FROM api_usage
-         WHERE tenant_id = $1 AND timestamp >= NOW() - INTERVAL '24 hours'`,
+           COUNT(*) as total_scans,
+           ROUND(AVG(scan_duration * 1000)) as avg_response_time,
+           MIN(scan_duration * 1000) as min_response_time,
+           MAX(scan_duration * 1000) as max_response_time,
+           PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY scan_duration * 1000) as median_response_time,
+           PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY scan_duration * 1000) as p95_response_time,
+           COUNT(CASE WHEN scan_duration > 5 THEN 1 END) as slow_requests,
+           COUNT(CASE WHEN security_score > 0 THEN 1 END) as successful_scans
+         FROM security_scans
+         WHERE tenant_id = $1 AND status = 'completed'
+           AND created_at >= NOW() - INTERVAL '30 days'`,
         [tenantId],
       ),
+      // Hourly scan activity (last 24h)
       database.queryMany(
         `SELECT
-           DATE_TRUNC('hour', timestamp) as hour,
-           AVG(response_time) as avg_response_time,
-           COUNT(*) as request_count,
-           COUNT(CASE WHEN response_time > 1000 THEN 1 END) as slow_requests
-         FROM api_usage
-         WHERE tenant_id = $1 AND timestamp >= NOW() - INTERVAL '24 hours'
-         GROUP BY DATE_TRUNC('hour', timestamp)
-         ORDER BY hour DESC`,
+           DATE_TRUNC('hour', created_at) as hour,
+           ROUND(AVG(scan_duration * 1000)) as avg_response_time,
+           COUNT(*) as scan_count
+         FROM security_scans
+         WHERE tenant_id = $1 AND status = 'completed'
+           AND created_at >= NOW() - INTERVAL '24 hours'
+         GROUP BY DATE_TRUNC('hour', created_at)
+         ORDER BY hour`,
         [tenantId],
       ),
+      // Per-endpoint performance (latest scan per URL)
       database.queryMany(
-        `SELECT
-           endpoint,
-           COUNT(*) as request_count,
-           AVG(response_time) as avg_response_time,
-           PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY response_time) as p95_response_time,
-           COUNT(CASE WHEN response_time > 1000 THEN 1 END) as slow_requests
-         FROM api_usage
-         WHERE tenant_id = $1 AND timestamp >= NOW() - INTERVAL '24 hours'
-         GROUP BY endpoint
-         ORDER BY request_count DESC
-         LIMIT 10`,
+        `SELECT DISTINCT ON (url) url as endpoint,
+           security_score, scan_duration * 1000 as response_time,
+           vulnerability_count, created_at as last_scanned
+         FROM security_scans
+         WHERE tenant_id = $1 AND status = 'completed'
+         ORDER BY url, created_at DESC`,
         [tenantId],
       ),
-      database.queryOne(
-        `SELECT
-           COUNT(CASE WHEN status_code >= 400 AND status_code < 500 THEN 1 END) as client_errors,
-           COUNT(CASE WHEN status_code >= 500 THEN 1 END) as server_errors,
-           COUNT(CASE WHEN status_code = 429 THEN 1 END) as rate_limit_errors,
-           COUNT(CASE WHEN status_code = 503 THEN 1 END) as service_unavailable
-         FROM api_usage
-         WHERE tenant_id = $1 AND timestamp >= NOW() - INTERVAL '24 hours'`,
-        [tenantId],
-      ),
+      // Slowest endpoints
       database.queryMany(
-        `SELECT
-           endpoint,
-           AVG(response_time) as avg_response_time,
-           COUNT(*) as request_count
-         FROM api_usage
-         WHERE tenant_id = $1 AND timestamp >= NOW() - INTERVAL '24 hours'
-         GROUP BY endpoint
-         HAVING COUNT(*) >= 10
-         ORDER BY avg_response_time DESC
-         LIMIT 5`,
+        `SELECT DISTINCT ON (url) url as endpoint,
+           scan_duration * 1000 as response_time,
+           security_score, created_at as last_scanned
+         FROM security_scans
+         WHERE tenant_id = $1 AND status = 'completed'
+         ORDER BY url, created_at DESC`,
         [tenantId],
       ),
     ]);
 
-    const totalRequests = parseInt(performanceStats?.total_requests || "0");
-    const successfulRequests = parseInt(
-      performanceStats?.successful_requests || "0",
-    );
-    const slowRequests = parseInt(performanceStats?.slow_requests || "0");
+    const totalScans = parseInt(summary?.total_scans || "0");
+    const successfulScans = parseInt(summary?.successful_scans || "0");
+
+    // Sort slowest by response time DESC
+    slowest.sort((a: any, b: any) => (b.response_time || 0) - (a.response_time || 0));
+
+    // Error analysis from vulnerabilities
+    const errorEndpoints = endpoints.filter((e: any) => e.security_score === 0);
 
     const res = NextResponse.json({
       success: true,
       performance: {
         summary: {
-          totalRequests,
-          averageResponseTime: performanceStats?.avg_response_time
-            ? Math.round(parseFloat(performanceStats.avg_response_time))
-            : null,
-          minResponseTime: performanceStats?.min_response_time
-            ? Math.round(parseFloat(performanceStats.min_response_time))
-            : null,
-          maxResponseTime: performanceStats?.max_response_time
-            ? Math.round(parseFloat(performanceStats.max_response_time))
-            : null,
-          medianResponseTime: performanceStats?.median_response_time
-            ? Math.round(parseFloat(performanceStats.median_response_time))
-            : null,
-          p95ResponseTime: performanceStats?.p95_response_time
-            ? Math.round(parseFloat(performanceStats.p95_response_time))
-            : null,
-          slowRequests,
-          successRate:
-            totalRequests > 0
-              ? Math.round((successfulRequests / totalRequests) * 100 * 100) /
-                100
-              : 0,
-          slowRequestRate:
-            totalRequests > 0
-              ? Math.round((slowRequests / totalRequests) * 100 * 100) / 100
-              : 0,
+          totalRequests: totalScans,
+          averageResponseTime: parseInt(summary?.avg_response_time || "0"),
+          minResponseTime: parseInt(summary?.min_response_time || "0"),
+          maxResponseTime: parseInt(summary?.max_response_time || "0"),
+          medianResponseTime: parseInt(summary?.median_response_time || "0"),
+          p95ResponseTime: parseInt(summary?.p95_response_time || "0"),
+          slowRequests: parseInt(summary?.slow_requests || "0"),
+          successRate: totalScans > 0 ? Math.round((successfulScans / totalScans) * 100) : 0,
+          slowRequestRate: totalScans > 0 ? Math.round((parseInt(summary?.slow_requests || "0") / totalScans) * 100) : 0,
         },
-        hourlyTrends: hourlyTrends.map((trend) => ({
-          hour: trend.hour,
-          averageResponseTime: Math.round(
-            parseFloat(trend.avg_response_time || "0"),
-          ),
-          requestCount: parseInt(trend.request_count || "0"),
-          slowRequests: parseInt(trend.slow_requests || "0"),
+        hourlyTrends: hourlyTrends.map((t: any) => ({
+          hour: t.hour,
+          averageResponseTime: parseInt(t.avg_response_time || "0"),
+          requestCount: parseInt(t.scan_count || "0"),
         })),
-        endpointPerformance: endpointPerformance.map((ep) => ({
-          endpoint: ep.endpoint,
-          requestCount: parseInt(ep.request_count || "0"),
-          averageResponseTime: Math.round(
-            parseFloat(ep.avg_response_time || "0"),
-          ),
-          p95ResponseTime: Math.round(parseFloat(ep.p95_response_time || "0")),
-          slowRequests: parseInt(ep.slow_requests || "0"),
+        endpointPerformance: endpoints.map((e: any) => ({
+          endpoint: e.endpoint,
+          requestCount: 1,
+          averageResponseTime: parseInt(e.response_time || "0"),
+          p95ResponseTime: parseInt(e.response_time || "0"),
+          slowRequests: (e.response_time || 0) > 5000 ? 1 : 0,
+          securityScore: e.security_score,
+          vulnCount: e.vulnerability_count || 0,
+          lastScanned: e.last_scanned,
         })),
         errorAnalysis: {
-          clientErrors: parseInt(errorAnalysis?.client_errors || "0"),
-          serverErrors: parseInt(errorAnalysis?.server_errors || "0"),
-          rateLimitErrors: parseInt(errorAnalysis?.rate_limit_errors || "0"),
-          serviceUnavailable: parseInt(
-            errorAnalysis?.service_unavailable || "0",
-          ),
+          clientErrors: 0,
+          serverErrors: errorEndpoints.length,
+          rateLimitErrors: 0,
+          serviceUnavailable: 0,
         },
-        slowestEndpoints: slowestEndpoints.map((ep) => ({
-          endpoint: ep.endpoint,
-          averageResponseTime: Math.round(
-            parseFloat(ep.avg_response_time || "0"),
-          ),
-          requestCount: parseInt(ep.request_count || "0"),
+        slowestEndpoints: slowest.slice(0, 10).map((e: any) => ({
+          endpoint: e.endpoint,
+          averageResponseTime: parseInt(e.response_time || "0"),
+          requestCount: 1,
+          securityScore: e.security_score,
         })),
       },
     });
+
     res.headers.set("Cache-Control", "private, max-age=5, stale-while-revalidate=30");
     return res;
   } catch (error) {
-    logger.error("Performance API error:", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return NextResponse.json(
-      { success: false, error: "Failed to fetch performance data" },
-      { status: 500 },
-    );
+    console.error("Performance API error:", error);
+    return NextResponse.json({ success: false, error: "Failed to fetch performance data" }, { status: 500 });
   }
 }

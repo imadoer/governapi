@@ -92,7 +92,7 @@ export function PerformanceMonitorPage({ companyId }: { companyId: string }) {
       <div className="flex items-end justify-between mb-10">
         <div>
           <h1 className="text-2xl font-semibold text-white tracking-tight">Performance Monitor</h1>
-          <p className="text-sm text-gray-500 mt-1">Real-time API performance metrics</p>
+          <p className="text-sm text-gray-500 mt-1">API performance data from security scans</p>
         </div>
         <button onClick={() => mutate()} className="p-2 rounded-lg text-gray-500 hover:text-white hover:bg-white/5 transition-colors">
           <ArrowPathIcon className="w-4 h-4" />
@@ -168,6 +168,11 @@ export function PerformanceMonitorPage({ companyId }: { companyId: string }) {
           {tab === "errors" && <ErrorsTab errors={errors} />}
         </motion.div>
       </AnimatePresence>
+
+      {/* Disclaimer */}
+      <p className="text-[11px] text-gray-600 mt-6">
+        Performance data collected during security scans. Response times reflect scan duration, not live API latency. For continuous uptime monitoring, upgrade to Enterprise.
+      </p>
     </div></FadeIn>
   );
 }
