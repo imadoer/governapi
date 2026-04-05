@@ -334,13 +334,20 @@ export async function GET(request: NextRequest) {
           threatsLast24Hours: parseInt(threatStats?.threats_24h || "0"),
         },
         security: {
-          // Weighted composite score — 0 if no scans performed yet
-          overallScore: parseInt(scanStats?.total_scans || "0") === 0 ? 0 : Math.round(
-            (Math.max(0, Math.min(100, 100 - critVulns * 10 - highVulns * 5 - medVulns * 2 - lowVulns * 0.5)) * 0.5) +
-            (Math.max(0, Math.min(100, 100 - parseInt(threatStats?.total_threats || "0") * 2)) * 0.25) +
-            (complianceScore * 0.15) +
-            ((scansLast7d > 0 ? 100 : 0) * 0.10)
-          ),
+          // Score = weighted average of per-endpoint scores + compliance + scan hygiene
+          overallScore: await (async () => {
+            if (parseInt(scanStats?.total_scans || "0") === 0) return 0;
+            const ep = await database.queryOne(
+              `SELECT ROUND(AVG(latest_score)) as s FROM (
+                SELECT DISTINCT ON (url) security_score as latest_score
+                FROM security_scans WHERE tenant_id = $1 AND status = 'completed' AND security_score IS NOT NULL
+                ORDER BY url, created_at DESC
+              ) t`, [tenantId]);
+            const epScore = parseInt(ep?.s || "0");
+            const daysSince = recentScans.length > 0 ? Math.floor((Date.now() - new Date(recentScans[0].date).getTime()) / 86400000) : 999;
+            const hygiene = Math.max(0, 100 - daysSince * 2);
+            return Math.round((epScore * 0.70) + (complianceScore * 0.20) + (hygiene * 0.10));
+          })(),
           averageScanScore: avgScanScore,
           totalVulnerabilities: parseInt(vulnStats?.total || "0"),
           criticalVulnerabilities: critVulns,

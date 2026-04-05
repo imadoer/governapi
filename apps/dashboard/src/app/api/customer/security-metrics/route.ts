@@ -97,23 +97,30 @@ export async function GET(request: NextRequest) {
     const threatsBlockedToday = parseInt(threatsBlockedQuery?.count || '0');
 
     // ============================================
-    // FORTUNE 500 WEIGHTED COMPOSITE SCORE SYSTEM
+    // SCORE = WEIGHTED AVERAGE OF PER-ENDPOINT SCORES
     // ============================================
+    // Each endpoint's scan score contributes equally. Scanning a clean
+    // endpoint improves the score. Fixing vulns on a bad endpoint improves it.
+    // The score moves with every action the customer takes.
 
-    // 1. VULNERABILITY SCORE (50% weight)
-    const criticalPenalty = (parseInt(vulns.critical_count) || 0) * 10;
-    const highPenalty = (parseInt(vulns.high_count) || 0) * 5;
-    const mediumPenalty = (parseInt(vulns.medium_count) || 0) * 2;
-    const lowPenalty = (parseInt(vulns.low_count) || 0) * 0.5;
-    const vulnScore = Math.max(0, Math.min(100,
-      100 - criticalPenalty - highPenalty - mediumPenalty - lowPenalty
-    ));
+    const hasScans = lastScanQuery?.last_scan != null;
 
-    // 2. THREAT SCORE (25% weight)
-    const threatPenalty = (activeThreats * 2) + (criticalThreats * 4);
-    const threatScore = Math.max(0, Math.min(100, 100 - threatPenalty));
+    // 1. ENDPOINT SCORE (70% weight) — average of latest scan per unique URL
+    let endpointScore = 0;
+    if (hasScans) {
+      const epScores = await database.queryOne(
+        `SELECT ROUND(AVG(latest_score)) as avg_score, COUNT(*) as ep_count FROM (
+          SELECT DISTINCT ON (url) url, security_score as latest_score
+          FROM security_scans
+          WHERE tenant_id = $1 AND status = 'completed' AND security_score IS NOT NULL
+          ORDER BY url, created_at DESC
+        ) latest_per_url`,
+        [tenantId],
+      );
+      endpointScore = parseInt(epScores?.avg_score || "0");
+    }
 
-    // 3. COMPLIANCE SCORE (15% weight) — from scan-based assessment, matches Compliance Hub
+    // 2. COMPLIANCE SCORE (20% weight) — from scan-based assessment
     let complianceScore = 0;
     try {
       const { assessCompliance } = await import("../../../../lib/compliance-mapper");
@@ -126,29 +133,30 @@ export async function GET(request: NextRequest) {
       if (publicEps.length > 0) {
         vulnSums.push({ type: "No Authentication", severity: "HIGH", title: "Public endpoints", count: String(publicEps.length) });
       }
-      const hasSc = lastScanQuery?.last_scan != null;
       const fws = assessCompliance(
-        vulnSums.map((v: any) => ({ type: v.type, severity: v.severity, title: v.title, count: parseInt(v.count) })), hasSc);
+        vulnSums.map((v: any) => ({ type: v.type, severity: v.severity, title: v.title, count: parseInt(v.count) })), hasScans);
       complianceScore = fws.length > 0 ? Math.round(fws.reduce((s: number, f: any) => s + f.score, 0) / fws.length) : 0;
     } catch {}
 
-    // 4. SCAN HYGIENE SCORE (10% weight)
-    let scanHygieneScore = 100;
+    // 3. SCAN HYGIENE (10% weight) — are scans recent?
+    let scanHygieneScore = 0;
     if (lastScanQuery?.last_scan) {
-      const lastScan = new Date(lastScanQuery.last_scan);
-      const now = new Date();
-      const daysSinceLastScan = Math.floor((now.getTime() - lastScan.getTime()) / (1000 * 60 * 60 * 24));
-      scanHygieneScore = Math.max(0, 100 - (daysSinceLastScan * 2));
-    } else {
-      scanHygieneScore = 0; // No scans ever
+      const daysSince = Math.floor((Date.now() - new Date(lastScanQuery.last_scan).getTime()) / 86400000);
+      scanHygieneScore = Math.max(0, 100 - (daysSince * 2));
     }
 
-    // FINAL WEIGHTED SCORE — 0 if no scans performed yet
-    const hasScans = lastScanQuery?.last_scan != null;
+    // Keep vulnScore/threatScore for display (individual metrics, not used in final score)
+    const vq = vulnsQuery || {};
+    const vulnScore = Math.max(0, Math.min(100,
+      100 - (parseInt(vq.critical_count) || 0) * 10 - (parseInt(vq.high_count) || 0) * 5
+      - (parseInt(vq.medium_count) || 0) * 2 - (parseInt(vq.low_count) || 0) * 0.5
+    ));
+    const threatScore = Math.max(0, Math.min(100, 100 - (activeThreats * 2) - (criticalThreats * 4)));
+
+    // FINAL SCORE = weighted blend
     const finalScore = !hasScans ? 0 : Math.round(
-      (vulnScore * 0.5) +
-      (threatScore * 0.25) +
-      (complianceScore * 0.15) +
+      (endpointScore * 0.70) +
+      (complianceScore * 0.20) +
       (scanHygieneScore * 0.10)
     );
 
