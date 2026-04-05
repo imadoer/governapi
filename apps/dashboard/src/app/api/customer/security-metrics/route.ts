@@ -58,14 +58,8 @@ export async function GET(request: NextRequest) {
         AND blocked = true`,
         [tenantId]
       ),
-      // Get REAL compliance score
-      database.queryOne(
-        `SELECT AVG(compliance_percentage) as avg_score
-        FROM compliance_check_results
-        WHERE tenant_id = $1
-        AND status = 'passed'`,
-        [tenantId]
-      ),
+      // Placeholder for compliance — computed after Promise.all
+      Promise.resolve({ avg_score: "0" }),
       // Get bot detection stats
       database.queryOne(
         `SELECT
@@ -119,10 +113,24 @@ export async function GET(request: NextRequest) {
     const threatPenalty = (activeThreats * 2) + (criticalThreats * 4);
     const threatScore = Math.max(0, Math.min(100, 100 - threatPenalty));
 
-    // 3. COMPLIANCE SCORE (15% weight)
-    const complianceScore = complianceQuery?.avg_score
-      ? Math.round(parseFloat(complianceQuery.avg_score))
-      : 0;
+    // 3. COMPLIANCE SCORE (15% weight) — from scan-based assessment, matches Compliance Hub
+    let complianceScore = 0;
+    try {
+      const { assessCompliance } = await import("../../../../lib/compliance-mapper");
+      const vulnSums = await database.queryMany(
+        `SELECT vulnerability_type as type, severity, title, COUNT(*) as count
+         FROM vulnerabilities WHERE tenant_id = $1 AND status = 'open'
+         GROUP BY vulnerability_type, severity, title`, [tenantId]);
+      const publicEps = await database.queryMany(
+        `SELECT DISTINCT url FROM security_scans WHERE tenant_id = $1 AND status = 'completed' AND security_score IS NOT NULL`, [tenantId]);
+      if (publicEps.length > 0) {
+        vulnSums.push({ type: "No Authentication", severity: "HIGH", title: "Public endpoints", count: String(publicEps.length) });
+      }
+      const hasSc = lastScanQuery?.last_scan != null;
+      const fws = assessCompliance(
+        vulnSums.map((v: any) => ({ type: v.type, severity: v.severity, title: v.title, count: parseInt(v.count) })), hasSc);
+      complianceScore = fws.length > 0 ? Math.round(fws.reduce((s: number, f: any) => s + f.score, 0) / fws.length) : 0;
+    } catch {}
 
     // 4. SCAN HYGIENE SCORE (10% weight)
     let scanHygieneScore = 100;
@@ -151,30 +159,32 @@ export async function GET(request: NextRequest) {
       ? Math.round(((parseInt(botStats.blocked_bots) || 0) / totalBots) * 100)
       : 0;
 
-    // Calculate trend (compare with last week)
-    const lastWeekQuery = await database.queryOne(
-      `SELECT
-        COUNT(*) FILTER (WHERE UPPER(severity) = 'CRITICAL') as critical_count,
-        COUNT(*) FILTER (WHERE UPPER(severity) = 'HIGH') as high_count,
-        COUNT(*) FILTER (WHERE UPPER(severity) = 'MEDIUM') as medium_count,
-        COUNT(*) FILTER (WHERE UPPER(severity) = 'LOW') as low_count
-      FROM vulnerabilities
-      WHERE tenant_id = $1
-      AND created_at < NOW() - INTERVAL '7 days'`,
-      [tenantId]
+    // Calculate trend — only if there were scans more than 7 days ago
+    let securityScoreTrend: number | null = null;
+    const oldScanCheck = await database.queryOne(
+      `SELECT COUNT(*) as c FROM security_scans
+       WHERE tenant_id = $1 AND status = 'completed' AND created_at < NOW() - INTERVAL '7 days'`,
+      [tenantId],
     );
 
-    const lastWeekVulns = lastWeekQuery || {};
-    const lastWeekVulnScore = Math.max(0, Math.min(100,
-      100
-      - (parseInt(lastWeekVulns.critical_count) || 0) * 10
-      - (parseInt(lastWeekVulns.high_count) || 0) * 5
-      - (parseInt(lastWeekVulns.medium_count) || 0) * 2
-      - (parseInt(lastWeekVulns.low_count) || 0) * 0.5
-    ));
-
-    // For now, use vuln score trend as overall trend (can enhance later with full composite)
-    const securityScoreTrend = Math.round(vulnScore - lastWeekVulnScore);
+    if (parseInt(oldScanCheck?.c || "0") > 0) {
+      const lastWeekQuery = await database.queryOne(
+        `SELECT
+          COUNT(*) FILTER (WHERE UPPER(severity) = 'CRITICAL') as critical_count,
+          COUNT(*) FILTER (WHERE UPPER(severity) = 'HIGH') as high_count,
+          COUNT(*) FILTER (WHERE UPPER(severity) = 'MEDIUM') as medium_count,
+          COUNT(*) FILTER (WHERE UPPER(severity) = 'LOW') as low_count
+        FROM vulnerabilities
+        WHERE tenant_id = $1 AND created_at < NOW() - INTERVAL '7 days'`,
+        [tenantId],
+      );
+      const lw = lastWeekQuery || {};
+      const lastWeekVulnScore = Math.max(0, Math.min(100,
+        100 - (parseInt(lw.critical_count) || 0) * 10 - (parseInt(lw.high_count) || 0) * 5
+        - (parseInt(lw.medium_count) || 0) * 2 - (parseInt(lw.low_count) || 0) * 0.5
+      ));
+      securityScoreTrend = Math.round(vulnScore - lastWeekVulnScore);
+    }
 
     const metrics = {
       // Main score (Fortune 500 composite)

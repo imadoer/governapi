@@ -147,6 +147,26 @@ export async function GET(request: NextRequest) {
       ),
     ]);
 
+    // Compute real compliance score (matches Compliance Hub)
+    let complianceScore = 0;
+    try {
+      const { assessCompliance } = await import("../../../../lib/compliance-mapper");
+      const vulnSums = await database.queryMany(
+        `SELECT vulnerability_type as type, severity, title, COUNT(*) as count
+         FROM vulnerabilities WHERE tenant_id = $1 AND status = 'open'
+         GROUP BY vulnerability_type, severity, title`, [tenantId]);
+      const publicEps = await database.queryMany(
+        `SELECT DISTINCT url FROM security_scans WHERE tenant_id = $1 AND status = 'completed' AND security_score IS NOT NULL`, [tenantId]);
+      if (publicEps.length > 0) {
+        vulnSums.push({ type: "No Authentication", severity: "HIGH", title: "Public endpoints", count: String(publicEps.length) });
+      }
+      const hasScans = parseInt(scanStats?.total_scans || "0") > 0;
+      const frameworks = assessCompliance(
+        vulnSums.map((v: any) => ({ type: v.type, severity: v.severity, title: v.title, count: parseInt(v.count) })),
+        hasScans);
+      complianceScore = frameworks.length > 0 ? Math.round(frameworks.reduce((s: number, f: any) => s + f.score, 0) / frameworks.length) : 0;
+    } catch {}
+
     // Get latest scan's full vulnerability details (for score breakdown)
     let latestScanReport = null;
     if (recentScans.length > 0) {
@@ -318,7 +338,7 @@ export async function GET(request: NextRequest) {
           overallScore: parseInt(scanStats?.total_scans || "0") === 0 ? 0 : Math.round(
             (Math.max(0, Math.min(100, 100 - critVulns * 10 - highVulns * 5 - medVulns * 2 - lowVulns * 0.5)) * 0.5) +
             (Math.max(0, Math.min(100, 100 - parseInt(threatStats?.total_threats || "0") * 2)) * 0.25) +
-            (0 * 0.15) +
+            (complianceScore * 0.15) +
             ((scansLast7d > 0 ? 100 : 0) * 0.10)
           ),
           averageScanScore: avgScanScore,
