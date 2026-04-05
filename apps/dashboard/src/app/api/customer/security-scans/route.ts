@@ -285,20 +285,32 @@ async function startSecurityScan(
 
     securityScore = Math.max(0, securityScore);
 
-    // Insert vulnerabilities into database
+    // Upsert vulnerabilities — update last_seen if same vuln+url exists, else insert
     for (const vuln of vulnerabilities) {
-      await database.query(
-        `INSERT INTO vulnerabilities (
-          tenant_id, scan_id, vulnerability_type, severity, title, 
-          description, cwe_id, cvss_score, affected_url, remediation, status, created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())`,
-        [
-          tenantId, scanId, vuln.vulnerability_type, vuln.severity,
-          vuln.title, vuln.description, vuln.cwe_id || null,
-          vuln.cvss_score || null, vuln.affected_url,
-          vuln.remediation, 'open'
-        ]
+      const existing = await database.queryOne(
+        `SELECT id FROM vulnerabilities
+         WHERE tenant_id = $1 AND vulnerability_type = $2 AND affected_url = $3 AND status = 'open'`,
+        [tenantId, vuln.vulnerability_type, vuln.affected_url],
       );
+
+      if (existing) {
+        await database.query(
+          `UPDATE vulnerabilities SET scan_id = $1, last_seen = NOW(), severity = $2 WHERE id = $3`,
+          [scanId, vuln.severity, existing.id],
+        );
+      } else {
+        await database.query(
+          `INSERT INTO vulnerabilities (
+            tenant_id, scan_id, vulnerability_type, severity, title,
+            description, cwe_id, cvss_score, affected_url, remediation, status, created_at, last_seen
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'open', NOW(), NOW())`,
+          [
+            tenantId, scanId, vuln.vulnerability_type, vuln.severity,
+            vuln.title, vuln.description, vuln.cwe_id || null,
+            vuln.cvss_score || null, vuln.affected_url, vuln.remediation,
+          ],
+        );
+      }
     }
 
     const duration = Math.round((Date.now() - startTime) / 1000);
