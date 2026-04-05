@@ -48,6 +48,88 @@ function showToast(msg: string, type: "success" | "error" = "success") {
   }, 2500);
 }
 
+// ==================== FIX GUIDES ====================
+
+const VULN_GUIDES: Record<string, {
+  description: string;
+  fixes: { framework: string; code: string }[];
+  docs: { label: string; url: string }[];
+}> = {
+  "Missing HSTS": {
+    description: "Without HTTP Strict Transport Security, browsers allow connections over unencrypted HTTP. An attacker on the same network (coffee shop Wi-Fi, hotel, airport) can intercept all traffic between your users and your API, stealing tokens, passwords, and data in transit. This is one of the most exploited vulnerabilities in real-world attacks.",
+    fixes: [
+      { framework: "Express / Node.js", code: `const helmet = require('helmet');\napp.use(helmet.hsts({\n  maxAge: 31536000,\n  includeSubDomains: true\n}));` },
+      { framework: "Nginx", code: `add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;` },
+      { framework: "Apache", code: `Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"` },
+      { framework: "Django", code: `# settings.py\nSECURE_HSTS_SECONDS = 31536000\nSECURE_HSTS_INCLUDE_SUBDOMAINS = True` },
+    ],
+    docs: [
+      { label: "MDN: Strict-Transport-Security", url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Strict-Transport-Security" },
+      { label: "OWASP: HSTS Cheat Sheet", url: "https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Strict_Transport_Security_Cheat_Sheet.html" },
+    ],
+  },
+  "Missing CSP": {
+    description: "Without a Content Security Policy, your API has no defense against cross-site scripting (XSS). If an attacker can inject even one line of JavaScript — through a form field, URL parameter, or stored data — it will execute with full access to the user's session. CSP tells the browser which scripts are allowed to run, blocking everything else.",
+    fixes: [
+      { framework: "Express / Node.js", code: `const helmet = require('helmet');\napp.use(helmet.contentSecurityPolicy({\n  directives: {\n    defaultSrc: ["'self'"],\n    scriptSrc: ["'self'"],\n    styleSrc: ["'self'", "'unsafe-inline'"],\n  }\n}));` },
+      { framework: "Nginx", code: `add_header Content-Security-Policy "default-src 'self'; script-src 'self'" always;` },
+      { framework: "Apache", code: `Header always set Content-Security-Policy "default-src 'self'; script-src 'self'"` },
+      { framework: "Django", code: `# pip install django-csp\nMIDDLEWARE += ['csp.middleware.CSPMiddleware']\nCSP_DEFAULT_SRC = ("'self'",)\nCSP_SCRIPT_SRC = ("'self'",)` },
+    ],
+    docs: [
+      { label: "MDN: Content-Security-Policy", url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP" },
+      { label: "CSP Evaluator (Google)", url: "https://csp-evaluator.withgoogle.com/" },
+    ],
+  },
+  "Missing X-Frame-Options": {
+    description: "Without X-Frame-Options, your pages can be loaded inside invisible iframes on attacker-controlled websites. The attacker overlays their own UI on top, tricking users into clicking buttons they can't see — like 'Delete Account' or 'Transfer Funds'. This is called clickjacking and it's trivially easy to exploit.",
+    fixes: [
+      { framework: "Express / Node.js", code: `const helmet = require('helmet');\napp.use(helmet.frameguard({ action: 'deny' }));` },
+      { framework: "Nginx", code: `add_header X-Frame-Options "DENY" always;` },
+      { framework: "Apache", code: `Header always set X-Frame-Options "DENY"` },
+      { framework: "Django", code: `# Enabled by default in Django\nX_FRAME_OPTIONS = 'DENY'` },
+    ],
+    docs: [
+      { label: "MDN: X-Frame-Options", url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Frame-Options" },
+      { label: "OWASP: Clickjacking", url: "https://owasp.org/www-community/attacks/Clickjacking" },
+    ],
+  },
+  "Insecure CORS Configuration": {
+    description: "An overly permissive CORS policy (Access-Control-Allow-Origin: *) means any website in the world can make requests to your API and read the responses. If your API returns user data, authentication tokens, or any sensitive information, a malicious site can steal it silently while the user browses.",
+    fixes: [
+      { framework: "Express / Node.js", code: `const cors = require('cors');\napp.use(cors({\n  origin: 'https://yourdomain.com',\n  credentials: true\n}));` },
+      { framework: "Nginx", code: `add_header Access-Control-Allow-Origin "https://yourdomain.com" always;\nadd_header Access-Control-Allow-Credentials "true" always;` },
+      { framework: "Django", code: `# pip install django-cors-headers\nCORS_ALLOWED_ORIGINS = [\n    "https://yourdomain.com",\n]\nCORS_ALLOW_CREDENTIALS = True` },
+    ],
+    docs: [
+      { label: "MDN: CORS", url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS" },
+      { label: "OWASP: CORS Misconfig", url: "https://owasp.org/www-community/attacks/CORS_OriginHeaderScrutiny" },
+    ],
+  },
+  "Information Disclosure": {
+    description: "Your server is revealing its software name and version in HTTP response headers (e.g., 'Server: nginx/1.21.3' or 'X-Powered-By: Express'). Attackers use this to look up known vulnerabilities for your exact software version. It's like leaving your house key under the mat — it makes their job much easier.",
+    fixes: [
+      { framework: "Express / Node.js", code: `app.disable('x-powered-by');\n// Or use helmet:\nconst helmet = require('helmet');\napp.use(helmet.hidePoweredBy());` },
+      { framework: "Nginx", code: `server_tokens off;` },
+      { framework: "Apache", code: `ServerTokens Prod\nServerSignature Off` },
+    ],
+    docs: [
+      { label: "OWASP: Info Leakage", url: "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/01-Information_Gathering" },
+    ],
+  },
+  "Missing X-Content-Type-Options": {
+    description: "Without the X-Content-Type-Options header, browsers may 'sniff' the content type of responses and interpret files differently than intended. An attacker could upload a file that looks like an image but contains JavaScript — the browser would execute it. This header tells the browser to trust the declared content type only.",
+    fixes: [
+      { framework: "Express / Node.js", code: `const helmet = require('helmet');\napp.use(helmet.noSniff());\n// Or manually:\napp.use((req, res, next) => {\n  res.setHeader('X-Content-Type-Options', 'nosniff');\n  next();\n});` },
+      { framework: "Nginx", code: `add_header X-Content-Type-Options "nosniff" always;` },
+      { framework: "Apache", code: `Header always set X-Content-Type-Options "nosniff"` },
+    ],
+    docs: [
+      { label: "MDN: X-Content-Type-Options", url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Content-Type-Options" },
+    ],
+  },
+};
+
 // ==================== MAIN COMPONENT ====================
 
 export function VulnerabilitiesPage({ company }: { company?: any }) {
@@ -642,7 +724,7 @@ export function VulnerabilitiesPage({ company }: { company?: any }) {
                                 <div className="flex gap-1.5 flex-wrap">
                                   {vuln.cwe_id && (
                                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400 border border-white/5">
-                                      CWE-{vuln.cwe_id}
+                                      {String(vuln.cwe_id).startsWith("CWE-") ? vuln.cwe_id : `CWE-${vuln.cwe_id}`}
                                     </span>
                                   )}
                                   {vuln.cvss_score !== undefined && vuln.cvss_score !== null && (
@@ -949,8 +1031,10 @@ export function VulnerabilitiesPage({ company }: { company?: any }) {
                           value: new Date(selectedVulnerability.created_at).toLocaleString(),
                         },
                         {
-                          label: "Last Updated",
-                          value: new Date(selectedVulnerability.updated_at).toLocaleString(),
+                          label: "Last Seen",
+                          value: selectedVulnerability.last_seen
+                            ? new Date(selectedVulnerability.last_seen).toLocaleString()
+                            : new Date(selectedVulnerability.created_at).toLocaleString(),
                         },
                       ].map((item, i) => (
                         <div key={i} className="flex bg-slate-900/40">
@@ -982,13 +1066,63 @@ export function VulnerabilitiesPage({ company }: { company?: any }) {
                       </div>
                     )}
 
-                    {/* Remediation */}
-                    {selectedVulnerability.remediation && (
-                      <div className="bg-slate-800/30 border border-white/10 rounded-xl p-4">
-                        <h5 className="text-sm font-semibold text-slate-300 mb-2">Remediation Steps</h5>
-                        <p className="text-sm text-slate-400 leading-relaxed">{selectedVulnerability.remediation}</p>
-                      </div>
-                    )}
+                    {/* Remediation — rich fix guide */}
+                    {(() => {
+                      const guide = VULN_GUIDES[selectedVulnerability.vulnerability_type];
+                      return (
+                        <div className="bg-slate-800/30 border border-white/10 rounded-xl p-4 space-y-4">
+                          <h5 className="text-sm font-semibold text-slate-300">How to Fix</h5>
+
+                          {/* Rich description */}
+                          {guide?.description && (
+                            <div>
+                              <div className="text-[11px] font-medium text-gray-400 mb-1">Why this matters</div>
+                              <p className="text-[12px] text-slate-300 leading-relaxed">{guide.description}</p>
+                            </div>
+                          )}
+
+                          {/* Quick fix from DB */}
+                          {selectedVulnerability.remediation && (
+                            <div>
+                              <div className="text-[11px] font-medium text-gray-400 mb-1">Quick fix</div>
+                              <p className="text-[12px] text-slate-300">{selectedVulnerability.remediation}</p>
+                            </div>
+                          )}
+
+                          {/* Code examples */}
+                          {guide?.fixes && guide.fixes.length > 0 && (
+                            <div>
+                              <div className="text-[11px] font-medium text-gray-400 mb-2">Code examples</div>
+                              <div className="space-y-2">
+                                {guide.fixes.map((fix: any) => (
+                                  <div key={fix.framework}>
+                                    <div className="text-[10px] text-cyan-400 font-medium mb-1">{fix.framework}</div>
+                                    <pre className="text-[11px] text-slate-300 bg-black/30 rounded-lg p-3 overflow-x-auto font-mono leading-relaxed whitespace-pre-wrap">{fix.code}</pre>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Reference links */}
+                          {guide?.docs && guide.docs.length > 0 && (
+                            <div className="flex flex-wrap gap-2 pt-1">
+                              {guide.docs.map((doc: any) => (
+                                <a key={doc.url} href={doc.url} target="_blank" rel="noopener noreferrer"
+                                  className="text-[10px] text-gray-500 hover:text-white border border-white/[0.06] rounded-lg px-2 py-1 transition-colors">
+                                  {doc.label} ↗
+                                </a>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Fallback if no guide exists */}
+                          {!guide && !selectedVulnerability.remediation && (
+                            <p className="text-[12px] text-slate-500">No specific fix guide available for this vulnerability type.</p>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     {/* SLA Status */}
                     <div className="bg-slate-800/30 border border-white/10 rounded-xl p-4">
