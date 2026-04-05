@@ -10,17 +10,51 @@ function debugLog(msg: string) {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const PROBE_PATHS = [
-  // Common API roots
+  // ── API roots ──
   "/", "/api", "/api/v1", "/api/v2", "/api/v3", "/v1", "/v2", "/v3",
-  "/rest", "/rest/v1",
-  // Common resources
-  "/users", "/repos", "/gists", "/feeds", "/emojis", "/events",
-  "/rate_limit", "/meta", "/octocat", "/zen", "/licenses",
-  "/organizations", "/search", "/marketplace_listing/plans",
-  "/notifications", "/issues", "/accounts", "/products", "/orders",
-  "/api/users", "/api/admin", "/api/config", "/api/debug", "/api/internal",
-  // Utility/test endpoints (httpbin-style)
-  "/get", "/post", "/put", "/delete", "/patch",
+  "/rest", "/rest/v1", "/rest/v2",
+  // ── Content & data ──
+  "/posts", "/post", "/comments", "/comment", "/articles", "/pages",
+  "/content", "/media", "/files", "/uploads", "/images", "/videos",
+  "/documents", "/attachments", "/messages", "/chat", "/conversations",
+  // ── E-commerce ──
+  "/products", "/product", "/orders", "/order", "/cart", "/checkout",
+  "/payments", "/invoices", "/subscriptions", "/plans", "/pricing",
+  "/catalog", "/inventory", "/shipping", "/coupons", "/discounts",
+  // ── Users & auth ──
+  "/users", "/user", "/accounts", "/customers", "/customer", "/members",
+  "/teams", "/groups", "/roles", "/permissions", "/sessions", "/invites",
+  "/password-reset", "/me", "/profile", "/settings",
+  // ── App resources ──
+  "/projects", "/project", "/tasks", "/task", "/todos", "/todo",
+  "/items", "/item", "/entries", "/records", "/lists", "/categories",
+  "/tags", "/labels", "/notes", "/bookmarks", "/favorites", "/likes",
+  "/reviews", "/ratings", "/votes",
+  // ── Social/feed ──
+  "/feed", "/timeline", "/activity", "/notifications", "/alerts",
+  "/announcements", "/replies", "/threads", "/channels",
+  // ── Data & analytics ──
+  "/reports", "/analytics", "/stats", "/metrics", "/logs",
+  "/audit", "/history", "/exports", "/imports", "/jobs", "/queue", "/workers",
+  // ── CMS ──
+  "/blogs", "/news", "/faq", "/help", "/support", "/tickets", "/ticket",
+  "/contacts", "/forms", "/templates", "/themes", "/plugins", "/modules",
+  "/widgets", "/components",
+  // ── Photos/albums ──
+  "/photos", "/photo", "/albums", "/album", "/galleries", "/collections",
+  // ── API meta ──
+  "/schema", "/types", "/fields", "/models", "/resources", "/endpoints",
+  "/routes", "/capabilities",
+  // ── GitHub/GitLab-specific ──
+  "/repos", "/gists", "/emojis", "/events", "/rate_limit", "/meta",
+  "/octocat", "/zen", "/licenses", "/organizations", "/search",
+  "/marketplace_listing/plans", "/issues",
+  // ── API sub-paths ──
+  "/api/users", "/api/login", "/api/register", "/api/admin",
+  "/api/config", "/api/debug", "/api/internal", "/api/search",
+  "/api/products", "/api/orders", "/api/posts", "/api/comments",
+  // ── httpbin-style test endpoints ──
+  "/get", "/put", "/delete", "/patch",
   "/headers", "/ip", "/user-agent",
   "/html", "/json", "/xml", "/anything",
   "/cookies", "/cookies/set", "/redirect/1",
@@ -28,36 +62,35 @@ const PROBE_PATHS = [
   "/response-headers", "/delay/0", "/base64/SFRUUEJJTg==",
   "/image", "/image/png", "/image/jpeg",
   "/encoding/utf8", "/forms/post", "/bytes/10",
-  // User/account
-  "/me", "/profile", "/settings", "/feed",
-  "/webhook", "/webhooks", "/callback", "/ping", "/version",
-  // Auth
+  // ── Auth endpoints ──
   "/login", "/register", "/signup", "/logout", "/auth", "/oauth",
   "/oauth/authorize", "/oauth/token", "/token", "/api/token",
   "/auth/login", "/auth/register", "/sso", "/saml",
   "/.well-known/jwks.json", "/.well-known/openid-configuration",
   "/.well-known/security.txt",
-  // Health/debug
+  // ── Webhook/callback ──
+  "/webhook", "/webhooks", "/callback", "/ping", "/version",
+  // ── Health/debug ──
   "/health", "/healthz", "/ready", "/alive", "/status", "/info",
-  "/debug", "/debug/vars", "/debug/pprof", "/metrics", "/prometheus",
+  "/debug", "/debug/vars", "/debug/pprof", "/prometheus",
   "/config", "/configuration",
-  // Docs
+  // ── Docs ──
   "/graphql", "/graphiql", "/swagger", "/swagger-ui",
   "/swagger.json", "/swagger.yaml", "/openapi.json", "/openapi.yaml",
   "/docs", "/api-docs", "/api/docs", "/redoc", "/spec",
-  // Sensitive/dangerous
+  // ── Sensitive/dangerous ──
   "/.env", "/.git", "/.git/config", "/.git/HEAD",
   "/admin", "/admin/api", "/console", "/dashboard",
   "/server-info", "/server-status", "/phpinfo.php",
   "/wp-admin", "/wp-json", "/wp-login.php",
   "/actuator", "/actuator/health", "/actuator/env", "/actuator/beans",
-  // Data/storage
+  // ── Data/storage ──
   "/db", "/database", "/phpmyadmin", "/adminer",
   "/elasticsearch", "/_cat/indices", "/_cluster/health",
   "/solr", "/redis", "/memcached",
-  // Standard files
+  // ── Standard files ──
   "/robots.txt", "/sitemap.xml", "/favicon.ico", "/manifest.json",
-  // Risky
+  // ── Risky ──
   "/test", "/staging", "/backup",
 ];
 

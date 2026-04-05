@@ -108,7 +108,7 @@ export default function ApiDiscoveryPage({ companyId }: { companyId: string }) {
               placeholder="yourcompany.com"
               className="w-full px-4 py-2.5 bg-white/[0.03] border border-white/[0.06] rounded-lg text-[14px] text-white placeholder-gray-600 focus:outline-none focus:border-white/[0.12] transition-colors"
             />
-            <p className="text-[11px] text-gray-600 mt-1.5">We&apos;ll probe {PROBE_COUNT} common paths for APIs, admin panels, exposed files, and debug endpoints</p>
+            <p className="text-[11px] text-gray-600 mt-1.5">We&apos;ll probe 250+ common paths for APIs, admin panels, exposed files, and debug endpoints</p>
           </div>
           <button onClick={runDiscovery} disabled={scanning || !domain.trim()}
             className="px-5 py-2.5 rounded-lg text-[13px] font-medium bg-white text-black hover:bg-gray-200 transition-colors disabled:opacity-40 flex items-center gap-2 shrink-0 h-fit">
@@ -261,4 +261,4 @@ export default function ApiDiscoveryPage({ companyId }: { companyId: string }) {
   );
 }
 
-const PROBE_COUNT = 120;
+const PROBE_COUNT = 263;
