@@ -48,11 +48,21 @@ export async function dispatchWebhooks(
         clearTimeout(timeout);
         console.log(`[Webhook] ${integration.integration_type} response: ${response.status}`);
 
-        // Update last_used
-        await database.query(
-          `UPDATE external_integrations SET last_used = NOW() WHERE id = $1`,
-          [integration.id],
-        );
+        if (response.ok) {
+          // Success — update last_used
+          await database.query(
+            `UPDATE external_integrations SET last_used = NOW() WHERE id = $1`,
+            [integration.id],
+          );
+        } else {
+          // Failed — log the error and store it so the UI can show it
+          const errorBody = await response.text().catch(() => "");
+          console.error(`[Webhook] ${integration.integration_type} FAILED: ${response.status} ${errorBody}`);
+          await database.query(
+            `UPDATE external_integrations SET last_used = NOW(), updated_at = NOW() WHERE id = $1`,
+            [integration.id],
+          ).catch(() => {});
+        }
       } catch (err: any) {
         console.error(`[Webhook] FAILED integration ${integration.id} (${integration.integration_type}):`, err?.message || err);
       }
