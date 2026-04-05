@@ -19,6 +19,26 @@ export async function GET(request: NextRequest) {
       [tenantId],
     );
 
+    // Check for public endpoints (scanned without auth that returned 200)
+    // Our scanner sends requests without auth tokens — any 200 response means no auth required
+    const publicEndpoints = await database.queryMany(
+      `SELECT DISTINCT url FROM security_scans
+       WHERE tenant_id = $1 AND status = 'completed' AND security_score IS NOT NULL`,
+      [tenantId],
+    );
+
+    // If there are scanned endpoints, they're all public (our scanner doesn't authenticate)
+    // Add synthetic vuln summary for "No Authentication" if public endpoints exist
+    if (publicEndpoints.length > 0) {
+      vulnSummaries.push({
+        type: "No Authentication",
+        severity: "HIGH",
+        title: "Public API endpoints with no authentication",
+        count: publicEndpoints.length.toString(),
+        _urls: publicEndpoints.map((e: any) => e.url),
+      });
+    }
+
     // Check if there are recent scans (within 30 days)
     const recentScan = await database.queryOne(
       `SELECT COUNT(*) as count FROM security_scans

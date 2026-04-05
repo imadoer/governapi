@@ -43,7 +43,7 @@ export const FRAMEWORKS: Framework[] = [
       {
         id: "A02", name: "Broken Authentication",
         description: "Authentication mechanisms must be properly implemented to prevent credential attacks.",
-        mappedVulnTypes: ["Missing Authentication"],
+        mappedVulnTypes: ["No Authentication", "Missing Authentication"],
         passWhen: "absent",
         remediation: "Implement strong authentication (OAuth 2.0, JWT) on all API endpoints. Use rate limiting on auth endpoints.",
         severity: "critical",
@@ -125,7 +125,7 @@ export const FRAMEWORKS: Framework[] = [
       {
         id: "CC6.1", name: "Logical Access Security",
         description: "Logical access to information assets is restricted through authentication and authorization.",
-        mappedVulnTypes: ["Missing Authentication", "Missing HSTS", "Missing CSP"],
+        mappedVulnTypes: ["No Authentication", "Missing Authentication", "Missing HSTS", "Missing CSP"],
         passWhen: "absent",
         remediation: "Implement authentication on all endpoints. Enable HSTS and CSP to prevent session hijacking.",
         severity: "high",
@@ -199,7 +199,7 @@ export const FRAMEWORKS: Framework[] = [
       {
         id: "164.312(d)", name: "Person or Entity Authentication",
         description: "Implement procedures to verify the identity of persons seeking access to ePHI.",
-        mappedVulnTypes: ["Missing Authentication"],
+        mappedVulnTypes: ["No Authentication", "Missing Authentication"],
         passWhen: "absent",
         remediation: "Implement strong authentication (OAuth 2.0, multi-factor) on all endpoints handling PHI.",
         severity: "critical",
@@ -296,9 +296,16 @@ export function assessCompliance(
         };
       }
 
-      const relatedTitles = vulnSummaries
-        .filter((v) => matchingVulns.includes(v.type))
-        .map((v) => v.title);
+      const relatedEntries = vulnSummaries.filter((v) => matchingVulns.includes(v.type));
+      const relatedTitles = relatedEntries.map((v) => v.title);
+
+      // For "No Authentication", include the endpoint URLs in evidence
+      let evidence = `Found: ${relatedTitles.join(", ")}`;
+      const noAuthEntry = relatedEntries.find((v) => v.type === "No Authentication");
+      if (noAuthEntry && (noAuthEntry as any)._urls) {
+        const urls = (noAuthEntry as any)._urls as string[];
+        evidence = `Public endpoints with no authentication: ${urls.slice(0, 5).join(", ")}${urls.length > 5 ? ` (+${urls.length - 5} more)` : ""}`;
+      }
 
       return {
         id: req.id,
@@ -306,7 +313,7 @@ export function assessCompliance(
         description: req.description,
         status: "fail" as const,
         severity: req.severity,
-        evidence: `Found: ${relatedTitles.join(", ")}`,
+        evidence,
         remediation: req.remediation,
         relatedVulns: matchingVulns,
       };
