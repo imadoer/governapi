@@ -5,18 +5,23 @@ import { UserAuthService } from "../services/auth/UserAuthService";
 export async function validateApiRequest(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
 
-  if (!authHeader) {
+  // Fall back to session cookie if no Authorization header
+  const sessionCookie = request.cookies.get("session_token")?.value
+    || request.cookies.get("next-auth.session-token")?.value
+    || request.cookies.get("__Secure-next-auth.session-token")?.value;
+
+  if (!authHeader && !sessionCookie) {
     return {
       valid: false,
       response: NextResponse.json(
-        { error: "Missing authorization header" },
+        { error: "Missing authorization" },
         { status: 401 },
       ),
     };
   }
 
-  // Check if it's an API key (starts with 'gapi_' or 'gov_live_') or Bearer token
-  if (authHeader.startsWith("Bearer gapi_") || authHeader.startsWith("Bearer gov_live_")) {
+  // Check if it's an API key (starts with 'gapi_' or 'gov_live_')
+  if (authHeader?.startsWith("Bearer gapi_") || authHeader?.startsWith("Bearer gov_live_")) {
     // API Key authentication
     const apiKey = authHeader.substring(7); // Remove 'Bearer '
     const validation = await APIKeyService.validateAPIKey(apiKey);
@@ -62,9 +67,9 @@ export async function validateApiRequest(request: NextRequest) {
     };
   }
 
-  if (authHeader.startsWith("Bearer ")) {
-    // Session token authentication
-    const sessionToken = authHeader.substring(7);
+  // Session token from Authorization header or cookie
+  const sessionToken = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : sessionCookie;
+  if (sessionToken) {
     const authResult = await UserAuthService.validateSession(sessionToken);
 
     if (!authResult.success) {
