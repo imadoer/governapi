@@ -45,12 +45,12 @@ export function SecurityCenterPage({ company, onNavigate }: any) {
     ([u, id]: [string, string]) => fetcher(u, id),
     { refreshInterval: 30000 },
   );
-  const { data: scansData, isLoading: scansLoading } = useSWR(
+  const { data: scansData, mutate: refreshScans, isLoading: scansLoading } = useSWR(
     [`/api/customer/security-scans?limit=10`, tenantId],
     ([u, id]: [string, string]) => fetcher(u, id),
     { refreshInterval: 10000 },
   );
-  const { data: vulnsData, isLoading: vulnsLoading } = useSWR(
+  const { data: vulnsData, mutate: refreshVulns, isLoading: vulnsLoading } = useSWR(
     [`/api/customer/vulnerabilities?limit=5&status=open`, tenantId],
     ([u, id]: [string, string]) => fetcher(u, id),
     { refreshInterval: 15000 },
@@ -60,11 +60,15 @@ export function SecurityCenterPage({ company, onNavigate }: any) {
     ([u, id]: [string, string]) => fetcher(u, id),
     { refreshInterval: 10000 },
   );
-  const { data: trendsData, isLoading: trendsLoading } = useSWR(
+  const { data: trendsData, mutate: refreshTrends, isLoading: trendsLoading } = useSWR(
     [`/api/customer/security-metrics/trends`, tenantId],
     ([u, id]: [string, string]) => fetcher(u, id),
     { refreshInterval: 60000 },
   );
+
+  const refreshAll = () => {
+    refreshMetrics(); refreshScans(); refreshVulns(); refreshTrends();
+  };
 
   const metrics = metricsData?.success ? metricsData.metrics : null;
   const scans = scansData?.success ? scansData.securityScans : [];
@@ -83,8 +87,30 @@ export function SecurityCenterPage({ company, onNavigate }: any) {
         body: JSON.stringify({ url: formUrl, scanType: formScanType }),
       });
       const data = await r.json();
-      if (data.success) { flash("Scan initiated"); setScanModal(false); setFormUrl(""); }
-      else flash(data.error || "Scan failed", false);
+      if (data.success) {
+        flash("Scan started — results will appear automatically");
+        setScanModal(false); setFormUrl("");
+        // Poll for completion then refresh all data
+        const scanId = data.securityScan?.id;
+        if (scanId) {
+          const poll = setInterval(async () => {
+            try {
+              const check = await fetch(`/api/customer/security-scans?limit=1`, {
+                headers: { "x-tenant-id": tenantId },
+              });
+              const checkData = await check.json();
+              const latest = checkData?.securityScans?.[0];
+              if (latest && latest.id === scanId && latest.status !== "pending" && latest.status !== "running") {
+                clearInterval(poll);
+                flash(`Scan complete — score: ${latest.securityScore ?? latest.security_score ?? "?"}`);
+                refreshAll();
+              }
+            } catch { /* ignore poll errors */ }
+          }, 3000);
+          // Stop polling after 60s regardless
+          setTimeout(() => { clearInterval(poll); refreshAll(); }, 60000);
+        }
+      } else flash(data.error || "Scan failed", false);
     } catch { flash("Scan failed", false); }
     setSubmitting(false);
   };
