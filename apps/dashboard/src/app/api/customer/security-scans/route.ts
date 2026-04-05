@@ -333,9 +333,19 @@ async function startSecurityScan(
     );
 
     // Dispatch webhook notifications (fire-and-forget)
+    const sevCounts: Record<string, number> = {};
+    const criticals: string[] = [];
+    for (const v of vulnerabilities) {
+      sevCounts[v.severity] = (sevCounts[v.severity] || 0) + 1;
+      if (v.severity === "CRITICAL") criticals.push(v.title);
+    }
     dispatchWebhooks(tenantId, "scan.completed", {
-      scanId, url: targetUrl, securityScore, vulnerabilityCount: vulnerabilities.length, scanType,
-    }).catch(() => {});
+      scanId, url: targetUrl, securityScore,
+      vulnerabilityCount: vulnerabilities.length,
+      severities: sevCounts,
+      criticalVulns: criticals,
+      scanType,
+    }).catch((err) => console.error("Webhook dispatch failed:", err));
 
   } catch (error) {
     logger.error("Security scan execution failed:", error);
