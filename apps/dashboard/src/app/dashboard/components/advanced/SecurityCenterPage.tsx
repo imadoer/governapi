@@ -66,8 +66,11 @@ export function SecurityCenterPage({ company, onNavigate }: any) {
     { refreshInterval: 60000 },
   );
 
-  const refreshAll = () => {
-    refreshMetrics(); refreshScans(); refreshVulns(); refreshTrends();
+  const refreshAll = async () => {
+    // Force revalidate all SWR caches — await to ensure data is fresh before render
+    await Promise.all([
+      refreshMetrics(), refreshScans(), refreshVulns(), refreshTrends(),
+    ]);
   };
 
   const metrics = metricsData?.success ? metricsData.metrics : null;
@@ -90,26 +93,34 @@ export function SecurityCenterPage({ company, onNavigate }: any) {
       if (data.success) {
         flash("Scan started — results will appear automatically");
         setScanModal(false); setFormUrl("");
-        // Poll for completion then refresh all data
+
+        // Poll: re-fetch scans list every 3s, check if our scan completed
         const scanId = data.securityScan?.id;
-        if (scanId) {
-          const poll = setInterval(async () => {
-            try {
-              const check = await fetch(`/api/customer/security-scans?limit=1`, {
-                headers: { "x-tenant-id": tenantId },
-              });
-              const checkData = await check.json();
-              const latest = checkData?.securityScans?.[0];
-              if (latest && latest.id === scanId && latest.status !== "pending" && latest.status !== "running") {
-                clearInterval(poll);
-                flash(`Scan complete — score: ${latest.securityScore ?? latest.security_score ?? "?"}`);
-                refreshAll();
-              }
-            } catch { /* ignore poll errors */ }
-          }, 3000);
-          // Stop polling after 60s regardless
-          setTimeout(() => { clearInterval(poll); refreshAll(); }, 60000);
-        }
+        let attempts = 0;
+        const poll = setInterval(async () => {
+          attempts++;
+          try {
+            // Re-fetch the scans list via SWR mutate and check the result
+            const freshScans = await refreshScans();
+            const allScans = freshScans?.securityScans ?? [];
+            const ourScan = allScans.find((s: any) => s.id === scanId);
+
+            if (ourScan && ourScan.status !== "pending" && ourScan.status !== "running") {
+              clearInterval(poll);
+              const score = ourScan.securityScore ?? ourScan.security_score;
+              flash(`Scan complete${score != null ? ` — endpoint score: ${score}/100` : ""}. Refreshing...`);
+              // Refresh everything — score, vulns, trends all need recalculation
+              await refreshAll();
+              flash("All data updated");
+            }
+          } catch { /* ignore */ }
+
+          // Give up after 20 attempts (60s)
+          if (attempts >= 20) {
+            clearInterval(poll);
+            await refreshAll();
+          }
+        }, 3000);
       } else flash(data.error || "Scan failed", false);
     } catch { flash("Scan failed", false); }
     setSubmitting(false);
