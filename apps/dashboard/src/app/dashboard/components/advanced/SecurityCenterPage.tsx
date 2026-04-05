@@ -287,7 +287,7 @@ export function SecurityCenterPage({ company, onNavigate }: any) {
           { label: "Active Threats", value: metrics?.activeThreats ?? 0, icon: FireIcon, live: (metrics?.activeThreats ?? 0) > 0 },
           { label: "Critical Vulns", value: metrics?.criticalVulns ?? 0, icon: BugAntIcon },
           { label: "Scans Running", value: metrics?.scansRunning ?? 0, icon: ChartBarIcon },
-          { label: "Bot Detection", value: `${metrics?.botDetectionRate ?? 0}%`, icon: ShieldExclamationIcon },
+          { label: "Compliance", value: `${metrics?.complianceScore ?? 0}%`, icon: ShieldExclamationIcon },
         ].map((k, i) => (
           <motion.div key={k.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
             <Card className="p-5">
