@@ -21,9 +21,9 @@ async function checkAndSendReports() {
   try {
     // Find all companies that haven't received a report this week
     const companies = await database.queryMany(
-      `SELECT DISTINCT c.company_id as id, c.company_name as name
+      `SELECT DISTINCT c.id, c.company_name as name
        FROM companies c
-       JOIN users u ON u.company_id = c.company_id
+       JOIN users u ON u.company_id = c.id
        WHERE c.status = 'active'`,
       [],
     );
@@ -32,13 +32,10 @@ async function checkAndSendReports() {
       try {
         // Check if weekly reports are disabled
         const settings = await database.queryOne(
-          `SELECT settings FROM enterprise_settings WHERE tenant_id = $1`,
+          `SELECT weekly_report_enabled FROM enterprise_settings WHERE tenant_id = $1`,
           [company.id],
         );
-        const parsed = settings?.settings
-          ? (typeof settings.settings === "string" ? JSON.parse(settings.settings) : settings.settings)
-          : {};
-        if (parsed.weeklyReportEnabled === false) continue;
+        if (settings && settings.weekly_report_enabled === false) continue;
 
         // Check we haven't already sent this week
         const alreadySent = await database.queryOne(
@@ -279,7 +276,7 @@ ${d.topVulns.length > 0 ? `
 /** Send a test weekly report immediately (for testing) */
 export async function sendTestWeeklyReport(tenantId: string) {
   const company = await database.queryOne(
-    `SELECT company_id as id, company_name as name FROM companies WHERE company_id = $1`,
+    `SELECT id, company_name as name FROM companies WHERE id = $1`,
     [tenantId],
   );
   if (!company) throw new Error("Company not found");
@@ -290,6 +287,6 @@ export async function sendTestWeeklyReport(tenantId: string) {
   );
   if (!owner?.email) throw new Error("No owner email found");
 
-  await sendWeeklyReport(company.id, company.name, owner.email, owner.full_name);
+  await sendWeeklyReport(tenantId, company.name, owner.email, owner.full_name);
   return { email: owner.email };
 }

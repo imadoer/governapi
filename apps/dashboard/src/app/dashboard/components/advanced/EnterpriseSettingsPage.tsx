@@ -129,7 +129,8 @@ export function EnterpriseSettingsPage({ companyId }: { companyId: string }) {
   if (!settings) {
     return (
       <div className="text-center py-16">
-        <p className="text-xl text-white">Enterprise subscription required</p>
+        <p className="text-xl text-white">Unable to load settings</p>
+        <button onClick={fetchSettings} className="mt-4 px-4 py-2 text-sm bg-white/[0.06] hover:bg-white/[0.1] text-white rounded-lg border border-white/[0.06]">Retry</button>
       </div>
     );
   }

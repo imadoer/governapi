@@ -20,56 +20,41 @@ export async function GET(request: NextRequest) {
 
     // Get company subscription info
     const companyInfo = await database.queryOne(
-      `SELECT subscription_plan, subscription_status, company_name 
+      `SELECT subscription_plan, subscription_status, company_name
        FROM companies WHERE id = $1`,
       [tenantId],
     );
 
-    if (!companyInfo || companyInfo.subscription_plan !== "enterprise") {
-      return NextResponse.json(
-        {
-          error: "Enterprise subscription required",
-          currentPlan: companyInfo?.subscription_plan || "unknown",
-        },
-        { status: 403 },
-      );
-    }
-
-    // Default settings if none exist
-    const settings = enterpriseSettings || {
-      sso_enabled: false,
-      saml_config: null,
-      ip_whitelist: [],
-      custom_branding: false,
-      audit_logging: true,
-      data_retention_days: 90,
-      api_rate_limits: {
-        requests_per_minute: 1000,
-        burst_limit: 100,
-      },
-      security_policies: {
-        password_policy: "standard",
-        mfa_required: false,
-        session_timeout: 3600,
-      },
+    // All plans can access settings (badge, reports, basic config)
+    // Default settings if none exist — normalize column names from actual DB schema
+    const raw = enterpriseSettings || {};
+    const settings = {
+      sso_enabled: raw.sso_enabled ?? false,
+      saml_config: raw.saml_config ?? raw.sso_config ?? null,
+      ip_whitelist: raw.ip_whitelist ?? raw.ip_whitelisting ?? [],
+      custom_branding: raw.custom_branding ?? false,
+      audit_logging: raw.audit_logging ?? true,
+      data_retention_days: raw.data_retention_days ?? 90,
+      weekly_report_enabled: raw.weekly_report_enabled ?? true,
+      api_rate_limits: raw.api_rate_limits ?? { requests_per_minute: 1000, burst_limit: 100 },
+      security_policies: raw.security_policies ?? { password_policy: "standard", mfa_required: false, session_timeout: 3600 },
+      updated_at: raw.updated_at,
+      created_at: raw.created_at,
     };
 
     // Get usage statistics
-    const usageStats = await database.queryOne(
-      `SELECT 
-         COUNT(DISTINCT u.id) as total_users,
-         COUNT(DISTINCT a.id) as total_apis,
-         COUNT(sr.id) as total_scans_30d,
-         COUNT(au.id) as total_requests_30d
-       FROM companies c
-       LEFT JOIN users u ON c.id = u.company_id
-       LEFT JOIN apis a ON c.id = a.tenant_id
-       LEFT JOIN scan_results sr ON c.id = sr.tenant_id AND sr.created_at >= NOW() - INTERVAL '30 days'
-       LEFT JOIN api_usage au ON c.id = au.tenant_id AND au.timestamp >= NOW() - INTERVAL '30 days'
-       WHERE c.id = $1
-       GROUP BY c.id`,
-      [tenantId],
-    );
+    let usageStats: any = null;
+    try {
+      const userCount = await database.queryOne(`SELECT COUNT(*) as count FROM users WHERE company_id = $1`, [tenantId]);
+      const scanCount = await database.queryOne(`SELECT COUNT(*) as count FROM security_scans WHERE tenant_id = $1 AND created_at >= NOW() - INTERVAL '30 days'`, [tenantId]);
+      const endpointCount = await database.queryOne(`SELECT COUNT(DISTINCT url) as count FROM security_scans WHERE tenant_id = $1 AND status = 'completed'`, [tenantId]);
+      usageStats = {
+        total_users: userCount?.count || "0",
+        total_apis: endpointCount?.count || "0",
+        total_scans_30d: scanCount?.count || "0",
+        total_requests_30d: "0",
+      };
+    } catch {};
 
     return NextResponse.json({
       success: true,
@@ -90,6 +75,7 @@ export async function GET(request: NextRequest) {
           typeof settings.security_policies === "string"
             ? JSON.parse(settings.security_policies)
             : settings.security_policies,
+        weeklyReportEnabled: settings.weekly_report_enabled ?? true,
         lastUpdated: settings.updated_at || settings.created_at,
       },
       companyInfo: {
@@ -128,21 +114,6 @@ export async function POST(request: NextRequest) {
 
   try {
     const settings = await request.json();
-
-    // Verify enterprise subscription
-    const companyInfo = await database.queryOne(
-      `SELECT subscription_plan FROM companies WHERE id = $1`,
-      [tenantId],
-    );
-
-    if (!companyInfo || companyInfo.subscription_plan !== "enterprise") {
-      return NextResponse.json(
-        {
-          error: "Enterprise subscription required",
-        },
-        { status: 403 },
-      );
-    }
 
     // Validate settings structure
     const validatedSettings = {
@@ -185,16 +156,17 @@ export async function POST(request: NextRequest) {
           ),
         ),
       },
+      weekly_report_enabled: settings.weeklyReportEnabled !== false,
     };
 
     // Upsert enterprise settings
     const updatedSettings = await database.queryOne(
       `INSERT INTO enterprise_settings (
-         tenant_id, sso_enabled, saml_config, ip_whitelist, custom_branding, 
-         audit_logging, data_retention_days, api_rate_limits, security_policies, 
-         updated_by, created_at, updated_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
-       ON CONFLICT (tenant_id) 
+         tenant_id, sso_enabled, saml_config, ip_whitelist, custom_branding,
+         audit_logging, data_retention_days, api_rate_limits, security_policies,
+         weekly_report_enabled, updated_by, created_at, updated_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+       ON CONFLICT (tenant_id)
        DO UPDATE SET
          sso_enabled = EXCLUDED.sso_enabled,
          saml_config = EXCLUDED.saml_config,
@@ -204,6 +176,7 @@ export async function POST(request: NextRequest) {
          data_retention_days = EXCLUDED.data_retention_days,
          api_rate_limits = EXCLUDED.api_rate_limits,
          security_policies = EXCLUDED.security_policies,
+         weekly_report_enabled = EXCLUDED.weekly_report_enabled,
          updated_by = EXCLUDED.updated_by,
          updated_at = NOW()
        RETURNING *`,
@@ -217,6 +190,7 @@ export async function POST(request: NextRequest) {
         validatedSettings.data_retention_days,
         JSON.stringify(validatedSettings.api_rate_limits),
         JSON.stringify(validatedSettings.security_policies),
+        validatedSettings.weekly_report_enabled,
         userId || "system",
       ],
     );
@@ -240,6 +214,7 @@ export async function POST(request: NextRequest) {
           typeof updatedSettings.security_policies === "string"
             ? JSON.parse(updatedSettings.security_policies)
             : updatedSettings.security_policies,
+        weeklyReportEnabled: updatedSettings.weekly_report_enabled ?? true,
         savedAt: updatedSettings.updated_at,
       },
       message: "Enterprise settings saved successfully",
