@@ -482,7 +482,7 @@ export function ApiManagementPage({ companyId }: { companyId: string }) {
                           Permissions: {key.permissions.join(", ")}
                         </span>
                         <span>•</span>
-                        <span>Rate Limit: {key.rateLimit}/hr</span>
+                        <span>Rate Limit: {key.rateLimit ? `${key.rateLimit}/hr` : "Unlimited"}</span>
                         <span>•</span>
                         <span>Used: {key.usageCount} times</span>
                         {key.lastUsed && (
