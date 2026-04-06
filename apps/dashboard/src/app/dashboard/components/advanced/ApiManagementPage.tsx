@@ -15,6 +15,7 @@ import {
   ClipboardDocumentIcon,
   CheckIcon,
   XMarkIcon,
+  ClockIcon,
 } from "@heroicons/react/24/outline";
 
 interface PlatformApiKey {
@@ -99,6 +100,19 @@ const PERMISSION_OPTIONS = [
   { value: "admin", label: "Admin" },
 ];
 
+function formatNextRun(dateStr: string): string {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const diffMs = d.getTime() - now.getTime();
+  const diffH = Math.round(diffMs / 3600000);
+  if (diffH < 1) return "Less than 1 hour";
+  if (diffH < 24) return `In ${diffH} hour${diffH === 1 ? "" : "s"}`;
+  const diffD = Math.round(diffH / 24);
+  if (diffD === 1) return "Tomorrow at " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "UTC" }) + " UTC";
+  if (diffD < 7) return `In ${diffD} days`;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " at 2:00 AM UTC";
+}
+
 export function ApiManagementPage({ companyId }: { companyId: string }) {
   // Platform API Keys state
   const [platformKeys, setPlatformKeys] = useState<PlatformApiKey[]>([]);
@@ -119,6 +133,7 @@ export function ApiManagementPage({ companyId }: { companyId: string }) {
 
   // API Endpoints state
   const [apiEndpoints, setApiEndpoints] = useState<ApiEndpoint[]>([]);
+  const [schedules, setSchedules] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -170,10 +185,36 @@ export function ApiManagementPage({ companyId }: { companyId: string }) {
     }
   };
 
+  const fetchSchedules = async () => {
+    const data = await safeFetch("/api/customer/scan-schedules");
+    if (data?.success) {
+      setSchedules(data.schedules || {});
+    }
+  };
+
+  const updateSchedule = async (url: string, frequency: string) => {
+    try {
+      const resp = await fetch("/api/customer/scan-schedules", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "x-tenant-id": companyId },
+        body: JSON.stringify({ url, frequency }),
+      });
+      const data = await resp.json();
+      if (data.success) {
+        setSchedules((prev) => ({ ...prev, [url]: { ...prev[url], frequency, nextRunAt: data.schedule.nextRunAt } }));
+        showToast(`Schedule updated: ${frequency === "manual" ? "Manual only" : frequency}`, "success");
+      } else {
+        showToast(data.error || "Failed to update schedule", "error");
+      }
+    } catch {
+      showToast("Failed to update schedule", "error");
+    }
+  };
+
   useEffect(() => {
     if (companyId) {
       setFetchError(false);
-      Promise.all([fetchPlatformKeys(), fetchApiEndpoints()])
+      Promise.all([fetchPlatformKeys(), fetchApiEndpoints(), fetchSchedules()])
         .catch(() => setFetchError(true))
         .finally(() => setLoading(false));
     }
@@ -567,52 +608,82 @@ export function ApiManagementPage({ companyId }: { companyId: string }) {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-3"
           >
-            {apiEndpoints.map((endpoint, index) => (
-              <motion.div
-                key={endpoint.id}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.05 }}
-                className="bg-slate-800/50 border border-slate-700 rounded-xl p-5"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <MethodTag method={endpoint.method} />
-                      <span className="text-white font-mono">
-                        {endpoint.path}
-                      </span>
+            {apiEndpoints.map((endpoint: any, index) => {
+              const url = endpoint.url || endpoint.path;
+              const sched = schedules[url];
+              const freq = sched?.frequency || "manual";
+              const nextRun = sched?.nextRunAt;
+              const score = endpoint.score ?? endpoint.avg_security_score;
+
+              return (
+                <motion.div
+                  key={endpoint.id || url}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: Math.min(index * 0.03, 0.3) }}
+                  className="bg-slate-800/50 border border-slate-700 rounded-xl p-5"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className={`inline-flex items-center px-2 py-0.5 text-[10px] font-bold rounded-full ${
+                          (score ?? 0) >= 70 ? "bg-emerald-500/15 text-emerald-400" :
+                          (score ?? 0) >= 40 ? "bg-amber-500/15 text-amber-400" :
+                          "bg-red-500/15 text-red-400"
+                        }`}>
+                          {score ?? "—"}
+                        </span>
+                        <span className="text-white font-mono text-sm truncate">{url}</span>
+                      </div>
+                      <div className="flex items-center gap-4 text-[12px] text-slate-400">
+                        <span>{endpoint.scanCount ?? endpoint.scan_count} scans</span>
+                        {(endpoint.vulnCount ?? endpoint.vulnerability_count) > 0 && (
+                          <>
+                            <span>•</span>
+                            <span className="text-red-400">
+                              {endpoint.vulnCount ?? endpoint.vulnerability_count} vulns
+                            </span>
+                          </>
+                        )}
+                        {endpoint.lastScanned && (
+                          <>
+                            <span>•</span>
+                            <span>Last: {new Date(endpoint.lastScanned).toLocaleDateString()}</span>
+                          </>
+                        )}
+                      </div>
+                      {/* Next scheduled scan */}
+                      {freq !== "manual" && nextRun && (
+                        <div className="flex items-center gap-1.5 mt-2 text-[11px] text-cyan-400/80">
+                          <ClockIcon className="w-3.5 h-3.5" />
+                          <span>Next scan: {formatNextRun(nextRun)}</span>
+                        </div>
+                      )}
                     </div>
-                    <div className="flex items-center gap-4 text-sm text-slate-400">
-                      <span>Scans: {endpoint.scan_count}</span>
-                      {endpoint.avg_security_score && (
-                        <>
-                          <span>•</span>
-                          <span>
-                            Score: {Math.round(endpoint.avg_security_score)}
-                          </span>
-                        </>
-                      )}
-                      {endpoint.vulnerability_count > 0 && (
-                        <>
-                          <span>•</span>
-                          <span className="text-red-400">
-                            {endpoint.vulnerability_count} vulns
-                          </span>
-                        </>
-                      )}
+
+                    {/* Schedule dropdown */}
+                    <div className="shrink-0">
+                      <select
+                        value={freq}
+                        onChange={(e) => updateSchedule(url, e.target.value)}
+                        className="px-3 py-1.5 text-[11px] font-medium bg-slate-700/50 border border-white/[0.06] text-gray-300 rounded-lg focus:outline-none focus:border-cyan-500/30 appearance-none cursor-pointer"
+                      >
+                        <option value="manual">Manual only</option>
+                        <option value="daily">Daily (2 AM UTC)</option>
+                        <option value="weekly">Weekly (Mon 2 AM)</option>
+                        <option value="6h">Every 6 hours</option>
+                      </select>
                     </div>
                   </div>
-                </div>
-              </motion.div>
-            ))}
+                </motion.div>
+              );
+            })}
 
             {apiEndpoints.length === 0 && (
               <div className="text-center py-16 bg-slate-800/30 rounded-2xl">
                 <ShieldCheckIcon className="w-16 h-16 text-slate-600 mx-auto mb-4" />
                 <p className="text-slate-400">
-                  No APIs being monitored yet. Use API Discovery to find
-                  APIs to monitor.
+                  No APIs being monitored yet. Scan an endpoint from Security Center to start monitoring.
                 </p>
               </div>
             )}
