@@ -66,9 +66,9 @@ export function SettingsPage({ companyId }: { companyId: string }) {
     setLoading(true);
     try {
       const [settingsRes, profileRes, teamRes] = await Promise.all([
-        fetch("/api/customer/enterprise-settings", { headers: { "x-tenant-id": companyId } }),
+        fetch("/api/customer/enterprise-settings", { headers: { "x-tenant-id": companyId, ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}) }, credentials: "include" }),
         fetch("/api/auth/session", { credentials: "include" }),
-        fetch("/api/customer/team", { headers: { "x-tenant-id": companyId } }),
+        fetch("/api/customer/team", { headers: { "x-tenant-id": companyId, ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}) }, credentials: "include" }),
       ]);
       const settingsData = await settingsRes.json();
       const profileData = await profileRes.json().catch(() => ({}));
@@ -96,7 +96,8 @@ export function SettingsPage({ companyId }: { companyId: string }) {
       // Save company name
       const r = await fetch("/api/customer/enterprise-settings", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-tenant-id": companyId },
+        headers: { "Content-Type": "application/json", "x-tenant-id": companyId, ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}) },
+        credentials: "include",
         body: JSON.stringify({
           weeklyReportEnabled: weeklyReport,
           ssoEnabled: false,
@@ -118,7 +119,8 @@ export function SettingsPage({ companyId }: { companyId: string }) {
     try {
       await fetch("/api/customer/enterprise-settings", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-tenant-id": companyId },
+        headers: { "Content-Type": "application/json", "x-tenant-id": companyId, ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}) },
+        credentials: "include",
         body: JSON.stringify({
           weeklyReportEnabled: enabled,
           ssoEnabled: false,
@@ -138,7 +140,8 @@ export function SettingsPage({ companyId }: { companyId: string }) {
     try {
       const r = await fetch("/api/customer/team", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-tenant-id": companyId },
+        headers: { "Content-Type": "application/json", "x-tenant-id": companyId, ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}) },
+        credentials: "include",
         body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
       });
       const d = await r.json();
@@ -155,7 +158,7 @@ export function SettingsPage({ companyId }: { companyId: string }) {
 
   const handleRemoveMember = async (id: number) => {
     try {
-      await fetch(`/api/customer/team?id=${id}`, { method: "DELETE", headers: { "x-tenant-id": companyId } });
+      await fetch(`/api/customer/team?id=${id}`, { method: "DELETE", headers: { "x-tenant-id": companyId, ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}) }, credentials: "include" });
       flash("Member removed");
       setTeamMembers((prev) => prev.filter((m) => m.id !== id));
     } catch { flash("Failed to remove", false); }

@@ -57,7 +57,8 @@ export function EnterpriseSettingsPage({ companyId }: { companyId: string }) {
     setLoading(true);
     try {
       const response = await fetch("/api/customer/enterprise-settings", {
-        headers: { "x-tenant-id": companyId },
+        headers: { "x-tenant-id": companyId, ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}) },
+        credentials: "include",
       });
       const data = await response.json();
 
@@ -87,7 +88,9 @@ export function EnterpriseSettingsPage({ companyId }: { companyId: string }) {
         headers: {
           "Content-Type": "application/json",
           "x-tenant-id": companyId,
+          ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}),
         },
+        credentials: "include",
         body: JSON.stringify({
           ssoEnabled: settings.ssoEnabled,
           ipWhitelist: settings.ipWhitelist,

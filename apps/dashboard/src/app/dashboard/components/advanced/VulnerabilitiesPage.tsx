@@ -167,7 +167,8 @@ export function VulnerabilitiesPage({ company }: { company?: any }) {
     const timeout = setTimeout(() => controller.abort(), 15000);
     try {
       const response = await fetch(url, {
-        headers: { "x-tenant-id": company?.id || "1" },
+        headers: { "x-tenant-id": company?.id || "1", ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}) },
+        credentials: "include",
         signal: controller.signal,
       });
       clearTimeout(timeout);
@@ -242,7 +243,9 @@ export function VulnerabilitiesPage({ company }: { company?: any }) {
         headers: {
           "Content-Type": "application/json",
           "x-tenant-id": company?.id || "1",
+          ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}),
         },
+        credentials: "include",
         body: JSON.stringify({ status: newStatus, comment }),
       });
 
@@ -270,7 +273,9 @@ export function VulnerabilitiesPage({ company }: { company?: any }) {
         headers: {
           "Content-Type": "application/json",
           "x-tenant-id": company?.id || "1",
+          ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}),
         },
+        credentials: "include",
         body: JSON.stringify({
           vulnerabilityId: selectedVulnerability.id,
           project: jiraProject,
@@ -296,7 +301,8 @@ export function VulnerabilitiesPage({ company }: { company?: any }) {
   const handleExport = async (format: "pdf" | "json" | "csv") => {
     try {
       const response = await fetch(`/api/customer/vulnerabilities/export?format=${format}`, {
-        headers: { "x-tenant-id": company?.id || "1" },
+        headers: { "x-tenant-id": company?.id || "1", ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}) },
+        credentials: "include",
       });
 
       if (response.ok) {

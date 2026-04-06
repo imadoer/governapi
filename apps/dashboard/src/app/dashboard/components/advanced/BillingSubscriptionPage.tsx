@@ -48,7 +48,11 @@ export function BillingSubscriptionPage({ companyId }: { companyId: string }) {
     setLoading(true);
     try {
       const response = await fetch("/api/analytics/costs", {
-        headers: { "x-tenant-id": companyId },
+        headers: {
+          "x-tenant-id": companyId,
+          ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}),
+        },
+        credentials: "include",
       });
       const data = await response.json();
 
@@ -77,7 +81,9 @@ export function BillingSubscriptionPage({ companyId }: { companyId: string }) {
         headers: {
           "Content-Type": "application/json",
           "x-tenant-id": companyId,
+          ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}),
         },
+        credentials: "include",
         body: JSON.stringify({
           planType,
           billingCycle: "monthly",

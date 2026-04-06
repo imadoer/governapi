@@ -149,7 +149,8 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
     setLoading(true);
     try {
       const response = await fetch("/api/customer/external-integrations", {
-        headers: { "x-tenant-id": companyId },
+        headers: { "x-tenant-id": companyId, ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}) },
+        credentials: "include",
       });
       const data = await response.json();
 
@@ -196,7 +197,9 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
         headers: {
           "Content-Type": "application/json",
           "x-tenant-id": companyId,
+          ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}),
         },
+        credentials: "include",
         body: JSON.stringify({
           integrationType: selectedType,
           integrationName,
@@ -240,7 +243,9 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
         headers: {
           "Content-Type": "application/json",
           "x-tenant-id": companyId,
+          ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}),
         },
+        credentials: "include",
         body: JSON.stringify({
           integrationId: integration.id,
           event: "test",
@@ -295,7 +300,8 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
         `/api/customer/external-integrations/${id}`,
         {
           method: "DELETE",
-          headers: { "x-tenant-id": companyId },
+          headers: { "x-tenant-id": companyId, ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}) },
+          credentials: "include",
         },
       );
 

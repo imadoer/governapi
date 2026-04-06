@@ -220,7 +220,12 @@ export default function BotProtectionPage({
     try {
       const r = await fetch("/api/customer/block-ip", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-tenant-id": companyId },
+        headers: {
+          "Content-Type": "application/json",
+          "x-tenant-id": companyId,
+          ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}),
+        },
+        credentials: "include",
         body: JSON.stringify({ action: "block", sourceIp: ip, reason: "Manual block" }),
       });
       if (r.ok) { setBlockedIps((s) => new Set(s).add(ip)); mutate(); flash(`Blocked ${ip}`); }
@@ -232,7 +237,12 @@ export default function BotProtectionPage({
     try {
       const r = await fetch("/api/customer/block-ip", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-tenant-id": companyId },
+        headers: {
+          "Content-Type": "application/json",
+          "x-tenant-id": companyId,
+          ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}),
+        },
+        credentials: "include",
         body: JSON.stringify({ action: "unblock", sourceIp: ip, reason: "Manual unblock" }),
       });
       if (r.ok) {
@@ -675,7 +685,12 @@ function RulesTab({ companyId, flash }: { companyId: string; flash: (t: string, 
     try {
       const r = await fetch("/api/customer/bot-rules", {
         method: editing ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json", "x-tenant-id": companyId },
+        headers: {
+          "Content-Type": "application/json",
+          "x-tenant-id": companyId,
+          ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}),
+        },
+        credentials: "include",
         body: JSON.stringify(editing ? { id: editing.id, name, description: desc, action, priority } : { name, description: desc, action, priority }),
       });
       if (r.ok) { setModal(false); setEditing(null); reset(); mutate(); flash(editing ? "Rule updated" : "Rule created"); }
@@ -689,7 +704,12 @@ function RulesTab({ companyId, flash }: { companyId: string; flash: (t: string, 
     try {
       await fetch("/api/customer/bot-rules", {
         method: "PUT",
-        headers: { "Content-Type": "application/json", "x-tenant-id": companyId },
+        headers: {
+          "Content-Type": "application/json",
+          "x-tenant-id": companyId,
+          ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}),
+        },
+        credentials: "include",
         body: JSON.stringify({ ...rule, id, enabled }),
       });
       mutate(); flash(enabled ? "Rule enabled" : "Rule disabled");
@@ -699,7 +719,14 @@ function RulesTab({ companyId, flash }: { companyId: string; flash: (t: string, 
   const confirmDelete = async () => {
     if (deleting == null) return;
     try {
-      await fetch(`/api/customer/bot-rules?id=${deleting}`, { method: "POST", headers: { "x-tenant-id": companyId } });
+      await fetch(`/api/customer/bot-rules?id=${deleting}`, {
+        method: "POST",
+        headers: {
+          "x-tenant-id": companyId,
+          ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}),
+        },
+        credentials: "include",
+      });
       mutate(); flash("Rule deleted");
     } catch { flash("Delete failed", false); }
     setDeleting(null);

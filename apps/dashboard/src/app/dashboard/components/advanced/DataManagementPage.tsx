@@ -60,7 +60,8 @@ export function DataManagementPage({ companyId }: { companyId: string }) {
     setExporting(dataType + format);
     try {
       const response = await fetch(`/api/customer/data-export?type=${dataType}&format=${format}`, {
-        headers: { "x-tenant-id": companyId },
+        headers: { "x-tenant-id": companyId, ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}) },
+        credentials: "include",
       });
       if (response.ok) {
         if (format === "csv") {

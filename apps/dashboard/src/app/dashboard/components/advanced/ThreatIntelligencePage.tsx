@@ -79,7 +79,12 @@ export function ThreatIntelligencePage({ companyId }: { companyId: string }) {
       const action = isBlocked ? "unblock" : "block";
       const r = await fetch("/api/customer/block-ip", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-tenant-id": companyId },
+        headers: {
+          "Content-Type": "application/json",
+          "x-tenant-id": companyId,
+          ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}),
+        },
+        credentials: "include",
         body: JSON.stringify({ sourceIp: ip, action, duration: 86400000 }),
       });
       const result = await r.json();

@@ -26,7 +26,8 @@ export default function ApiDiscoveryPage({ companyId }: { companyId: string }) {
     try {
       const res = await fetch("/api/customer/api-discovery", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-tenant-id": companyId },
+        headers: { "Content-Type": "application/json", "x-tenant-id": companyId, ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}) },
+        credentials: "include",
         body: JSON.stringify({ domain: domain.trim() }),
       });
       const data = await res.json();
@@ -46,7 +47,8 @@ export default function ApiDiscoveryPage({ companyId }: { companyId: string }) {
     try {
       const res = await fetch("/api/customer/api-discovery", {
         method: "PUT",
-        headers: { "Content-Type": "application/json", "x-tenant-id": companyId },
+        headers: { "Content-Type": "application/json", "x-tenant-id": companyId, ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}) },
+        credentials: "include",
         body: JSON.stringify({ endpoints: [{ ...endpoint, domain: results?.domain, fullUrl: `https://${results?.domain}${endpoint.path}` }] }),
       });
       const data = await res.json();

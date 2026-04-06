@@ -161,7 +161,8 @@ export function ApiManagementPage({ companyId }: { companyId: string }) {
     const timeout = setTimeout(() => controller.abort(), 15000);
     try {
       const response = await fetch(url, {
-        headers: { "x-tenant-id": companyId },
+        headers: { "x-tenant-id": companyId, ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}) },
+        credentials: "include",
         signal: controller.signal,
       });
       clearTimeout(timeout);
@@ -197,7 +198,8 @@ export function ApiManagementPage({ companyId }: { companyId: string }) {
     try {
       const resp = await fetch("/api/customer/scan-schedules", {
         method: "PUT",
-        headers: { "Content-Type": "application/json", "x-tenant-id": companyId },
+        headers: { "Content-Type": "application/json", "x-tenant-id": companyId, ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}) },
+        credentials: "include",
         body: JSON.stringify({ url, frequency }),
       });
       const data = await resp.json();
@@ -239,7 +241,9 @@ export function ApiManagementPage({ companyId }: { companyId: string }) {
         headers: {
           "Content-Type": "application/json",
           "x-tenant-id": companyId,
+          ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}),
         },
+        credentials: "include",
         body: JSON.stringify({
           name: newKeyName,
           permissions: newKeyPermissions,
@@ -276,7 +280,8 @@ export function ApiManagementPage({ companyId }: { companyId: string }) {
       const response = await fetch(
         `/api/customer/api-discovery?domain=${encodeURIComponent(discoverDomain)}`,
         {
-          headers: { "x-tenant-id": companyId },
+          headers: { "x-tenant-id": companyId, ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}) },
+          credentials: "include",
         },
       );
       const data = await response.json();

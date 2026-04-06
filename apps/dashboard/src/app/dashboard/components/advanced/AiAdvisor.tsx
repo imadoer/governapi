@@ -42,7 +42,8 @@ export function AiAdvisor({ companyId, plan }: { companyId: string; plan: string
     try {
       const r = await fetch("/api/customer/ai-advisor", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-tenant-id": companyId },
+        headers: { "Content-Type": "application/json", "x-tenant-id": companyId, ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}) },
+        credentials: "include",
         body: JSON.stringify({ message: text.trim() }),
       });
       const d = await r.json();

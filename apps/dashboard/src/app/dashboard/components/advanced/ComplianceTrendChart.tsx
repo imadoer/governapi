@@ -39,7 +39,9 @@ export default function ComplianceTrendChart({ companyId }: ComplianceTrendChart
       const response = await fetch("/api/customer/compliance/history", {
         headers: {
           "x-tenant-id": companyId,
+          ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}),
         },
+        credentials: "include",
       });
 
       const data = await response.json();

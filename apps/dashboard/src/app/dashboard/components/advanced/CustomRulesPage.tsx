@@ -65,7 +65,7 @@ export function CustomRulesPage({ companyId }: { companyId: string }) {
   const fetchRules = async () => {
     setLoading(true);
     try {
-      const r = await fetch("/api/customer/custom-rules", { headers: { "x-tenant-id": companyId } });
+      const r = await fetch("/api/customer/custom-rules", { headers: { "x-tenant-id": companyId, ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}) }, credentials: "include" });
       const d = await r.json();
       if (d.success) setRules(d.rules || []);
     } catch {} finally { setLoading(false); }
@@ -108,7 +108,8 @@ export function CustomRulesPage({ companyId }: { companyId: string }) {
       const conditions = buildConditions();
       const r = await fetch("/api/customer/custom-rules", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-tenant-id": companyId },
+        headers: { "Content-Type": "application/json", "x-tenant-id": companyId, ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}) },
+        credentials: "include",
         body: JSON.stringify({
           name,
           ruleType,
@@ -128,7 +129,8 @@ export function CustomRulesPage({ companyId }: { companyId: string }) {
     try {
       await fetch(`/api/customer/custom-rules?id=${id}`, {
         method: "DELETE",
-        headers: { "x-tenant-id": companyId },
+        headers: { "x-tenant-id": companyId, ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}) },
+        credentials: "include",
       });
       flash("Policy deleted");
       fetchRules();
@@ -139,7 +141,8 @@ export function CustomRulesPage({ companyId }: { companyId: string }) {
     try {
       await fetch("/api/customer/custom-rules", {
         method: "PUT",
-        headers: { "Content-Type": "application/json", "x-tenant-id": companyId },
+        headers: { "Content-Type": "application/json", "x-tenant-id": companyId, ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}) },
+        credentials: "include",
         body: JSON.stringify({ id: rule.id, name: rule.name, isActive: !rule.isActive }),
       });
       fetchRules();

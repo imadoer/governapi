@@ -198,7 +198,7 @@ export default function AdvancedDashboard() {
   // Fetch plan once
   useEffect(() => {
     if (company?.id) {
-      fetch("/api/customer/plan", { headers: { "x-tenant-id": company.id.toString() } })
+      fetch("/api/customer/plan", { headers: { "x-tenant-id": company.id.toString(), ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}) }, credentials: "include" })
         .then((r) => r.json())
         .then((d) => { if (d.success) setPlan(d.plan); })
         .catch(() => {});

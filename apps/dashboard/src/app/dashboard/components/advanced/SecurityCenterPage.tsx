@@ -99,7 +99,8 @@ export function SecurityCenterPage({ company, onNavigate }: any) {
     try {
       const r = await fetch("/api/customer/security-scans", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-tenant-id": tenantId },
+        headers: { "Content-Type": "application/json", "x-tenant-id": tenantId, ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}) },
+        credentials: "include",
         body: JSON.stringify({ url: formUrl, scanType: formScanType }),
       });
       const data = await r.json();
@@ -142,7 +143,7 @@ export function SecurityCenterPage({ company, onNavigate }: any) {
   const handleExportPDF = async () => {
     try {
       flash("Generating PDF...");
-      const response = await fetch('/api/customer/security-report/pdf', { headers: { 'x-tenant-id': tenantId } });
+      const response = await fetch('/api/customer/security-report/pdf', { headers: { 'x-tenant-id': tenantId, ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}) }, credentials: "include" });
       const data = await response.json();
       if (!data.success) throw new Error();
       const { default: jsPDF } = await import('jspdf');

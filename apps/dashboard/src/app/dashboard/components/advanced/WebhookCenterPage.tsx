@@ -69,7 +69,8 @@ export function WebhookCenterPage({ companyId }: { companyId: string }) {
     setLoading(true);
     try {
       const response = await fetch("/api/customer/webhooks", {
-        headers: { "x-tenant-id": companyId },
+        headers: { "x-tenant-id": companyId, ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}) },
+        credentials: "include",
       });
       const data = await response.json();
       if (data.success) {
@@ -93,7 +94,8 @@ export function WebhookCenterPage({ companyId }: { companyId: string }) {
     try {
       const response = await fetch("/api/customer/webhooks", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-tenant-id": companyId },
+        headers: { "Content-Type": "application/json", "x-tenant-id": companyId, ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}) },
+        credentials: "include",
         body: JSON.stringify({ name: webhookName, url: webhookUrl, events: selectedEvents, webhookType }),
       });
       const data = await response.json();
