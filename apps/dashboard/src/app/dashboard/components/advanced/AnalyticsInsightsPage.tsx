@@ -76,6 +76,16 @@ export function AnalyticsInsightsPage({ companyId }: { companyId: string }) {
     ([u, id]: [string, string]) => fetcher(u, id),
   );
 
+  const { data: endpointsData } = useSWR(
+    [`/api/customer/api-endpoints`, companyId],
+    ([u, id]: [string, string]) => fetcher(u, id),
+  );
+
+  const { data: policiesData } = useSWR(
+    [`/api/customer/custom-rules`, companyId],
+    ([u, id]: [string, string]) => fetcher(u, id),
+  );
+
   const loading = dashLoading && metricsLoading;
 
   const stats = dashData?.success ? dashData.stats : null;
@@ -142,7 +152,7 @@ export function AnalyticsInsightsPage({ companyId }: { companyId: string }) {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
         >
-          {tab === "overview" && <OverviewTab stats={stats} metrics={metrics} scanStats={scanStats} vulnSummary={vulnSummary} trends={trends} />}
+          {tab === "overview" && <OverviewTab stats={stats} metrics={metrics} scanStats={scanStats} vulnSummary={vulnSummary} trends={trends} endpointCount={endpointsData?.total ?? 0} activePolicies={policiesData?.rules?.filter((r: any) => r.isActive).length ?? 0} />}
           {tab === "scans" && <ScansTab scans={scans} loading={scansLoading} />}
           {tab === "vulnerabilities" && <VulnerabilitiesTab vulns={vulns} summary={vulnSummary} />}
           {tab === "trends" && <TrendsTab trends={trends} loading={trendsLoading} />}
@@ -154,13 +164,14 @@ export function AnalyticsInsightsPage({ companyId }: { companyId: string }) {
 
 /* ───────────────────── Overview ───────────────────── */
 
-function OverviewTab({ stats, metrics, scanStats, vulnSummary, trends }: any) {
+function OverviewTab({ stats, metrics, scanStats, vulnSummary, trends, endpointCount, activePolicies }: any) {
+  const openVulns = vulnSummary?.total ?? metrics?.openVulnerabilities ?? 0;
   const kpis = [
     { label: "Total Scans", value: stats?.totalScans ?? 0, icon: ChartBarIcon },
     { label: "Avg Score", value: stats?.avgSecurityScore ?? 0, icon: ShieldCheckIcon },
-    { label: "Open Vulns", value: metrics?.openVulnerabilities ?? 0, icon: BugAntIcon },
-    { label: "Endpoints", value: stats?.totalEndpoints ?? 0, icon: GlobeAltIcon },
-    { label: "Threats Blocked", value: stats?.blockedThreats ?? 0, icon: ShieldCheckIcon },
+    { label: "Open Vulns", value: openVulns, icon: BugAntIcon },
+    { label: "Endpoints", value: endpointCount, icon: GlobeAltIcon },
+    { label: "Policies Active", value: activePolicies, icon: ClockIcon },
   ];
 
   /* scan frequency — group scans by week from trends */
@@ -284,7 +295,7 @@ function ScansTab({ scans, loading }: { scans: any[]; loading: boolean }) {
     const d = new Date(s.createdAt ?? s.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
     freq[d] = (freq[d] ?? 0) + 1;
   });
-  const freqData = Object.entries(freq).map(([date, count]) => ({ date, scans: count }));
+  const freqData = Object.entries(freq).map(([date, count]) => ({ date, scans: count })).reverse();
 
   return (
     <div className="space-y-8">
@@ -358,7 +369,7 @@ function VulnerabilitiesTab({ vulns, summary }: { vulns: any[]; summary: any }) 
     const sev = v.severity?.toLowerCase();
     if (sev && sev in byDate[d]) (byDate[d] as any)[sev]++;
   });
-  const trendData = Object.entries(byDate).map(([date, counts]) => ({ date, ...counts }));
+  const trendData = Object.entries(byDate).map(([date, counts]) => ({ date, ...counts })).reverse();
 
   /* most targeted endpoints */
   const epCount: Record<string, number> = {};
