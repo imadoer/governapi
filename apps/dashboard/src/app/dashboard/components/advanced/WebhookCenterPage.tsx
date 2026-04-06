@@ -39,16 +39,17 @@ interface WebhookDelivery {
 }
 
 const AVAILABLE_EVENTS = [
-  { value: "scan.completed", label: "Scan Completed", category: "Security" },
-  { value: "scan.failed", label: "Scan Failed", category: "Security" },
+  { value: "scan.completed", label: "Scan Completed", category: "Scanning" },
+  { value: "scan.failed", label: "Scan Failed", category: "Scanning" },
+  { value: "scan.score_changed", label: "Score Changed", category: "Scanning" },
+  { value: "scan.score_dropped", label: "Score Dropped Below Threshold", category: "Scanning" },
   { value: "vulnerability.detected", label: "Vulnerability Detected", category: "Security" },
-  { value: "threat.detected", label: "Threat Detected", category: "Security" },
-  { value: "bot.blocked", label: "Bot Blocked", category: "Bot Protection" },
   { value: "compliance.violation", label: "Compliance Violation", category: "Compliance" },
+  { value: "discovery.new_endpoint", label: "New Endpoint Discovered", category: "API Discovery" },
+  { value: "discovery.exposed_endpoint", label: "Exposed Endpoint Found", category: "API Discovery" },
   { value: "api.created", label: "API Created", category: "API Management" },
   { value: "api.deleted", label: "API Deleted", category: "API Management" },
-  { value: "rate_limit.exceeded", label: "Rate Limit Exceeded", category: "Rate Limiting" },
-  { value: "alert.triggered", label: "Alert Triggered", category: "Alerts" },
+  { value: "policy.triggered", label: "Policy Triggered", category: "Alerts" },
 ];
 
 export function WebhookCenterPage({ companyId }: { companyId: string }) {
