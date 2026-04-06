@@ -214,6 +214,77 @@ export default function AdvancedDashboard() {
     );
   }
 
+  const handleOnboardingScan = async () => {
+    if (!addApiUrl || !company?.id) return;
+    setOnboardingLoading(true);
+    setOnboardingError("");
+
+    let scanUrl = addApiUrl.trim();
+    if (!scanUrl.startsWith("http://") && !scanUrl.startsWith("https://")) {
+      scanUrl = "https://" + scanUrl;
+    }
+
+    try {
+      setOnboardingStep(2);
+      const sessionToken = typeof window !== "undefined" ? sessionStorage.getItem("sessionToken") || "" : "";
+
+      const scanRes = await fetch("/api/customer/security-scans", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(sessionToken ? { "Authorization": `Bearer ${sessionToken}` } : {}),
+        },
+        credentials: "include",
+        body: JSON.stringify({ url: scanUrl, scanType: "quick" }),
+      });
+
+      let scanResult: any;
+      try { scanResult = await scanRes.json(); } catch {
+        setOnboardingStep(0);
+        setOnboardingLoading(false);
+        setOnboardingError("Server error — please try logging out and back in.");
+        return;
+      }
+
+      if (!scanResult.success) {
+        setOnboardingStep(0);
+        setOnboardingLoading(false);
+        setOnboardingError(scanResult.error || "Scan failed to start. Try logging out and back in.");
+        return;
+      }
+
+      setOnboardingStep(3);
+
+      const headers: Record<string, string> = {};
+      if (sessionToken) headers["Authorization"] = `Bearer ${sessionToken}`;
+
+      const poll = setInterval(async () => {
+        try {
+          const dashRes = await fetch("/api/customer/dashboard", { headers, credentials: "include" });
+          const dashData = await dashRes.json();
+          if (dashData.success && (dashData.stats?.totalScans > 0 || dashData.stats?.completedScans > 0)) {
+            clearInterval(poll);
+            setDashboardStats(dashData.dashboard || dashData);
+            setOnboardingDone(true);
+            setOnboardingLoading(false);
+          }
+        } catch {}
+      }, 3000);
+
+      setTimeout(() => {
+        clearInterval(poll);
+        setOnboardingLoading(false);
+        setOnboardingDone(true);
+        refreshDashboard();
+      }, 60000);
+    } catch (err) {
+      console.error("Onboarding error:", err);
+      setOnboardingStep(0);
+      setOnboardingLoading(false);
+      setOnboardingError("Something went wrong. Please try again.");
+    }
+  };
+
   // Full-screen onboarding when user has 0 scans
   const hasScans = (dashboardStats?.overview?.totalScans ?? dashboardStats?.stats?.totalScans ?? 0) > 0;
   if (!hasScans && !onboardingDone) {
@@ -250,11 +321,11 @@ export default function AdvancedDashboard() {
                   <input type="text" value={addApiUrl} onChange={(e) => { setAddApiUrl(e.target.value); setOnboardingError(""); }}
                     placeholder="https://api.yourcompany.com"
                     className="w-full px-4 py-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white text-[15px] placeholder-gray-600 focus:outline-none focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/20 transition-all"
-                    onKeyDown={(e) => { if (e.key === "Enter" && addApiUrl) { setOnboardingStep(1); handleOnboardingAddApi(); } }}
+                    onKeyDown={(e) => { if (e.key === "Enter" && addApiUrl) { setOnboardingStep(1); handleOnboardingScan(); } }}
                     autoFocus
                   />
                 </div>
-                <button onClick={() => { setOnboardingStep(1); handleOnboardingAddApi(); }} disabled={!addApiUrl}
+                <button onClick={() => { setOnboardingStep(1); handleOnboardingScan(); }} disabled={!addApiUrl}
                   className="relative w-full py-3.5 rounded-xl text-[14px] font-semibold bg-gradient-to-r from-cyan-500 to-emerald-500 text-white shadow-[0_0_24px_rgba(6,182,212,0.3)] hover:shadow-[0_0_36px_rgba(6,182,212,0.45)] transition-all disabled:opacity-30 disabled:shadow-none overflow-hidden group">
                   <span className="relative z-10">Scan Now</span>
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.15] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
@@ -324,85 +395,6 @@ export default function AdvancedDashboard() {
     );
   }
 
-  const handleOnboardingAddApi = async () => {
-    if (!addApiUrl || !company?.id) return;
-    setOnboardingLoading(true);
-    setOnboardingError("");
-
-    // Normalize URL
-    let scanUrl = addApiUrl.trim();
-    if (!scanUrl.startsWith("http://") && !scanUrl.startsWith("https://")) {
-      scanUrl = "https://" + scanUrl;
-    }
-
-    try {
-      setOnboardingStep(2);
-
-      // Use session token from sessionStorage as Authorization header
-      // This bypasses the cookie issue entirely
-      const sessionToken = sessionStorage.getItem("sessionToken") || "";
-
-      const scanRes = await fetch("/api/customer/security-scans", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(sessionToken ? { "Authorization": `Bearer ${sessionToken}` } : {}),
-        },
-        credentials: "include",
-        body: JSON.stringify({ url: scanUrl, scanType: "quick" }),
-      });
-
-      let scanResult: any;
-      try { scanResult = await scanRes.json(); } catch {
-        setOnboardingStep(0);
-        setOnboardingLoading(false);
-        setOnboardingError("Server error — please try logging out and back in.");
-        return;
-      }
-
-      if (!scanResult.success) {
-        setOnboardingStep(0);
-        setOnboardingLoading(false);
-        setOnboardingError(scanResult.error || "Scan failed to start. Try logging out and back in.");
-        return;
-      }
-
-      setOnboardingStep(3);
-
-      // Poll for scan completion
-      const headers: Record<string, string> = {};
-      if (sessionToken) headers["Authorization"] = `Bearer ${sessionToken}`;
-
-      const poll = setInterval(async () => {
-        try {
-          const dashRes = await fetch("/api/customer/dashboard", {
-            headers,
-            credentials: "include",
-          });
-          const dashData = await dashRes.json();
-          if (dashData.success && (dashData.stats?.totalScans > 0 || dashData.stats?.completedScans > 0)) {
-            clearInterval(poll);
-            setDashboardStats(dashData.dashboard || dashData);
-            setOnboardingDone(true);
-            setOnboardingLoading(false);
-          }
-        } catch {}
-      }, 3000);
-
-      setTimeout(() => {
-        clearInterval(poll);
-        setOnboardingLoading(false);
-        setOnboardingDone(true);
-        refreshDashboard();
-      }, 60000);
-    } catch (err) {
-      console.error("Onboarding error:", err);
-      setOnboardingStep(0);
-      setOnboardingLoading(false);
-      setOnboardingError("Something went wrong. Please try again.");
-    }
-  };
-
   const renderContent = () => {
     if (activeFeature === "overview") {
       return (
@@ -450,7 +442,7 @@ export default function AdvancedDashboard() {
                     className="flex-1 px-3 py-2 bg-white/[0.03] border border-white/[0.06] rounded-lg text-[13px] text-white placeholder-gray-600 focus:outline-none focus:border-white/[0.12]"
                   />
                   <button
-                    onClick={() => { setOnboardingStep(1); handleOnboardingAddApi(); }}
+                    onClick={() => { setOnboardingStep(1); handleOnboardingScan(); }}
                     disabled={!addApiUrl || onboardingLoading}
                     className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 text-white text-[13px] font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                   >
