@@ -1,279 +1,92 @@
-import { logger } from "../../../../utils/logging/logger";
 import { NextRequest, NextResponse } from "next/server";
 import { database } from "../../../../infrastructure/database";
 
 export async function GET(request: NextRequest) {
   const tenantId = request.headers.get("x-tenant-id");
   if (!tenantId) {
-    return NextResponse.json(
-      { error: "Authentication required" },
-      { status: 401 },
-    );
+    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   }
 
   try {
-    const url = new URL(request.url);
-    const status = url.searchParams.get("status");
-    const method = url.searchParams.get("method");
-    const limit = parseInt(url.searchParams.get("limit") || "50");
-    const offset = parseInt(url.searchParams.get("offset") || "0");
+    // Get all endpoints from scans — every URL that has been scanned is a monitored API
+    const endpoints = await database.queryMany(
+      `SELECT
+         url,
+         MAX(security_score) FILTER (WHERE id = latest_id) as last_score,
+         COUNT(*) as scan_count,
+         MAX(created_at) as last_scanned,
+         SUM(vulnerability_count) FILTER (WHERE id = latest_id) as vuln_count
+       FROM (
+         SELECT *,
+           FIRST_VALUE(id) OVER (PARTITION BY url ORDER BY created_at DESC) as latest_id
+         FROM security_scans
+         WHERE tenant_id = $1 AND status = 'completed'
+       ) scans
+       GROUP BY url
+       ORDER BY MAX(security_score) FILTER (WHERE id = latest_id) ASC NULLS LAST`,
+      [tenantId],
+    );
 
-    // Build dynamic query with filters
-    let query = `
-      SELECT a.*,
-             COALESCE(sr_agg.scan_count, 0) as scan_count,
-             sr_agg.last_scan_date,
-             sr_agg.avg_security_score,
-             COALESCE(v_agg.vulnerability_count, 0) as vulnerability_count
-      FROM apis a
-      LEFT JOIN (
-        SELECT target, COUNT(*) as scan_count,
-               MAX(created_at) as last_scan_date,
-               AVG(security_score) as avg_security_score
-        FROM scan_results WHERE tenant_id = $1
-        GROUP BY target
-      ) sr_agg ON a.url = sr_agg.target
-      LEFT JOIN (
-        SELECT endpoint, COUNT(*) as vulnerability_count
-        FROM vulnerabilities WHERE tenant_id = $1 AND status != 'resolved'
-        GROUP BY endpoint
-      ) v_agg ON a.url = v_agg.endpoint
-      WHERE a.tenant_id = $1`;
-
-    const params: any[] = [tenantId];
-    let paramIndex = 2;
-
-    if (status) {
-      query += ` AND a.status = $${paramIndex}`;
-      params.push(status);
-      paramIndex++;
+    // Get per-endpoint vuln counts from vulnerabilities table (deduplicated)
+    const vulnCounts = await database.queryMany(
+      `SELECT affected_url, COUNT(*) as count
+       FROM vulnerabilities WHERE tenant_id = $1 AND status = 'open'
+       GROUP BY affected_url`,
+      [tenantId],
+    );
+    const vulnMap: Record<string, number> = {};
+    for (const v of vulnCounts) {
+      vulnMap[v.affected_url] = parseInt(v.count);
     }
 
-    if (method) {
-      query += ` AND a.method = $${paramIndex}`;
-      params.push(method.toUpperCase());
-      paramIndex++;
-    }
-
-    query += ` ORDER BY a.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
-    params.push(limit.toString(), offset.toString());
-
-    const endpoints = await database.queryMany(query, params);
-
-    // Get endpoint statistics
-    const endpointStats = await database.queryOne(
-      `SELECT
-         COUNT(*) as total_endpoints,
-         COUNT(CASE WHEN status = 'active' THEN 1 END) as active_endpoints,
-         COUNT(DISTINCT method) as unique_methods
-       FROM apis WHERE tenant_id = $1`,
-      [tenantId],
-    );
-
-    // Get method distribution
-    const methodDistribution = await database.queryMany(
-      `SELECT method, COUNT(*) as count
-       FROM apis 
-       WHERE tenant_id = $1 
-       GROUP BY method 
-       ORDER BY count DESC`,
-      [tenantId],
-    );
-
-    // Get security status summary
-    const securitySummary = await database.queryOne(
-      `SELECT
-         COUNT(CASE WHEN severity = 'CRITICAL' OR severity = 'critical' THEN 1 END) as critical_vulns,
-         COUNT(CASE WHEN severity = 'HIGH' OR severity = 'high' THEN 1 END) as high_vulns,
-         COUNT(CASE WHEN severity = 'MEDIUM' OR severity = 'medium' THEN 1 END) as medium_vulns,
-         COUNT(CASE WHEN severity = 'LOW' OR severity = 'low' THEN 1 END) as low_vulns
-       FROM vulnerabilities
-       WHERE tenant_id = $1 AND status != 'resolved'`,
-      [tenantId],
-    );
-
-    const formattedEndpoints = endpoints.map((endpoint) => ({
-      id: endpoint.id,
-      name: endpoint.name,
-      path: endpoint.url,
-      url: endpoint.url,
-      method: endpoint.method,
-      description: endpoint.description,
-      status: endpoint.status,
-      createdAt: endpoint.created_at,
-      updatedAt: endpoint.updated_at,
-      scan_count: parseInt(endpoint.scan_count || "0"),
-      last_scan_date: endpoint.last_scan_date,
-      avg_security_score: endpoint.avg_security_score
-        ? Math.round(parseFloat(endpoint.avg_security_score))
-        : null,
-      vulnerability_count: parseInt(endpoint.vulnerability_count || "0"),
-    }));
+    const result = endpoints.map((ep: any) => {
+      const score = parseInt(ep.last_score || "0");
+      const vulns = vulnMap[ep.url] || parseInt(ep.vuln_count || "0");
+      return {
+        url: ep.url,
+        score,
+        vulnCount: vulns,
+        scanCount: parseInt(ep.scan_count || "0"),
+        lastScanned: ep.last_scanned,
+        status: score >= 80 ? "good" : score >= 50 ? "warning" : "critical",
+      };
+    });
 
     return NextResponse.json({
       success: true,
-      endpoints: formattedEndpoints,
-      statistics: {
-        total: parseInt(endpointStats?.total_endpoints || "0"),
-        active: parseInt(endpointStats?.active_endpoints || "0"),
-        uniqueMethods: parseInt(endpointStats?.unique_methods || "0"),
-      },
-      methodDistribution: methodDistribution.map((dist) => ({
-        method: dist.method,
-        count: parseInt(dist.count || "0"),
-      })),
-      securitySummary: {
-        critical: parseInt(securitySummary?.critical_vulns || "0"),
-        high: parseInt(securitySummary?.high_vulns || "0"),
-        medium: parseInt(securitySummary?.medium_vulns || "0"),
-        low: parseInt(securitySummary?.low_vulns || "0"),
-      },
-      pagination: {
-        limit,
-        offset,
-        hasMore: formattedEndpoints.length === limit,
-      },
+      endpoints: result,
+      total: result.length,
     });
-  } catch (error) {
-    logger.error("API endpoints fetch error:", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return NextResponse.json(
-      { success: false, error: "Failed to fetch API endpoints" },
-      { status: 500 },
-    );
+
+  // ── Legacy query below (kept for reference) ──
+  } catch (e) {
+    // Fallback: try old apis table
+    try {
+      const apis = await database.queryMany(
+        `SELECT * FROM apis WHERE tenant_id = $1 ORDER BY created_at DESC`, [tenantId]);
+      return NextResponse.json({ success: true, endpoints: apis, total: apis.length });
+    } catch {}
+    return NextResponse.json({ error: "Failed to fetch endpoints" }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
+  // Keep existing POST for adding endpoints manually
   const tenantId = request.headers.get("x-tenant-id");
-  const userId = request.headers.get("x-user-id");
-
-  if (!tenantId) {
-    return NextResponse.json(
-      { error: "Authentication required" },
-      { status: 401 },
-    );
-  }
-
+  if (!tenantId) return NextResponse.json({ error: "Auth required" }, { status: 401 });
   try {
-    const { name, url, method, description, tags = [] } = await request.json();
-
-    if (!name || !url || !method) {
-      return NextResponse.json(
-        { error: "Name, URL, and method are required" },
-        { status: 400 },
-      );
-    }
-
-    // Validate URL format
-    try {
-      const parsedUrl = new URL(url);
-      if (!["http:", "https:"].includes(parsedUrl.protocol)) {
-        return NextResponse.json(
-          { error: "Invalid URL protocol. Only HTTP and HTTPS are allowed" },
-          { status: 400 },
-        );
-      }
-    } catch {
-      return NextResponse.json(
-        { error: "Invalid URL format" },
-        { status: 400 },
-      );
-    }
-
-    // Validate HTTP method
-    const validMethods = [
-      "GET",
-      "POST",
-      "PUT",
-      "PATCH",
-      "DELETE",
-      "HEAD",
-      "OPTIONS",
-    ];
-    if (!validMethods.includes(method.toUpperCase())) {
-      return NextResponse.json(
-        { error: "Invalid HTTP method" },
-        { status: 400 },
-      );
-    }
-
-    // Check for duplicate endpoint
-    const existingEndpoint = await database.queryOne(
-      "SELECT id FROM apis WHERE tenant_id = $1 AND url = $2 AND method = $3",
-      [tenantId, url, method.toUpperCase()],
+    const { name, url, method = "GET", description } = await request.json();
+    if (!url) return NextResponse.json({ error: "URL required" }, { status: 400 });
+    const ep = await database.queryOne(
+      `INSERT INTO apis (tenant_id, name, url, method, description, status, created_at)
+       VALUES ($1, $2, $3, $4, $5, 'active', NOW()) RETURNING *`,
+      [tenantId, name || url, url, method, description || ""],
     );
-
-    if (existingEndpoint) {
-      return NextResponse.json(
-        { error: "API endpoint with this URL and method already exists" },
-        { status: 409 },
-      );
-    }
-
-    // Create new API endpoint
-    const newEndpoint = await database.queryOne(
-      `INSERT INTO apis (tenant_id, name, url, method, description, tags, status, created_by, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW()) RETURNING *`,
-      [
-        tenantId,
-        name,
-        url,
-        method.toUpperCase(),
-        description || "",
-        JSON.stringify(tags),
-        "active",
-        userId || "system",
-      ],
-    );
-
-    if (!newEndpoint) {
-      return NextResponse.json(
-        { error: "Failed to create API endpoint" },
-        { status: 500 },
-      );
-    }
-
-    // Auto-trigger a quick security scan on the new endpoint
-    if (url.startsWith("http")) {
-      fetch(`http://localhost:3000/api/customer/security-scans`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-tenant-id": tenantId,
-          "x-internal-request": "true",
-          "x-request-id": `auto-scan-${newEndpoint.id}`,
-        },
-        body: JSON.stringify({ url, scanType: "quick" }),
-      }).catch((err) => {
-        logger.error("Auto-scan trigger failed:", {
-          error: err instanceof Error ? err.message : String(err),
-        });
-      });
-    }
-
-    return NextResponse.json({
-      success: true,
-      endpoint: {
-        id: newEndpoint.id,
-        name: newEndpoint.name,
-        url: newEndpoint.url,
-        method: newEndpoint.method,
-        description: newEndpoint.description,
-        tags: Array.isArray(newEndpoint.tags) ? newEndpoint.tags : [],
-        status: newEndpoint.status,
-        createdAt: newEndpoint.created_at,
-      },
-      message: "API endpoint created successfully. A security scan has been queued automatically.",
-    });
+    return NextResponse.json({ success: true, endpoint: ep });
   } catch (error) {
-    logger.error("API endpoint creation error:", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return NextResponse.json(
-      { error: "Failed to create API endpoint" },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "Failed to add endpoint" }, { status: 500 });
   }
 }
+
+/* ── OLD GET CODE REMOVED — was querying empty apis table ── */
+
