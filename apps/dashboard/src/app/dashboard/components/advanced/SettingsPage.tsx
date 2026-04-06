@@ -54,7 +54,8 @@ export function SettingsPage({ companyId }: { companyId: string }) {
   const [weeklyReport, setWeeklyReport] = useState(true);
 
   // Billing state
-  const [plan, setPlan] = useState("starter");
+  const [plan, setPlan] = useState("free");
+  const [annual, setAnnual] = useState(false);
 
   const flash = (text: string, ok = true) => {
     setToast({ text, ok });
@@ -484,40 +485,69 @@ export function SettingsPage({ companyId }: { companyId: string }) {
               {/* ─── Billing ─── */}
               {tab === "billing" && (
                 <div className="space-y-6">
-                  <Card className="p-6">
-                    <div className="flex items-center justify-between mb-6">
-                      <div>
-                        <h3 className="text-[15px] font-semibold text-white">Current Plan</h3>
-                        <p className="text-[12px] text-gray-500 mt-0.5">Manage your subscription</p>
-                      </div>
-                      <span className="px-3 py-1 text-[12px] font-semibold rounded-full bg-cyan-500/15 text-cyan-400 border border-cyan-500/20 capitalize">
-                        {plan}
-                      </span>
+                  {/* Annual toggle */}
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-[15px] font-semibold text-white">Plans & Pricing</h3>
+                    <div className="flex items-center gap-2 text-[12px]">
+                      <span className={!annual ? "text-white" : "text-gray-500"}>Monthly</span>
+                      <button onClick={() => setAnnual(!annual)}
+                        className={`relative w-10 rounded-full transition-colors ${annual ? "bg-emerald-500" : "bg-gray-700"}`} style={{ height: 22 }}>
+                        <span className={`absolute top-[3px] w-4 h-4 rounded-full bg-white shadow transition-transform ${annual ? "left-[20px]" : "left-[3px]"}`} />
+                      </button>
+                      <span className={annual ? "text-white" : "text-gray-500"}>Annual <span className="text-emerald-400 text-[10px]">Save 17%</span></span>
                     </div>
+                  </div>
 
-                    <div className="space-y-2 mb-6">
-                      {[
-                        "Unlimited security scans",
-                        "All compliance frameworks (OWASP, PCI DSS, SOC 2, GDPR, HIPAA)",
-                        "Scheduled scans (daily, weekly, every 6h)",
-                        "Security policy engine with automated alerts",
-                        "Slack, PagerDuty & webhook integrations",
-                        "API Discovery scanner",
-                        "Embeddable security badge",
-                        "Weekly email reports",
-                        "API key access for CI/CD",
-                      ].map((feature) => (
-                        <div key={feature} className="flex items-center gap-2 text-[12px] text-gray-400">
-                          <CheckIcon className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                          {feature}
-                        </div>
-                      ))}
-                    </div>
-
-                    <button className="px-4 py-2 rounded-lg text-[12px] font-medium bg-white/[0.06] text-gray-300 hover:bg-white/[0.1] border border-white/[0.06] transition-colors">
-                      Manage Subscription
-                    </button>
-                  </Card>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {[
+                      { id: "free", name: "Free", price: 0, annual: 0, features: [
+                        "1 API endpoint", "3 scans/month", "Quick scan only", "Vulnerability list", "Basic security headers check"
+                      ], missing: ["Fix guides", "Compliance reports", "Scheduled scans", "AI Advisor", "CI/CD", "Team members"] },
+                      { id: "starter", name: "Starter", price: 19, annual: 190, features: [
+                        "5 API endpoints", "Unlimited quick scans", "5 full scans/week", "Fix guides with code", "OWASP compliance", "Slack notifications", "Security badge", "Weekly email reports"
+                      ], missing: ["AI Advisor", "CI/CD integration", "Team members", "Scheduled scans"] },
+                      { id: "professional", name: "Professional", price: 49, annual: 490, features: [
+                        "Unlimited endpoints", "Unlimited scans", "Scheduled scans", "All 5 compliance frameworks", "PDF export", "AI Security Advisor (20/day)", "CI/CD integration", "5 team members", "Security policies", "API keys", "Custom webhooks"
+                      ], missing: [] },
+                    ].map((tier) => {
+                      const isCurrent = plan === tier.id;
+                      const displayPrice = annual ? Math.round(tier.annual / 12) : tier.price;
+                      return (
+                        <Card key={tier.id} className={`p-5 ${isCurrent ? "border-cyan-500/30 ring-1 ring-cyan-500/20" : ""}`}>
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="text-[14px] font-semibold text-white">{tier.name}</h4>
+                            {isCurrent && <span className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-cyan-500/15 text-cyan-400 border border-cyan-500/20">Current</span>}
+                          </div>
+                          <div className="mb-4">
+                            <span className="text-2xl font-bold text-white">${displayPrice}</span>
+                            <span className="text-[12px] text-gray-500">{tier.price > 0 ? "/mo" : ""}</span>
+                            {annual && tier.annual > 0 && <div className="text-[10px] text-gray-600">${tier.annual}/year billed annually</div>}
+                          </div>
+                          <div className="space-y-1.5 mb-4">
+                            {tier.features.map((f) => (
+                              <div key={f} className="flex items-start gap-2 text-[11px] text-gray-400">
+                                <CheckIcon className="w-3 h-3 text-emerald-400 shrink-0 mt-0.5" />{f}
+                              </div>
+                            ))}
+                            {tier.missing.map((f) => (
+                              <div key={f} className="flex items-start gap-2 text-[11px] text-gray-600">
+                                <span className="w-3 text-center shrink-0">—</span>{f}
+                              </div>
+                            ))}
+                          </div>
+                          {!isCurrent ? (
+                            <button className="w-full py-2 rounded-lg text-[12px] font-medium bg-white/[0.06] text-gray-300 hover:bg-white/[0.1] border border-white/[0.06] transition-colors">
+                              {tier.price > (plan === "free" ? 0 : plan === "starter" ? 19 : 49) ? "Upgrade" : "Downgrade"}
+                            </button>
+                          ) : (
+                            <button className="w-full py-2 rounded-lg text-[12px] font-medium bg-white/[0.04] text-gray-600 border border-white/[0.04] cursor-default">
+                              Current Plan
+                            </button>
+                          )}
+                        </Card>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 

@@ -179,7 +179,7 @@ function OverviewTab({ stats, metrics, scanStats, vulnSummary, trends, endpointC
   const scoreChart = last14.map((t: any) => ({
     date: new Date(t.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
     score: t.securityScore ?? 0,
-    threats: t.activeThreats ?? 0,
+    scans: t.scanCount ?? 1,
   }));
 
   /* vuln severity breakdown for bar chart */

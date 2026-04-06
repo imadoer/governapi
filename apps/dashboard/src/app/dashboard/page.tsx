@@ -44,6 +44,8 @@ const DataManagementPage = dynamic(() => import("./components/advanced/DataManag
 const BillingSubscriptionPage = dynamic(() => import("./components/advanced/BillingSubscriptionPage").then(m => ({ default: m.BillingSubscriptionPage })), { loading: () => <PageSkeleton /> });
 const EnterpriseSettingsPage = dynamic(() => import("./components/advanced/EnterpriseSettingsPage").then(m => ({ default: m.EnterpriseSettingsPage })), { loading: () => <PageSkeleton /> });
 const SettingsPage = dynamic(() => import("./components/advanced/SettingsPage").then(m => ({ default: m.SettingsPage })), { loading: () => <PageSkeleton /> });
+const AiAdvisor = dynamic(() => import("./components/advanced/AiAdvisor").then(m => ({ default: m.AiAdvisor })), { ssr: false });
+import { UpgradeGate, planHasAccess } from "./components/advanced/UpgradeGate";
 
 const SIDEBAR_ITEMS = [
   {
@@ -137,6 +139,7 @@ export default function AdvancedDashboard() {
   const [addApiName, setAddApiName] = useState("");
   const [onboardingLoading, setOnboardingLoading] = useState(false);
   const [onboardingDone, setOnboardingDone] = useState(false);
+  const [plan, setPlan] = useState("free");
 
   // All data comes from dashboardStats (fetched from /api/customer/dashboard)
 
@@ -173,6 +176,16 @@ export default function AdvancedDashboard() {
       setInitialLoading(false);
     }
   }, [swrDashboard]);
+
+  // Fetch plan once
+  useEffect(() => {
+    if (company?.id) {
+      fetch("/api/customer/plan", { headers: { "x-tenant-id": company.id.toString() } })
+        .then((r) => r.json())
+        .then((d) => { if (d.success) setPlan(d.plan); })
+        .catch(() => {});
+    }
+  }, [company?.id]);
 
   const handleLogout = () => {
     sessionStorage.clear();
@@ -524,7 +537,7 @@ export default function AdvancedDashboard() {
       case "vulnerability-scanner":
         return <VulnerabilitiesPage company={company} />;
       case "compliance-hub":
-        return <ComplianceHubPage company={company} />;
+        return planHasAccess(plan, "starter") ? <ComplianceHubPage company={company} /> : <UpgradeGate feature="Compliance Hub" requiredPlan="starter" currentPlan={plan} />;
       case "webhook-center":
         return <WebhookCenterPage companyId={company?.id.toString()} />;
       case "threat-surface":
@@ -532,7 +545,7 @@ export default function AdvancedDashboard() {
       case "api-discovery":
         return <ApiDiscoveryPage companyId={company?.id.toString()} />;
       case "custom-rules":
-        return <CustomRulesPage companyId={company?.id.toString()} />;
+        return planHasAccess(plan, "professional") ? <CustomRulesPage companyId={company?.id.toString()} /> : <UpgradeGate feature="Security Policies" requiredPlan="professional" currentPlan={plan} />;
       case "performance-monitor":
         return <PerformanceMonitorPage companyId={company?.id.toString()} />;
       case "analytics-insights":
@@ -654,6 +667,8 @@ export default function AdvancedDashboard() {
           </AnimatePresence>
         </div>
       </div>
+      {/* AI Advisor floating chat */}
+      {company?.id && <AiAdvisor companyId={company.id.toString()} plan={plan} />}
     </div>
   );
 }
