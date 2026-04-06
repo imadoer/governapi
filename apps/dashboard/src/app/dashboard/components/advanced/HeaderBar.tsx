@@ -65,12 +65,28 @@ export function HeaderBar({
           </div>
 
           <div className="flex items-center space-x-4">
-            <motion.div
-              whileHover={{ scale: 1.05 }}
-              className="px-4 py-2 rounded-full bg-cyan-500 text-white text-sm font-bold"
-            >
-              PROFESSIONAL PLAN
-            </motion.div>
+            {(() => {
+              const p = company?.subscriptionPlan || "free";
+              const cfg: Record<string, { bg: string; text: string; label: string }> = {
+                free: { bg: "bg-gray-700", text: "text-gray-300", label: "FREE PLAN" },
+                starter: { bg: "bg-blue-500/20", text: "text-blue-400", label: "STARTER PLAN" },
+                professional: { bg: "bg-emerald-500/20", text: "text-emerald-400", label: "PROFESSIONAL" },
+                enterprise: { bg: "bg-cyan-500", text: "text-white", label: "ENTERPRISE" },
+              };
+              const c = cfg[p] || cfg.free;
+              return (
+                <div className="flex items-center gap-2">
+                  <div className={`px-3 py-1.5 rounded-full ${c.bg} ${c.text} text-[11px] font-bold`}>
+                    {c.label}
+                  </div>
+                  {p === "free" && (
+                    <button className="text-[11px] text-cyan-400 hover:text-cyan-300 transition-colors font-medium">
+                      Upgrade
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
 
             <motion.button
               whileHover={{ scale: 1.1 }}

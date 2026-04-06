@@ -1069,19 +1069,13 @@ export function VulnerabilitiesPage({ company }: { company?: any }) {
                     {/* Remediation — rich fix guide */}
                     {(() => {
                       const guide = VULN_GUIDES[selectedVulnerability.vulnerability_type];
+                      const userPlan = company?.subscriptionPlan || company?.plan || "free";
+                      const canSeeFixes = userPlan !== "free";
                       return (
                         <div className="bg-slate-800/30 border border-white/10 rounded-xl p-4 space-y-4">
                           <h5 className="text-sm font-semibold text-slate-300">How to Fix</h5>
 
-                          {/* Rich description */}
-                          {guide?.description && (
-                            <div>
-                              <div className="text-[11px] font-medium text-gray-400 mb-1">Why this matters</div>
-                              <p className="text-[12px] text-slate-300 leading-relaxed">{guide.description}</p>
-                            </div>
-                          )}
-
-                          {/* Quick fix from DB */}
+                          {/* Quick fix — first line always visible */}
                           {selectedVulnerability.remediation && (
                             <div>
                               <div className="text-[11px] font-medium text-gray-400 mb-1">Quick fix</div>
@@ -1089,31 +1083,61 @@ export function VulnerabilitiesPage({ company }: { company?: any }) {
                             </div>
                           )}
 
-                          {/* Code examples */}
-                          {guide?.fixes && guide.fixes.length > 0 && (
-                            <div>
-                              <div className="text-[11px] font-medium text-gray-400 mb-2">Code examples</div>
-                              <div className="space-y-2">
-                                {guide.fixes.map((fix: any) => (
-                                  <div key={fix.framework}>
-                                    <div className="text-[10px] text-cyan-400 font-medium mb-1">{fix.framework}</div>
-                                    <pre className="text-[11px] text-slate-300 bg-black/30 rounded-lg p-3 overflow-x-auto font-mono leading-relaxed whitespace-pre-wrap">{fix.code}</pre>
-                                  </div>
-                                ))}
+                          {/* Blurred gate for free users */}
+                          {!canSeeFixes ? (
+                            <div className="relative">
+                              <div className="blur-[6px] pointer-events-none select-none opacity-60">
+                                <div className="text-[11px] font-medium text-gray-400 mb-1">Why this matters</div>
+                                <p className="text-[12px] text-slate-400">This vulnerability allows attackers to exploit your API by intercepting unencrypted traffic and performing man-in-the-middle attacks...</p>
+                                <div className="text-[11px] font-medium text-gray-400 mt-3 mb-1">Code examples</div>
+                                <pre className="text-[11px] text-slate-400 bg-black/30 rounded-lg p-3">{"// Express.js\napp.use(helmet.hsts({\n  maxAge: 31536000\n}));"}</pre>
+                              </div>
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <div className="bg-slate-900/90 border border-white/[0.08] rounded-xl px-5 py-4 text-center shadow-xl">
+                                  <p className="text-[12px] text-gray-300 mb-2">Upgrade to Starter to see full fix instructions</p>
+                                  <button className="px-4 py-1.5 rounded-lg text-[11px] font-medium bg-gradient-to-r from-cyan-500 to-blue-500 text-white">
+                                    Upgrade — $19/mo
+                                  </button>
+                                </div>
                               </div>
                             </div>
-                          )}
+                          ) : (
+                            <>
+                              {/* Rich description */}
+                              {guide?.description && (
+                                <div>
+                                  <div className="text-[11px] font-medium text-gray-400 mb-1">Why this matters</div>
+                                  <p className="text-[12px] text-slate-300 leading-relaxed">{guide.description}</p>
+                                </div>
+                              )}
 
-                          {/* Reference links */}
-                          {guide?.docs && guide.docs.length > 0 && (
-                            <div className="flex flex-wrap gap-2 pt-1">
-                              {guide.docs.map((doc: any) => (
-                                <a key={doc.url} href={doc.url} target="_blank" rel="noopener noreferrer"
-                                  className="text-[10px] text-gray-500 hover:text-white border border-white/[0.06] rounded-lg px-2 py-1 transition-colors">
-                                  {doc.label} ↗
-                                </a>
-                              ))}
-                            </div>
+                              {/* Code examples */}
+                              {guide?.fixes && guide.fixes.length > 0 && (
+                                <div>
+                                  <div className="text-[11px] font-medium text-gray-400 mb-2">Code examples</div>
+                                  <div className="space-y-2">
+                                    {guide.fixes.map((fix: any) => (
+                                      <div key={fix.framework}>
+                                        <div className="text-[10px] text-cyan-400 font-medium mb-1">{fix.framework}</div>
+                                        <pre className="text-[11px] text-slate-300 bg-black/30 rounded-lg p-3 overflow-x-auto font-mono leading-relaxed whitespace-pre-wrap">{fix.code}</pre>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Reference links */}
+                              {guide?.docs && guide.docs.length > 0 && (
+                                <div className="flex flex-wrap gap-2 pt-1">
+                                  {guide.docs.map((doc: any) => (
+                                    <a key={doc.url} href={doc.url} target="_blank" rel="noopener noreferrer"
+                                      className="text-[10px] text-gray-500 hover:text-white border border-white/[0.06] rounded-lg px-2 py-1 transition-colors">
+                                      {doc.label} ↗
+                                    </a>
+                                  ))}
+                                </div>
+                              )}
+                            </>
                           )}
 
                           {/* Fallback if no guide exists */}

@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import useSWR from "swr";
 import { FadeIn } from "./PageSkeleton";
 import { motion, AnimatePresence } from "framer-motion";
@@ -36,8 +36,19 @@ export function SecurityCenterPage({ company, onNavigate }: any) {
   const [formScanType, setFormScanType] = useState("comprehensive");
   const [formError, setFormError] = useState("");
   const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null);
+  const [planInfo, setPlanInfo] = useState<any>(null);
 
   const tenantId = company?.id || "1";
+  const userPlan = company?.subscriptionPlan || "free";
+
+  // Fetch plan usage for scan limit
+  useEffect(() => {
+    const token = typeof window !== "undefined" ? sessionStorage.getItem("sessionToken") || "" : "";
+    if (token) {
+      fetch("/api/customer/plan", { headers: { "Authorization": `Bearer ${token}` }, credentials: "include" })
+        .then(r => r.json()).then(d => { if (d.success) setPlanInfo(d); }).catch(() => {});
+    }
+  }, []);
   const flash = (text: string, ok = true) => { setToast({ text, ok }); setTimeout(() => setToast(null), 2500); };
 
   const { data: metricsData, mutate: refreshMetrics, isLoading: metricsLoading } = useSWR(
@@ -180,9 +191,24 @@ export function SecurityCenterPage({ company, onNavigate }: any) {
           <button onClick={() => refreshMetrics()} className="p-2 rounded-lg text-gray-500 hover:text-white hover:bg-white/5 transition-colors">
             <ArrowPathIcon className="w-4 h-4" />
           </button>
-          <button onClick={() => setScanModal(true)} className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-white text-black hover:bg-gray-200 transition-colors flex items-center gap-1.5">
-            <PlayCircleIcon className="w-3.5 h-3.5" /> Start Scan
-          </button>
+          {/* Scan limit for free users */}
+          {userPlan === "free" && planInfo && (
+            <span className="text-[11px] text-gray-500">
+              {Math.max(0, 3 - (planInfo.usage?.scansThisMonth || 0))} of 3 scans remaining
+            </span>
+          )}
+          {(() => {
+            const atLimit = userPlan === "free" && planInfo && (planInfo.usage?.scansThisMonth || 0) >= 3;
+            return atLimit ? (
+              <button disabled className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-gray-700 text-gray-500 cursor-not-allowed flex items-center gap-1.5" title="Scan limit reached">
+                Scan limit reached — Upgrade
+              </button>
+            ) : (
+              <button onClick={() => setScanModal(true)} className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-white text-black hover:bg-gray-200 transition-colors flex items-center gap-1.5">
+                <PlayCircleIcon className="w-3.5 h-3.5" /> Start Scan
+              </button>
+            );
+          })()}
         </div>
       </div>
 
