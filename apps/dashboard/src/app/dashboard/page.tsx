@@ -417,7 +417,7 @@ export default function AdvancedDashboard() {
       return (
         <div className="space-y-6">
           {/* Onboarding Card — shown when customer has no APIs and hasn't completed onboarding */}
-          {dashboardStats.overview.totalApis === 0 && !onboardingDone && (
+          {endpointCount === 0 && dashboardStats.overview.totalScans === 0 && !onboardingDone && (
             <div className="bg-slate-800/50 border border-white/[0.06] rounded-2xl p-5">
               <div className="flex items-center justify-between mb-4">
                 <div>

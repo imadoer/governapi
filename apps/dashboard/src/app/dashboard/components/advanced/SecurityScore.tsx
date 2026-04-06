@@ -87,7 +87,7 @@ export function SecurityScore({
 
         {/* Endpoints */}
         <div className="bg-slate-800/50 border border-white/[0.06] rounded-2xl p-5">
-          <div className="text-[12px] text-gray-500 mb-2">Endpoints Protected</div>
+          <div className="text-[12px] text-gray-500 mb-2">Monitored Endpoints</div>
           <div className="text-2xl font-semibold text-white tracking-tight">{totalEndpoints}</div>
           <div className="text-[11px] text-gray-600 mt-1">Monitored APIs</div>
         </div>

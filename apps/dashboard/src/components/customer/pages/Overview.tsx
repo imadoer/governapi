@@ -251,7 +251,7 @@ export default function Overview({
               <Title level={2} style={{ margin: 0 }}>
                 {totalEndpoints}
               </Title>
-              <Text type="secondary">Protected Endpoints</Text>
+              <Text type="secondary">Monitored Endpoints</Text>
             </Space>
           </Card>
         </Col>
