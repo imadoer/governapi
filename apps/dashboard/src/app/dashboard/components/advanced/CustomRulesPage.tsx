@@ -2,501 +2,307 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { PageSkeleton, FadeIn } from "./PageSkeleton";
+import { PageSkeleton } from "./PageSkeleton";
 import {
   PlusIcon,
   ArrowPathIcon,
-  ShieldCheckIcon,
-  FireIcon,
-  BoltIcon,
   TrashIcon,
-  PencilIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
 
-interface CustomRule {
-  id: string;
-  name: string;
-  ruleType: string;
-  description: string;
-  priority: string;
-  action: string;
-  conditions: any;
-  isActive: boolean;
-  triggeredCount: number;
-  createdAt: string;
-  updatedAt: string;
+function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return <div className={`bg-slate-800/50 border border-white/[0.06] rounded-2xl ${className}`}>{children}</div>;
 }
 
-interface RuleStatistics {
-  totalRules: number;
-  activeRules: number;
-  totalTriggers: number;
-  rulesByType: Record<string, number>;
-  mostTriggeredRule: string | null;
-}
+const RULE_TYPES = [
+  { id: "score_alert", label: "Score Alert", desc: "Trigger when an endpoint's score drops below a threshold" },
+  { id: "vuln_alert", label: "Vulnerability Alert", desc: "Trigger when a new vulnerability of a specific severity is found" },
+  { id: "header_check", label: "Header Check", desc: "Trigger when a specific security header is missing" },
+  { id: "compliance_alert", label: "Compliance Alert", desc: "Trigger when a compliance framework score drops below a threshold" },
+  { id: "endpoint_down", label: "Endpoint Down", desc: "Trigger when a scanned endpoint returns 5xx or times out" },
+  { id: "new_exposure", label: "New Exposure", desc: "Trigger when API Discovery finds a new exposed endpoint" },
+];
+
+const ACTIONS = [
+  { id: "notify", label: "Notify", desc: "Send alert to Slack/PagerDuty/webhook" },
+  { id: "flag_critical", label: "Flag Critical", desc: "Mark the vulnerability as critical" },
+  { id: "fail_cicd", label: "Fail CI/CD", desc: "Return failure status via API key" },
+  { id: "auto_rescan", label: "Auto-Rescan", desc: "Immediately rescan the endpoint" },
+];
+
+const HEADERS = ["HSTS", "CSP", "X-Frame-Options", "X-Content-Type-Options", "CORS", "Referrer-Policy"];
+const SEVERITIES = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
 
 export function CustomRulesPage({ companyId }: { companyId: string }) {
-  const [rules, setRules] = useState<CustomRule[]>([]);
-  const [stats, setStats] = useState<RuleStatistics | null>(null);
+  const [rules, setRules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingRule, setEditingRule] = useState<CustomRule | null>(null);
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [modal, setModal] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null);
 
   // Form state
-  const [ruleName, setRuleName] = useState("");
-  const [ruleType, setRuleType] = useState("rate_limit");
-  const [description, setDescription] = useState("");
-  const [priority, setPriority] = useState("Medium");
-  const [action, setAction] = useState("BLOCK");
-  const [conditions, setConditions] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const [name, setName] = useState("");
+  const [ruleType, setRuleType] = useState("score_alert");
+  const [action, setAction] = useState("notify");
+  const [threshold, setThreshold] = useState(50);
+  const [severity, setSeverity] = useState("CRITICAL");
+  const [header, setHeader] = useState("HSTS");
 
-  const showToast = (message: string, type: "success" | "error") => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
+  const flash = (text: string, ok = true) => { setToast({ text, ok }); setTimeout(() => setToast(null), 2500); };
 
   const fetchRules = async () => {
     setLoading(true);
     try {
-      const response = await fetch("/api/customer/custom-rules", {
-        headers: { "x-tenant-id": companyId },
-      });
-      const data = await response.json();
-
-      if (data.success) {
-        setRules(data.rules || []);
-        setStats(data.statistics || null);
-      }
-    } catch (error) {
-      console.error("Failed to fetch rules:", error);
-    } finally {
-      setLoading(false);
-    }
+      const r = await fetch("/api/customer/custom-rules", { headers: { "x-tenant-id": companyId } });
+      const d = await r.json();
+      if (d.success) setRules(d.rules || []);
+    } catch {} finally { setLoading(false); }
   };
 
-  useEffect(() => {
-    if (companyId) fetchRules();
-  }, [companyId]);
-
-  const handleCreateRule = async () => {
-    if (!ruleName || !ruleType) {
-      showToast("Please fill in all required fields", "error");
-      return;
-    }
-
-    let parsedConditions = {};
-    if (conditions) {
-      try {
-        parsedConditions = JSON.parse(conditions);
-      } catch (e) {
-        showToast("Invalid JSON in conditions", "error");
-        return;
-      }
-    }
-
-    setSubmitting(true);
-    try {
-      const response = await fetch("/api/customer/custom-rules", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-tenant-id": companyId,
-        },
-        body: JSON.stringify({
-          name: ruleName,
-          ruleType,
-          description,
-          priority,
-          action,
-          conditions: parsedConditions,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        showToast("Rule created successfully!", "success");
-        resetForm();
-        setIsModalOpen(false);
-        fetchRules();
-      } else {
-        showToast(data.error || "Failed to create rule", "error");
-      }
-    } catch (error) {
-      showToast("Failed to create rule", "error");
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  useEffect(() => { if (companyId) fetchRules(); }, [companyId]);
 
   const resetForm = () => {
-    setRuleName("");
-    setRuleType("rate_limit");
-    setDescription("");
-    setPriority("Medium");
-    setAction("BLOCK");
-    setConditions("");
-    setEditingRule(null);
+    setName(""); setRuleType("score_alert"); setAction("notify");
+    setThreshold(50); setSeverity("CRITICAL"); setHeader("HSTS");
   };
 
-  const getRuleTypeIcon = (type: string) => {
-    switch (type) {
-      case "rate_limit":
-        return <BoltIcon className="w-5 h-5" />;
-      case "ip_blocking":
-        return <ShieldCheckIcon className="w-5 h-5" />;
-      case "path_blocking":
-        return <FireIcon className="w-5 h-5" />;
-      default:
-        return <ShieldCheckIcon className="w-5 h-5" />;
+  const buildConditions = () => {
+    switch (ruleType) {
+      case "score_alert": return { type: "score_below", threshold };
+      case "vuln_alert": return { type: "severity_match", severity };
+      case "header_check": return { type: "header_missing", header };
+      case "compliance_alert": return { type: "compliance_below", threshold };
+      case "endpoint_down": return { type: "endpoint_error" };
+      case "new_exposure": return { type: "new_exposure" };
+      default: return {};
     }
   };
 
-  const getPriorityClasses = (priority: string) => {
-    switch (priority.toLowerCase()) {
-      case "critical":
-        return "bg-red-500/20 text-red-400 border border-red-500/30";
-      case "high":
-        return "bg-orange-500/20 text-orange-400 border border-orange-500/30";
-      case "medium":
-        return "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30";
-      case "low":
-        return "bg-green-500/20 text-green-400 border border-green-500/30";
-      default:
-        return "bg-slate-500/20 text-slate-400 border border-slate-500/30";
+  const describeRule = (rule: any) => {
+    const c = typeof rule.conditions === "string" ? JSON.parse(rule.conditions) : rule.conditions || {};
+    switch (c.type) {
+      case "score_below": return `Alert when score drops below ${c.threshold}`;
+      case "severity_match": return `Alert on ${c.severity} vulnerabilities`;
+      case "header_missing": return `Alert when ${c.header} header is missing`;
+      case "compliance_below": return `Alert when compliance drops below ${c.threshold}%`;
+      case "endpoint_error": return "Alert when endpoint returns 5xx or times out";
+      case "new_exposure": return "Alert when new exposed endpoint is found";
+      default: return rule.description || "Custom policy";
     }
   };
 
-  const getActionClasses = (action: string) => {
-    switch (action.toUpperCase()) {
-      case "BLOCK":
-        return "bg-red-500/20 text-red-400 border border-red-500/30";
-      case "ALLOW":
-        return "bg-green-500/20 text-green-400 border border-green-500/30";
-      case "MONITOR":
-        return "bg-blue-500/20 text-blue-400 border border-blue-500/30";
-      case "CHALLENGE":
-        return "bg-orange-500/20 text-orange-400 border border-orange-500/30";
-      default:
-        return "bg-slate-500/20 text-slate-400 border border-slate-500/30";
-    }
+  const handleCreate = async () => {
+    if (!name) { flash("Name required", false); return; }
+    setSubmitting(true);
+    try {
+      const r = await fetch("/api/customer/custom-rules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-tenant-id": companyId },
+        body: JSON.stringify({
+          name,
+          ruleType,
+          conditions: buildConditions(),
+          action,
+          description: describeRule({ conditions: buildConditions() }),
+        }),
+      });
+      const d = await r.json();
+      if (d.success) { flash("Policy created"); setModal(false); resetForm(); fetchRules(); }
+      else flash(d.error || "Failed", false);
+    } catch { flash("Failed", false); }
+    setSubmitting(false);
   };
 
-  if (loading) {
-    return <PageSkeleton />;
-  }
+  const handleDelete = async (id: number) => {
+    try {
+      await fetch(`/api/customer/custom-rules?id=${id}`, {
+        method: "DELETE",
+        headers: { "x-tenant-id": companyId },
+      });
+      flash("Policy deleted");
+      fetchRules();
+    } catch { flash("Delete failed", false); }
+  };
+
+  const handleToggle = async (rule: any) => {
+    try {
+      await fetch("/api/customer/custom-rules", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "x-tenant-id": companyId },
+        body: JSON.stringify({ id: rule.id, name: rule.name, isActive: !rule.isActive }),
+      });
+      fetchRules();
+    } catch {}
+  };
+
+  if (loading) return <PageSkeleton />;
+
+  const activeCount = rules.filter((r) => r.isActive).length;
 
   return (
-    <div className="space-y-6">
+    <div>
       {/* Toast */}
       <AnimatePresence>
         {toast && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className={`fixed top-6 right-6 z-50 px-6 py-3 rounded-xl text-white font-medium shadow-lg backdrop-blur-xl border border-white/10 ${
-              toast.type === "success" ? "bg-emerald-500/90" : "bg-red-500/90"
-            }`}
-          >
-            {toast.message}
+          <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }}
+            className={`fixed top-5 right-5 z-[200] px-4 py-2 rounded-lg text-[13px] font-medium shadow-xl border border-white/[0.06] ${toast.ok ? "bg-emerald-600/90 text-white" : "bg-red-600/90 text-white"}`}>
+            {toast.text}
           </motion.div>
         )}
       </AnimatePresence>
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-end justify-between mb-10">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-2">Custom Rules</h1>
-          <p className="text-slate-400">
-            Create and manage custom security rules for your APIs
-          </p>
+          <h1 className="text-2xl font-semibold text-white tracking-tight">Security Policies</h1>
+          <p className="text-sm text-gray-500 mt-1">Automated alerts and actions based on scan results</p>
         </div>
-        <div className="flex items-center gap-4">
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => setIsModalOpen(true)}
-            className="px-6 py-3 bg-cyan-500 hover:bg-cyan-600 text-white rounded-xl font-semibold flex items-center gap-2"
-          >
-            <PlusIcon className="w-5 h-5" />
-            Create Rule
-          </motion.button>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={fetchRules}
-            className="p-2 bg-slate-700 hover:bg-slate-600 rounded-xl transition-colors"
-          >
-            <ArrowPathIcon className="w-5 h-5 text-white" />
-          </motion.button>
+        <div className="flex items-center gap-2">
+          <button onClick={fetchRules} className="p-2 rounded-lg text-gray-500 hover:text-white hover:bg-white/5 transition-colors">
+            <ArrowPathIcon className="w-4 h-4" />
+          </button>
+          <button onClick={() => { resetForm(); setModal(true); }}
+            className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-white text-black hover:bg-gray-200 transition-colors flex items-center gap-1.5">
+            <PlusIcon className="w-3.5 h-3.5" /> New Policy
+          </button>
         </div>
       </div>
 
-      {/* Statistics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         {[
-          { label: "Total Rules", value: stats?.totalRules || 0 },
-          { label: "Active Rules", value: stats?.activeRules || 0 },
-          { label: "Total Triggers", value: stats?.totalTriggers || 0 },
-          { label: "Most Triggered", value: stats?.mostTriggeredRule || "N/A", small: true },
-        ].map((s, i) => (
-          <motion.div key={s.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
-            className="bg-slate-800/50 border border-white/[0.06] rounded-2xl p-5">
+          { label: "Total Policies", value: rules.length },
+          { label: "Active", value: activeCount },
+          { label: "Alert Policies", value: rules.filter((r) => r.action === "notify").length },
+          { label: "CI/CD Policies", value: rules.filter((r) => r.action === "fail_cicd").length },
+        ].map((s) => (
+          <Card key={s.label} className="p-5">
             <div className="text-[12px] text-gray-500 mb-2">{s.label}</div>
-            <div className={`${s.small ? "text-[14px]" : "text-2xl"} font-semibold text-white tracking-tight truncate`}>{s.value}</div>
-          </motion.div>
+            <div className="text-2xl font-semibold text-white">{s.value}</div>
+          </Card>
         ))}
       </div>
 
-      {/* Rules List */}
-      <div className="space-y-3">
-        <h2 className="text-xl font-bold text-white">
-          Your Rules ({rules.length})
-        </h2>
-        <AnimatePresence>
-          {rules.map((rule, index) => (
-            <motion.div
-              key={rule.id}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              transition={{ delay: index * 0.05 }}
-              className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:border-cyan-500/50 transition-all"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex items-start gap-4 flex-1">
-                  <div className="p-3 rounded-xl bg-cyan-500/20">
-                    {getRuleTypeIcon(rule.ruleType)}
-                  </div>
-
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-lg font-semibold text-white">
-                        {rule.name}
-                      </h3>
-                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${rule.isActive ? "bg-green-500/20 text-green-400 border border-green-500/30" : "bg-red-500/20 text-red-400 border border-red-500/30"}`}>
-                        {rule.isActive ? "Active" : "Inactive"}
-                      </span>
-                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${getPriorityClasses(rule.priority)}`}>
-                        {rule.priority}
-                      </span>
-                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${getActionClasses(rule.action)}`}>
-                        {rule.action}
-                      </span>
-                    </div>
-
-                    <p className="text-sm text-slate-400 mb-3">
-                      {rule.description}
-                    </p>
-
-                    <div className="flex items-center gap-4 text-sm text-slate-400">
-                      <span className="capitalize">
-                        Type: {rule.ruleType.replace("_", " ")}
-                      </span>
-                      <span>•</span>
-                      <span>
-                        Triggered:{" "}
-                        <span className="text-orange-400 font-semibold">
-                          {rule.triggeredCount}
-                        </span>{" "}
-                        times
-                      </span>
-                      <span>•</span>
-                      <span>
-                        Created: {new Date(rule.createdAt).toLocaleDateString()}
-                      </span>
-                    </div>
-
-                    {Object.keys(rule.conditions).length > 0 && (
-                      <div className="mt-3 p-3 bg-slate-900/50 rounded-lg">
-                        <p className="text-xs text-slate-500 mb-1">
-                          Conditions:
-                        </p>
-                        <code className="text-xs text-cyan-400">
-                          {JSON.stringify(rule.conditions, null, 2)}
-                        </code>
-                      </div>
-                    )}
+      {/* Rules list */}
+      <Card className="overflow-hidden">
+        {rules.length > 0 ? (
+          <div className="divide-y divide-white/[0.03]">
+            {rules.map((rule) => (
+              <div key={rule.id} className="flex items-center justify-between px-5 py-4 hover:bg-white/[0.02] transition-colors">
+                <div className="flex items-center gap-4 min-w-0">
+                  <button onClick={() => handleToggle(rule)}
+                    className={`w-9 h-5 rounded-full transition-colors relative shrink-0 ${rule.isActive ? "bg-emerald-500" : "bg-gray-700"}`}>
+                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${rule.isActive ? "left-[18px]" : "left-0.5"}`} />
+                  </button>
+                  <div className="min-w-0">
+                    <div className="text-[13px] text-white font-medium">{rule.name}</div>
+                    <div className="text-[11px] text-gray-500 mt-0.5">{describeRule(rule)}</div>
                   </div>
                 </div>
-
-                <div className="flex items-center gap-2">
-                  <motion.button
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
-                    className="p-2 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors"
-                  >
-                    <PencilIcon className="w-5 h-5" />
-                  </motion.button>
-
-                  <motion.button
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
-                    className="p-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
-                  >
-                    <TrashIcon className="w-5 h-5" />
-                  </motion.button>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-white/[0.04] text-gray-400 border border-white/[0.06]">
+                    {ACTIONS.find((a) => a.id === rule.action)?.label || rule.action}
+                  </span>
+                  <button onClick={() => handleDelete(rule.id)} className="p-1 text-gray-600 hover:text-red-400 transition-colors">
+                    <TrashIcon className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-
-        {rules.length === 0 && (
-          <div className="text-center py-16 bg-slate-800/30 rounded-2xl border border-white/10">
-            <ShieldCheckIcon className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-            <p className="text-xl text-white font-semibold mb-2">
-              No Custom Rules
-            </p>
-            <p className="text-slate-400 mb-4">
-              Create your first security rule to get started
-            </p>
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setIsModalOpen(true)}
-              className="px-6 py-3 bg-cyan-500 hover:bg-cyan-600 text-white rounded-xl font-semibold"
-            >
-              Create Rule
-            </motion.button>
+            ))}
+          </div>
+        ) : (
+          <div className="px-5 py-16 text-center">
+            <p className="text-[14px] text-gray-400 mb-1">No security policies configured</p>
+            <p className="text-[12px] text-gray-600">Create policies to get automated alerts when scan results change</p>
           </div>
         )}
-      </div>
+      </Card>
 
-      {/* Create Rule Modal */}
+      {/* Create modal */}
       <AnimatePresence>
-        {isModalOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          >
-            <div
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-              onClick={() => { setIsModalOpen(false); resetForm(); }}
-            />
+        {modal && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setModal(false)} />
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-[700px] bg-[#0a0a0f] border border-white/10 rounded-2xl shadow-2xl backdrop-blur-xl max-h-[90vh] overflow-y-auto"
-            >
-              <div className="p-6 border-b border-white/10">
-                <h2 className="text-xl font-bold text-white">Create Custom Rule</h2>
+              initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 12 }}
+              transition={{ type: "spring", damping: 28, stiffness: 380 }}
+              className="relative z-10 bg-[#111318] rounded-2xl border border-white/[0.06] shadow-2xl w-[500px] max-w-[92vw]">
+
+              <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
+                <h3 className="text-[15px] font-semibold text-white">New Security Policy</h3>
+                <button onClick={() => setModal(false)} className="p-1 rounded-lg text-gray-500 hover:text-white hover:bg-white/5 transition-colors">
+                  <XMarkIcon className="w-4 h-4" />
+                </button>
               </div>
-              <div className="p-6 space-y-4">
+
+              <div className="px-6 py-5 space-y-4">
+                {/* Name */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
-                    Rule Name *
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g., Rate Limit API Endpoints"
-                    value={ruleName}
-                    onChange={(e) => setRuleName(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-800 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors"
-                  />
+                  <label className="block text-[12px] text-gray-400 mb-1.5">Policy Name</label>
+                  <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Alert on critical vulns"
+                    className="w-full px-3 py-2 rounded-lg bg-white/[0.03] border border-white/[0.06] text-[13px] text-white placeholder-gray-600 focus:outline-none focus:border-white/[0.12]" />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">
-                      Rule Type *
-                    </label>
-                    <select
-                      value={ruleType}
-                      onChange={(e) => setRuleType(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-slate-800 border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500 transition-colors appearance-none cursor-pointer"
-                    >
-                      <option value="rate_limit" className="bg-slate-800">Rate Limit</option>
-                      <option value="ip_blocking" className="bg-slate-800">IP Blocking</option>
-                      <option value="path_blocking" className="bg-slate-800">Path Blocking</option>
-                      <option value="geo_blocking" className="bg-slate-800">Geo Blocking</option>
-                      <option value="header_validation" className="bg-slate-800">Header Validation</option>
-                      <option value="custom" className="bg-slate-800">Custom Rule</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">Priority</label>
-                    <select
-                      value={priority}
-                      onChange={(e) => setPriority(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-slate-800 border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500 transition-colors appearance-none cursor-pointer"
-                    >
-                      <option value="Critical" className="bg-slate-800">Critical</option>
-                      <option value="High" className="bg-slate-800">High</option>
-                      <option value="Medium" className="bg-slate-800">Medium</option>
-                      <option value="Low" className="bg-slate-800">Low</option>
-                    </select>
-                  </div>
-                </div>
-
+                {/* Rule Type */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">Action</label>
-                  <select
-                    value={action}
-                    onChange={(e) => setAction(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-800 border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500 transition-colors appearance-none cursor-pointer"
-                  >
-                    <option value="BLOCK" className="bg-slate-800">Block</option>
-                    <option value="ALLOW" className="bg-slate-800">Allow</option>
-                    <option value="MONITOR" className="bg-slate-800">Monitor</option>
-                    <option value="CHALLENGE" className="bg-slate-800">Challenge</option>
+                  <label className="block text-[12px] text-gray-400 mb-1.5">When</label>
+                  <select value={ruleType} onChange={(e) => setRuleType(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-white/[0.03] border border-white/[0.06] text-[13px] text-white focus:outline-none appearance-none cursor-pointer">
+                    {RULE_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label} — {t.desc}</option>)}
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
-                    Description
-                  </label>
-                  <textarea
-                    placeholder="Describe what this rule does..."
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    rows={2}
-                    className="w-full px-4 py-2.5 bg-slate-800 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors resize-none"
-                  />
-                </div>
+                {/* Condition fields — depend on rule type */}
+                {(ruleType === "score_alert" || ruleType === "compliance_alert") && (
+                  <div>
+                    <label className="block text-[12px] text-gray-400 mb-1.5">
+                      Alert when {ruleType === "score_alert" ? "score" : "compliance"} drops below
+                    </label>
+                    <input type="number" value={threshold} onChange={(e) => setThreshold(+e.target.value)} min={0} max={100}
+                      className="w-24 px-3 py-2 rounded-lg bg-white/[0.03] border border-white/[0.06] text-[13px] text-white focus:outline-none" />
+                  </div>
+                )}
 
+                {ruleType === "vuln_alert" && (
+                  <div>
+                    <label className="block text-[12px] text-gray-400 mb-1.5">Alert when this severity is found</label>
+                    <select value={severity} onChange={(e) => setSeverity(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg bg-white/[0.03] border border-white/[0.06] text-[13px] text-white focus:outline-none appearance-none cursor-pointer">
+                      {SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                )}
+
+                {ruleType === "header_check" && (
+                  <div>
+                    <label className="block text-[12px] text-gray-400 mb-1.5">Alert when this header is missing</label>
+                    <select value={header} onChange={(e) => setHeader(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg bg-white/[0.03] border border-white/[0.06] text-[13px] text-white focus:outline-none appearance-none cursor-pointer">
+                      {HEADERS.map((h) => <option key={h} value={h}>{h}</option>)}
+                    </select>
+                  </div>
+                )}
+
+                {/* Action */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
-                    Conditions (JSON)
-                  </label>
-                  <textarea
-                    placeholder='{"limit": 100, "window": "1m", "path": "/api/*"}'
-                    value={conditions}
-                    onChange={(e) => setConditions(e.target.value)}
-                    rows={4}
-                    className="w-full px-4 py-2.5 bg-slate-800 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors font-mono text-sm resize-none"
-                  />
-                  <p className="text-xs text-slate-500 mt-1">
-                    Define rule conditions in JSON format
-                  </p>
+                  <label className="block text-[12px] text-gray-400 mb-1.5">Then</label>
+                  <select value={action} onChange={(e) => setAction(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-white/[0.03] border border-white/[0.06] text-[13px] text-white focus:outline-none appearance-none cursor-pointer">
+                    {ACTIONS.map((a) => <option key={a.id} value={a.id}>{a.label} — {a.desc}</option>)}
+                  </select>
                 </div>
               </div>
-              <div className="p-6 border-t border-white/10 flex justify-end gap-3">
-                <button
-                  onClick={() => { setIsModalOpen(false); resetForm(); }}
-                  className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-medium transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleCreateRule}
-                  disabled={submitting}
-                  className="px-5 py-2.5 bg-cyan-500 hover:bg-cyan-600 text-white rounded-xl font-semibold transition-colors disabled:opacity-50 flex items-center gap-2"
-                >
-                  {submitting && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />}
-                  Create Rule
+
+              <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-white/[0.06]">
+                <button onClick={() => setModal(false)} className="px-3 py-1.5 rounded-lg text-[12px] text-gray-400 hover:bg-white/5 transition-colors">Cancel</button>
+                <button onClick={handleCreate} disabled={submitting}
+                  className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-white text-black hover:bg-gray-200 transition-colors disabled:opacity-50">
+                  {submitting ? "Creating..." : "Create Policy"}
                 </button>
               </div>
             </motion.div>
-          </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

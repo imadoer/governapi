@@ -100,7 +100,7 @@ const SIDEBAR_ITEMS = [
     category: "API Management",
     items: [
       { id: "api-management", label: "API Management", icon: GlobeAltIcon },
-      { id: "custom-rules", label: "Custom Rules", icon: CubeIcon },
+      { id: "custom-rules", label: "Security Policies", icon: CubeIcon },
       { id: "webhook-center", label: "Webhook Center", icon: BoltIcon },
       { id: "rate-limiting", label: "Rate Limiting", icon: ClockIcon },
     ],
