@@ -184,7 +184,6 @@ export default function AdvancedDashboard() {
   if (initialLoading || !dashboardStats) {
     return (
       <div className="min-h-screen bg-[#0a0a0f] flex">
-        {/* Static sidebar skeleton */}
         <div className="w-[280px] border-r border-white/[0.06] bg-black/20 p-6">
           <div className="h-7 w-32 bg-slate-700/30 rounded-lg animate-pulse mb-8" />
           <div className="space-y-2">
@@ -193,12 +192,72 @@ export default function AdvancedDashboard() {
             ))}
           </div>
         </div>
-        {/* Content skeleton */}
         <div className="flex-1 flex flex-col">
           <div className="h-16 border-b border-white/[0.06] bg-black/10" />
-          <div className="flex-1 p-8">
-            <PageSkeleton />
+          <div className="flex-1 p-8"><PageSkeleton /></div>
+        </div>
+      </div>
+    );
+  }
+
+  // Full-screen onboarding when user has 0 scans
+  const hasScans = (dashboardStats?.overview?.totalScans ?? dashboardStats?.stats?.totalScans ?? 0) > 0;
+  if (!hasScans && !onboardingDone) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
+        <div className="w-full max-w-lg mx-4">
+          <div className="text-center mb-8">
+            <div className="inline-block px-5 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-xl mb-6">
+              <span className="text-white text-xl font-bold">GovernAPI</span>
+            </div>
+            <h1 className="text-3xl font-bold text-white mb-2">Welcome! Let&apos;s check your first API</h1>
+            <p className="text-gray-500 text-[14px]">Enter your API URL and we&apos;ll run a security scan in seconds</p>
           </div>
+
+          <div className="bg-slate-800/50 border border-white/[0.06] rounded-2xl p-8">
+            {onboardingStep === 0 && (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[12px] text-gray-400 mb-1.5">Your API URL</label>
+                  <input type="url" value={addApiUrl} onChange={(e) => setAddApiUrl(e.target.value)}
+                    placeholder="https://api.yourcompany.com"
+                    className="w-full px-4 py-3 rounded-xl bg-white/[0.03] border border-white/[0.06] text-white text-[15px] placeholder-gray-600 focus:outline-none focus:border-cyan-500/30"
+                    onKeyDown={(e) => { if (e.key === "Enter" && addApiUrl) { setOnboardingStep(1); handleOnboardingAddApi(); } }}
+                  />
+                </div>
+                <button onClick={() => { setOnboardingStep(1); handleOnboardingAddApi(); }} disabled={!addApiUrl}
+                  className="w-full py-3 rounded-xl text-[14px] font-semibold bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:opacity-90 transition-opacity disabled:opacity-40">
+                  Scan Now
+                </button>
+              </div>
+            )}
+            {onboardingStep >= 1 && !onboardingDone && (
+              <div className="text-center py-6">
+                <div className="animate-spin rounded-full h-10 w-10 border-3 border-cyan-500/30 border-t-cyan-500 mx-auto mb-4" />
+                <p className="text-white text-[14px] font-medium">
+                  {onboardingStep === 1 ? "Registering endpoint..." : onboardingStep === 2 ? "Starting scan..." : "Analyzing security..."}
+                </p>
+                <p className="text-gray-600 text-[12px] mt-1">This usually takes 10-30 seconds</p>
+              </div>
+            )}
+            {onboardingDone && (
+              <div className="text-center py-6">
+                <ShieldCheckIcon className="w-10 h-10 text-emerald-400 mx-auto mb-3" />
+                <p className="text-white text-[14px] font-medium mb-4">Scan complete! Your dashboard is ready.</p>
+                <button onClick={() => { refreshDashboard(); }} className="px-6 py-2 rounded-xl text-[13px] font-medium bg-white text-black hover:bg-gray-200 transition-colors">
+                  View Dashboard →
+                </button>
+              </div>
+            )}
+          </div>
+
+          {onboardingStep === 0 && (
+            <div className="text-center mt-4">
+              <button onClick={() => setOnboardingDone(true)} className="text-[12px] text-gray-600 hover:text-gray-400 transition-colors">
+                Skip — I&apos;ll explore first
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );

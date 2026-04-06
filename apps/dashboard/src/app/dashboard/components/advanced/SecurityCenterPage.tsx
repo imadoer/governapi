@@ -423,14 +423,23 @@ export function SecurityCenterPage({ company, onNavigate }: any) {
                   {formError && <p className="text-red-400 text-[11px] mt-1">{formError}</p>}
                 </div>
                 <div>
-                  <label className="block text-[12px] text-gray-400 mb-1.5">Scan Type</label>
-                  <select value={formScanType} onChange={(e) => setFormScanType(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-white/[0.03] border border-white/[0.06] text-white text-[13px] focus:outline-none focus:border-white/[0.12] appearance-none cursor-pointer">
-                    <option value="quick">Quick</option>
-                    <option value="comprehensive">Comprehensive</option>
-                    <option value="deep">Deep</option>
-                    <option value="owasp_top10">OWASP Top 10</option>
-                  </select>
+                  <label className="block text-[12px] text-gray-400 mb-2">Scan Profile</label>
+                  <div className="space-y-2">
+                    <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${formScanType === "quick" ? "bg-cyan-500/5 border-cyan-500/20" : "bg-white/[0.01] border-white/[0.04] hover:border-white/[0.08]"}`}>
+                      <input type="radio" name="scanType" value="quick" checked={formScanType === "quick"} onChange={() => setFormScanType("quick")} className="mt-0.5 accent-cyan-500" />
+                      <div>
+                        <div className="text-[13px] text-white font-medium">Quick Scan</div>
+                        <div className="text-[11px] text-gray-500">Security headers and common misconfigurations · ~10 seconds</div>
+                      </div>
+                    </label>
+                    <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${formScanType === "comprehensive" ? "bg-cyan-500/5 border-cyan-500/20" : "bg-white/[0.01] border-white/[0.04] hover:border-white/[0.08]"}`}>
+                      <input type="radio" name="scanType" value="comprehensive" checked={formScanType === "comprehensive"} onChange={() => setFormScanType("comprehensive")} className="mt-0.5 accent-cyan-500" />
+                      <div>
+                        <div className="text-[13px] text-white font-medium">Full Scan</div>
+                        <div className="text-[11px] text-gray-500">Complete security assessment including endpoint discovery · ~1-2 minutes</div>
+                      </div>
+                    </label>
+                  </div>
                 </div>
                 <div className="flex items-center justify-end gap-3 pt-2">
                   <button type="button" onClick={() => setScanModal(false)} className="px-3 py-1.5 rounded-lg text-[12px] text-gray-400 hover:bg-white/5 transition-colors">Cancel</button>

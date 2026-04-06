@@ -16,6 +16,7 @@ import {
   CheckIcon,
   XMarkIcon,
   ClockIcon,
+  CommandLineIcon,
 } from "@heroicons/react/24/outline";
 
 interface PlatformApiKey {
@@ -373,6 +374,11 @@ export function ApiManagementPage({ companyId }: { companyId: string }) {
       icon: <ShieldCheckIcon className="w-5 h-5" />,
       label: `Monitored APIs (${apiEndpoints.length})`,
     },
+    {
+      key: "cicd",
+      icon: <CommandLineIcon className="w-5 h-5" />,
+      label: "CI/CD Integration",
+    },
   ];
 
   return (
@@ -687,6 +693,71 @@ export function ApiManagementPage({ companyId }: { companyId: string }) {
                 </p>
               </div>
             )}
+          </motion.div>
+        )}
+        {/* CI/CD Integration Tab */}
+        {activeTab === "cicd" && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
+              <h3 className="text-lg font-bold text-white mb-2">CI/CD Security Gate</h3>
+              <p className="text-sm text-slate-400 mb-6">
+                Add a security check to your CI/CD pipeline. The check fails if any CRITICAL vulnerabilities exist or if a security policy with &quot;Fail CI/CD&quot; action is triggered.
+              </p>
+
+              <div className="space-y-2 mb-6">
+                <div className="text-[12px] text-gray-400 mb-1">Endpoint</div>
+                <code className="block px-4 py-2.5 bg-slate-900/50 border border-white/[0.06] rounded-xl text-cyan-400 font-mono text-[13px]">
+                  GET http://146.190.99.58:3000/api/ci/check
+                </code>
+                <div className="text-[11px] text-gray-600">Requires: <code className="text-gray-400">Authorization: Bearer gov_live_...</code></div>
+              </div>
+
+              <div className="space-y-2 mb-6">
+                <div className="text-[12px] text-gray-400 mb-1">Response</div>
+                <pre className="px-4 py-3 bg-slate-900/50 border border-white/[0.06] rounded-xl text-[11px] text-gray-300 font-mono overflow-x-auto">{`{
+  "pass": true,
+  "score": 72,
+  "vulnerabilities": { "critical": 0, "high": 3, "medium": 5, "low": 2 },
+  "violations": []
+}`}</pre>
+              </div>
+            </div>
+
+            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
+              <h3 className="text-[15px] font-semibold text-white mb-4">Pipeline Snippets</h3>
+              <div className="space-y-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-[12px] font-medium text-white">GitHub Actions</span>
+                    <button onClick={() => { navigator.clipboard.writeText(`- name: Security Check\n  run: |\n    RESULT=$(curl -s -H "Authorization: Bearer $GOVERNAPI_KEY" http://146.190.99.58:3000/api/ci/check)\n    PASS=$(echo $RESULT | jq -r '.pass')\n    if [ "$PASS" != "true" ]; then echo "Security check failed"; exit 1; fi`); showToast("Copied!", "success"); }}
+                      className="text-[10px] text-gray-500 hover:text-white transition-colors">Copy</button>
+                  </div>
+                  <pre className="px-4 py-3 bg-slate-900/50 border border-white/[0.06] rounded-xl text-[11px] text-emerald-400/80 font-mono overflow-x-auto whitespace-pre">{`- name: Security Check
+  run: |
+    RESULT=$(curl -s -H "Authorization: Bearer $GOVERNAPI_KEY" \\
+      http://146.190.99.58:3000/api/ci/check)
+    PASS=$(echo $RESULT | jq -r '.pass')
+    if [ "$PASS" != "true" ]; then
+      echo "Security check failed"
+      echo $RESULT | jq .
+      exit 1
+    fi`}</pre>
+                </div>
+
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-[12px] font-medium text-white">GitLab CI</span>
+                    <button onClick={() => { navigator.clipboard.writeText(`security_check:\n  script:\n    - 'RESULT=$(curl -s -H "Authorization: Bearer $GOVERNAPI_KEY" http://146.190.99.58:3000/api/ci/check)'\n    - 'echo $RESULT | jq -e ".pass == true"'`); showToast("Copied!", "success"); }}
+                      className="text-[10px] text-gray-500 hover:text-white transition-colors">Copy</button>
+                  </div>
+                  <pre className="px-4 py-3 bg-slate-900/50 border border-white/[0.06] rounded-xl text-[11px] text-amber-400/80 font-mono overflow-x-auto whitespace-pre">{`security_check:
+  script:
+    - 'RESULT=$(curl -s -H "Authorization: Bearer $GOVERNAPI_KEY"
+        http://146.190.99.58:3000/api/ci/check)'
+    - 'echo $RESULT | jq -e ".pass == true"'`}</pre>
+                </div>
+              </div>
+            </div>
           </motion.div>
         )}
       </div>

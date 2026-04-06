@@ -11,6 +11,10 @@ import {
   ExclamationTriangleIcon,
   ClipboardDocumentIcon,
   CheckIcon,
+  UsersIcon,
+  PlusIcon,
+  TrashIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
@@ -19,6 +23,7 @@ function Card({ children, className = "" }: { children: React.ReactNode; classNa
 
 const TABS = [
   { key: "profile", label: "Profile", icon: UserCircleIcon },
+  { key: "team", label: "Team", icon: UsersIcon },
   { key: "notifications", label: "Notifications", icon: BellIcon },
   { key: "badge", label: "Security Badge", icon: ShieldCheckIcon },
   { key: "billing", label: "Billing", icon: CreditCardIcon },
@@ -38,6 +43,13 @@ export function SettingsPage({ companyId }: { companyId: string }) {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
 
+  // Team state
+  const [teamMembers, setTeamMembers] = useState<any[]>([]);
+  const [inviteModal, setInviteModal] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("viewer");
+  const [inviting, setInviting] = useState(false);
+
   // Notification state
   const [weeklyReport, setWeeklyReport] = useState(true);
 
@@ -52,9 +64,10 @@ export function SettingsPage({ companyId }: { companyId: string }) {
   const fetchSettings = useCallback(async () => {
     setLoading(true);
     try {
-      const [settingsRes, profileRes] = await Promise.all([
+      const [settingsRes, profileRes, teamRes] = await Promise.all([
         fetch("/api/customer/enterprise-settings", { headers: { "x-tenant-id": companyId } }),
         fetch("/api/auth/session", { credentials: "include" }),
+        fetch("/api/customer/team", { headers: { "x-tenant-id": companyId } }),
       ]);
       const settingsData = await settingsRes.json();
       const profileData = await profileRes.json().catch(() => ({}));
@@ -67,6 +80,8 @@ export function SettingsPage({ companyId }: { companyId: string }) {
       if (profileData.user) {
         setEmail(profileData.user.email || "");
       }
+      const teamData = await teamRes.json().catch(() => ({}));
+      if (teamData.success) setTeamMembers(teamData.members || []);
     } catch {} finally {
       setLoading(false);
     }
@@ -114,6 +129,35 @@ export function SettingsPage({ companyId }: { companyId: string }) {
       });
       flash(enabled ? "Weekly report enabled" : "Weekly report disabled");
     } catch { flash("Failed to update", false); }
+  };
+
+  const handleInvite = async () => {
+    if (!inviteEmail) return;
+    setInviting(true);
+    try {
+      const r = await fetch("/api/customer/team", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-tenant-id": companyId },
+        body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
+      });
+      const d = await r.json();
+      if (d.success) {
+        flash("Invite sent");
+        setInviteModal(false);
+        setInviteEmail("");
+        setInviteRole("viewer");
+        fetchSettings();
+      } else flash(d.error || "Failed", false);
+    } catch { flash("Failed to invite", false); }
+    setInviting(false);
+  };
+
+  const handleRemoveMember = async (id: number) => {
+    try {
+      await fetch(`/api/customer/team?id=${id}`, { method: "DELETE", headers: { "x-tenant-id": companyId } });
+      flash("Member removed");
+      setTeamMembers((prev) => prev.filter((m) => m.id !== id));
+    } catch { flash("Failed to remove", false); }
   };
 
   const copyEmbed = () => {
@@ -215,6 +259,130 @@ export function SettingsPage({ companyId }: { companyId: string }) {
                       </button>
                     </div>
                   </Card>
+                </div>
+              )}
+
+              {/* ─── Team ─── */}
+              {tab === "team" && (
+                <div className="space-y-6">
+                  <Card className="p-6">
+                    <div className="flex items-center justify-between mb-6">
+                      <div>
+                        <h3 className="text-[15px] font-semibold text-white">Team Members</h3>
+                        <p className="text-[12px] text-gray-500 mt-0.5">{teamMembers.length + 1} member{teamMembers.length !== 0 ? "s" : ""} (including you)</p>
+                      </div>
+                      <button onClick={() => setInviteModal(true)}
+                        className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-white text-black hover:bg-gray-200 transition-colors flex items-center gap-1.5">
+                        <PlusIcon className="w-3.5 h-3.5" /> Invite Member
+                      </button>
+                    </div>
+
+                    {/* You (owner) */}
+                    <div className="flex items-center justify-between py-3 px-3 rounded-xl bg-white/[0.02] border border-white/[0.04] mb-2">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-cyan-500/20 flex items-center justify-center text-[12px] font-bold text-cyan-400">
+                          {(email || "U")[0].toUpperCase()}
+                        </div>
+                        <div>
+                          <div className="text-[13px] text-white font-medium">{email || "You"}</div>
+                          <div className="text-[11px] text-gray-500">Account owner</div>
+                        </div>
+                      </div>
+                      <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-cyan-500/15 text-cyan-400">Admin</span>
+                    </div>
+
+                    {/* Team members */}
+                    {teamMembers.map((m) => (
+                      <div key={m.id} className="flex items-center justify-between py-3 px-3 rounded-xl bg-white/[0.02] border border-white/[0.04] mb-2">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-[12px] font-bold text-gray-400">
+                            {m.email[0].toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="text-[13px] text-white font-medium">{m.email}</div>
+                            <div className="text-[11px] text-gray-500">
+                              {m.status === "pending" ? "Pending invite" : "Active"} · {m.role}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-0.5 text-[10px] font-medium rounded-full ${
+                            m.role === "admin" ? "bg-cyan-500/15 text-cyan-400" :
+                            m.role === "editor" ? "bg-amber-500/15 text-amber-400" :
+                            "bg-gray-500/15 text-gray-400"
+                          }`}>{m.role}</span>
+                          <button onClick={() => handleRemoveMember(m.id)} className="p-1 text-gray-600 hover:text-red-400 transition-colors">
+                            <TrashIcon className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+
+                    {teamMembers.length === 0 && (
+                      <div className="text-center py-6 text-[12px] text-gray-600">
+                        No team members yet. Invite your first team member.
+                      </div>
+                    )}
+                  </Card>
+
+                  <Card className="p-6">
+                    <h3 className="text-[15px] font-semibold text-white mb-4">Roles</h3>
+                    <div className="space-y-3">
+                      {[
+                        { role: "Admin", desc: "Full access — manage team, billing, and all settings", color: "text-cyan-400" },
+                        { role: "Editor", desc: "Can scan, manage APIs, view reports — can't manage billing or delete account", color: "text-amber-400" },
+                        { role: "Viewer", desc: "Read-only — view dashboards and reports, can't scan or change anything", color: "text-gray-400" },
+                      ].map((r) => (
+                        <div key={r.role} className="flex items-start gap-3 text-[12px]">
+                          <span className={`font-medium ${r.color} w-12`}>{r.role}</span>
+                          <span className="text-gray-500">{r.desc}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+
+                  {/* Invite Modal */}
+                  <AnimatePresence>
+                    {inviteModal && (
+                      <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                          className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setInviteModal(false)} />
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 12 }}
+                          className="relative z-10 bg-[#111318] rounded-2xl border border-white/[0.06] shadow-2xl w-[420px] max-w-[92vw]">
+                          <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
+                            <h3 className="text-[15px] font-semibold text-white">Invite Team Member</h3>
+                            <button onClick={() => setInviteModal(false)} className="p-1 rounded-lg text-gray-500 hover:text-white hover:bg-white/5 transition-colors">
+                              <XMarkIcon className="w-4 h-4" />
+                            </button>
+                          </div>
+                          <div className="px-6 py-5 space-y-4">
+                            <div>
+                              <label className="block text-[12px] text-gray-400 mb-1.5">Email</label>
+                              <input type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="colleague@company.com"
+                                className="w-full px-3 py-2 rounded-lg bg-white/[0.03] border border-white/[0.06] text-[13px] text-white placeholder-gray-600 focus:outline-none focus:border-white/[0.12]" />
+                            </div>
+                            <div>
+                              <label className="block text-[12px] text-gray-400 mb-1.5">Role</label>
+                              <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}
+                                className="w-full px-3 py-2 rounded-lg bg-white/[0.03] border border-white/[0.06] text-[13px] text-white focus:outline-none appearance-none cursor-pointer">
+                                <option value="admin">Admin — Full access</option>
+                                <option value="editor">Editor — Can scan and manage APIs</option>
+                                <option value="viewer">Viewer — Read-only access</option>
+                              </select>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-white/[0.06]">
+                            <button onClick={() => setInviteModal(false)} className="px-3 py-1.5 rounded-lg text-[12px] text-gray-400 hover:bg-white/5 transition-colors">Cancel</button>
+                            <button onClick={handleInvite} disabled={inviting || !inviteEmail}
+                              className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-white text-black hover:bg-gray-200 transition-colors disabled:opacity-50">
+                              {inviting ? "Inviting..." : "Send Invite"}
+                            </button>
+                          </div>
+                        </motion.div>
+                      </div>
+                    )}
+                  </AnimatePresence>
                 </div>
               )}
 
