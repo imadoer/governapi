@@ -70,7 +70,7 @@ export class UserAuthService {
       const company = await database.queryOne(
         `INSERT INTO companies (company_name, subscription_plan, subscription_status, api_key, created_at)
          VALUES ($1, $2, $3, $4, NOW()) RETURNING *`,
-        [companyName, "starter", "active", apiKey],
+        [companyName, "free", "active", apiKey],
       );
 
       if (!company) {
