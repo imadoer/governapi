@@ -83,7 +83,7 @@ export default function LoginPageContent() {
         sessionStorage.setItem("user", JSON.stringify(result.user));
         sessionStorage.setItem("company", JSON.stringify(result.company));
         sessionStorage.setItem("sessionToken", result.sessionToken);
-        router.push("/dashboard");
+        window.location.href = "/dashboard";
       } else {
         setError(result.error || "Registration failed");
       }

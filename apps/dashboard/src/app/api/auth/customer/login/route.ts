@@ -36,9 +36,10 @@ export async function POST(request: NextRequest) {
     if (loginResult.sessionToken) {
       response.cookies.set("session_token", loginResult.sessionToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
+        secure: false, // HTTP server — no TLS on this VPS
         sameSite: "lax",
         maxAge: 7 * 24 * 60 * 60, // 7 days
+        path: "/",
       });
     }
 
