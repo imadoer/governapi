@@ -217,60 +217,102 @@ export default function AdvancedDashboard() {
   const hasScans = (dashboardStats?.overview?.totalScans ?? dashboardStats?.stats?.totalScans ?? 0) > 0;
   if (!hasScans && !onboardingDone) {
     return (
-      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
-        <div className="w-full max-w-lg mx-4">
+      <div className="min-h-screen bg-[#0a0a0f] relative overflow-hidden flex items-center justify-center">
+        {/* Background effects */}
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute top-[-15%] left-1/2 -translate-x-1/2 w-[900px] h-[500px] bg-cyan-500/[0.06] rounded-full blur-[180px]" />
+          <div className="absolute bottom-[-10%] right-[15%] w-[500px] h-[400px] bg-emerald-500/[0.04] rounded-full blur-[140px]" />
+          <div className="absolute inset-0" style={{ backgroundImage: "radial-gradient(rgba(255,255,255,0.03) 1px, transparent 1px)", backgroundSize: "40px 40px" }} />
+        </div>
+
+        <div className="relative z-10 w-full max-w-lg mx-4">
+          {/* Header */}
           <div className="text-center mb-8">
-            <div className="inline-block px-5 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-xl mb-6">
-              <span className="text-white text-xl font-bold">GovernAPI</span>
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-cyan-500 to-emerald-500 rounded-2xl mb-5 shadow-[0_0_40px_rgba(6,182,212,0.3)]">
+              <ShieldCheckIcon className="w-9 h-9 text-white" />
             </div>
-            <h1 className="text-3xl font-bold text-white mb-2">Welcome! Let&apos;s check your first API</h1>
-            <p className="text-gray-500 text-[14px]">Enter your API URL and we&apos;ll run a security scan in seconds</p>
+            <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">Welcome to GovernAPI</h1>
+            <p className="text-gray-400 text-[15px]">Let&apos;s check your first API in seconds</p>
           </div>
 
-          <div className="bg-slate-800/50 border border-white/[0.06] rounded-2xl p-8">
+          {/* Main card */}
+          <div className="backdrop-blur-xl bg-white/[0.03] border border-white/[0.07] rounded-2xl p-8 shadow-[0_8px_60px_rgba(0,0,0,0.4)]">
             {onboardingStep === 0 && (
-              <div className="space-y-4">
+              <div className="space-y-5">
                 <div>
-                  <label className="block text-[12px] text-gray-400 mb-1.5">Your API URL</label>
-                  <input type="url" value={addApiUrl} onChange={(e) => setAddApiUrl(e.target.value)}
+                  <label className="block text-[12px] text-gray-400 mb-2">Your API URL</label>
+                  <input type="text" value={addApiUrl} onChange={(e) => setAddApiUrl(e.target.value)}
                     placeholder="https://api.yourcompany.com"
-                    className="w-full px-4 py-3 rounded-xl bg-white/[0.03] border border-white/[0.06] text-white text-[15px] placeholder-gray-600 focus:outline-none focus:border-cyan-500/30"
+                    className="w-full px-4 py-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white text-[15px] placeholder-gray-600 focus:outline-none focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/20 transition-all"
                     onKeyDown={(e) => { if (e.key === "Enter" && addApiUrl) { setOnboardingStep(1); handleOnboardingAddApi(); } }}
+                    autoFocus
                   />
                 </div>
                 <button onClick={() => { setOnboardingStep(1); handleOnboardingAddApi(); }} disabled={!addApiUrl}
-                  className="w-full py-3 rounded-xl text-[14px] font-semibold bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:opacity-90 transition-opacity disabled:opacity-40">
-                  Scan Now
+                  className="relative w-full py-3.5 rounded-xl text-[14px] font-semibold bg-gradient-to-r from-cyan-500 to-emerald-500 text-white shadow-[0_0_24px_rgba(6,182,212,0.3)] hover:shadow-[0_0_36px_rgba(6,182,212,0.45)] transition-all disabled:opacity-30 disabled:shadow-none overflow-hidden group">
+                  <span className="relative z-10">Scan Now</span>
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.15] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
                 </button>
+
+                {/* Benefits */}
+                <div className="grid grid-cols-3 gap-3 pt-2">
+                  {[
+                    { icon: "🔍", text: "Find vulnerabilities in seconds" },
+                    { icon: "🛡️", text: "Get fix instructions with code" },
+                    { icon: "📊", text: "Track your score over time" },
+                  ].map((b) => (
+                    <div key={b.text} className="text-center">
+                      <div className="text-[18px] mb-1.5">{b.icon}</div>
+                      <div className="text-[10px] text-gray-500 leading-tight">{b.text}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
+
             {onboardingStep >= 1 && !onboardingDone && (
-              <div className="text-center py-6">
-                <div className="animate-spin rounded-full h-10 w-10 border-3 border-cyan-500/30 border-t-cyan-500 mx-auto mb-4" />
-                <p className="text-white text-[14px] font-medium">
-                  {onboardingStep === 1 ? "Registering endpoint..." : onboardingStep === 2 ? "Starting scan..." : "Analyzing security..."}
+              <div className="text-center py-8">
+                <div className="relative mx-auto mb-5" style={{ width: 48, height: 48 }}>
+                  <div className="absolute inset-0 rounded-full border-2 border-cyan-500/20" />
+                  <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-cyan-500 animate-spin" />
+                  <ShieldCheckIcon className="absolute inset-2.5 w-7 h-7 text-cyan-400/60" />
+                </div>
+                <p className="text-white text-[15px] font-medium">
+                  {onboardingStep <= 2 ? "Scanning your API..." : "Analyzing security..."}
                 </p>
-                <p className="text-gray-600 text-[12px] mt-1">This usually takes 10-30 seconds</p>
+                <p className="text-gray-600 text-[12px] mt-1.5">Checking headers, misconfigurations, and vulnerabilities</p>
+                <div className="flex justify-center gap-1 mt-4">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse" style={{ animationDelay: `${i * 200}ms` }} />
+                  ))}
+                </div>
               </div>
             )}
+
             {onboardingDone && (
-              <div className="text-center py-6">
-                <ShieldCheckIcon className="w-10 h-10 text-emerald-400 mx-auto mb-3" />
-                <p className="text-white text-[14px] font-medium mb-4">Scan complete! Your dashboard is ready.</p>
-                <button onClick={() => { refreshDashboard(); }} className="px-6 py-2 rounded-xl text-[13px] font-medium bg-white text-black hover:bg-gray-200 transition-colors">
+              <div className="text-center py-8">
+                <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-emerald-500/15 border border-emerald-500/20 mb-4">
+                  <ShieldCheckIcon className="w-7 h-7 text-emerald-400" />
+                </div>
+                <p className="text-white text-[16px] font-semibold mb-2">Scan complete!</p>
+                <p className="text-gray-500 text-[13px] mb-5">Your security dashboard is ready</p>
+                <button onClick={() => { refreshDashboard(); }}
+                  className="px-8 py-2.5 rounded-xl text-[13px] font-medium bg-gradient-to-r from-cyan-500 to-emerald-500 text-white shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:shadow-[0_0_30px_rgba(6,182,212,0.4)] transition-all">
                   View Dashboard →
                 </button>
               </div>
             )}
           </div>
 
-          {onboardingStep === 0 && (
-            <div className="text-center mt-4">
-              <button onClick={() => setOnboardingDone(true)} className="text-[12px] text-gray-600 hover:text-gray-400 transition-colors">
+          {/* Social proof + skip */}
+          <div className="text-center mt-6 space-y-3">
+            <p className="text-[11px] text-gray-600">Join 100+ developers securing their APIs with GovernAPI</p>
+            {onboardingStep === 0 && (
+              <button onClick={() => setOnboardingDone(true)} className="text-[11px] text-gray-700 hover:text-gray-500 transition-colors">
                 Skip — I&apos;ll explore first
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     );
@@ -279,52 +321,47 @@ export default function AdvancedDashboard() {
   const handleOnboardingAddApi = async () => {
     if (!addApiUrl || !company?.id) return;
     setOnboardingLoading(true);
+
+    // Normalize URL — add https:// if missing
+    let scanUrl = addApiUrl.trim();
+    if (!scanUrl.startsWith("http://") && !scanUrl.startsWith("https://")) {
+      scanUrl = "https://" + scanUrl;
+    }
+
     try {
-      // Step 1: Register the endpoint
-      const addRes = await fetch("/api/customer/api-endpoints", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-tenant-id": company.id.toString(),
-        },
-        body: JSON.stringify({
-          name: addApiName || new URL(addApiUrl).hostname,
-          url: addApiUrl,
-          method: "GET",
-          description: "Added during onboarding",
-        }),
-      });
-      const addResult = await addRes.json();
-      if (!addResult.success) {
-        alert(addResult.error || "Failed to add API");
-        setOnboardingLoading(false);
-        return;
-      }
+      // Skip endpoint registration — just trigger the scan directly
+      // The scan creates the endpoint record in security_scans automatically
       setOnboardingStep(2);
 
-      // Step 2: Auto-trigger a scan
-      await fetch("/api/customer/security-scans", {
+      const scanRes = await fetch("/api/customer/security-scans", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-tenant-id": company.id.toString(),
-        },
-        body: JSON.stringify({ url: addApiUrl, scanType: "quick" }),
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ url: scanUrl, scanType: "quick" }),
       });
+      const scanResult = await scanRes.json();
+
+      if (!scanResult.success) {
+        setOnboardingStep(0);
+        setOnboardingLoading(false);
+        alert(scanResult.error || "Scan failed to start");
+        return;
+      }
+
       setOnboardingStep(3);
 
-      // Step 3: Wait for scan to complete, then refresh dashboard
+      // Poll for scan completion
       const poll = setInterval(async () => {
-        const dashRes = await fetch("/api/customer/dashboard", {
-          headers: { "x-tenant-id": company.id.toString() },
-        });
-        const dashData = await dashRes.json();
-        if (dashData.success && dashData.stats.totalScans > 0 && dashData.stats.postureScore > 0) {
-          clearInterval(poll);
-          setDashboardStats(dashData.dashboard);
-          setOnboardingDone(true);
-          setOnboardingLoading(false);
-        }
+        try {
+          const dashRes = await fetch("/api/customer/dashboard", { credentials: "include" });
+          const dashData = await dashRes.json();
+          if (dashData.success && (dashData.stats?.totalScans > 0 || dashData.stats?.completedScans > 0)) {
+            clearInterval(poll);
+            setDashboardStats(dashData.dashboard || dashData);
+            setOnboardingDone(true);
+            setOnboardingLoading(false);
+          }
+        } catch {}
       }, 3000);
 
       // Stop polling after 60s regardless
@@ -332,10 +369,11 @@ export default function AdvancedDashboard() {
         clearInterval(poll);
         setOnboardingLoading(false);
         setOnboardingDone(true);
-        handleRefresh();
+        refreshDashboard();
       }, 60000);
     } catch (err) {
       console.error("Onboarding error:", err);
+      setOnboardingStep(0);
       setOnboardingLoading(false);
     }
   };
