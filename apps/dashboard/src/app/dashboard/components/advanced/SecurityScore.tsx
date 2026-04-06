@@ -94,9 +94,9 @@ export function SecurityScore({
 
         {/* Threats */}
         <div className="bg-slate-800/50 border border-white/[0.06] rounded-2xl p-5">
-          <div className="text-[12px] text-gray-500 mb-2">Threats Blocked</div>
+          <div className="text-[12px] text-gray-500 mb-2">Policies Active</div>
           <div className="text-2xl font-semibold text-white tracking-tight">{threatsBlocked}</div>
-          <div className="text-[11px] text-gray-600 mt-1">Detected & prevented</div>
+          <div className="text-[11px] text-gray-600 mt-1">Automated alerts</div>
         </div>
       </div>
 

@@ -136,6 +136,24 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { url, scanType = "comprehensive" } = body;
 
+    // Plan-based scan limit enforcement (checked BEFORE scan runs)
+    const company = await database.queryOne(
+      `SELECT subscription_plan FROM companies WHERE id = $1`, [tenantId],
+    );
+    const plan = company?.subscription_plan || "free";
+    if (plan === "free") {
+      const monthScans = await database.queryOne(
+        `SELECT COUNT(*) as count FROM security_scans WHERE tenant_id = $1 AND created_at > DATE_TRUNC('month', NOW())`,
+        [tenantId],
+      );
+      if (parseInt(monthScans?.count || "0") >= 3) {
+        return NextResponse.json(
+          { error: "Scan limit reached (3/month on Free plan). Upgrade to Starter for unlimited scans.", upgrade: true },
+          { status: 403 },
+        );
+      }
+    }
+
     if (!url) {
       return NextResponse.json(
         { error: "Target URL is required" },

@@ -174,6 +174,19 @@ export default function AdvancedDashboard() {
     { revalidateOnFocus: false, dedupingInterval: 5000 },
   );
 
+  // Fetch endpoints for overview
+  const { data: endpointsData } = useSWR(
+    company?.id ? "/api/customer/api-endpoints" : null,
+    dashFetcher ? (url: string) => {
+      const token = typeof window !== "undefined" ? sessionStorage.getItem("sessionToken") || "" : "";
+      return fetch(url, { headers: token ? { "Authorization": `Bearer ${token}` } : {}, credentials: "include" })
+        .then((r) => r.json());
+    } : null,
+    { revalidateOnFocus: false, dedupingInterval: 30000 },
+  );
+  const endpointsList = endpointsData?.endpoints || [];
+  const endpointCount = endpointsData?.total || 0;
+
   // Sync SWR data into state (keeps existing renderContent() working)
   useEffect(() => {
     if (swrDashboard) {
@@ -481,14 +494,14 @@ export default function AdvancedDashboard() {
           {/* Hero Security Score */}
           <SecurityScore
             score={dashboardStats.security.overallScore}
-            totalEndpoints={dashboardStats.overview.totalApis}
+            totalEndpoints={endpointCount || dashboardStats.overview.totalApis}
             threatsBlocked={dashboardStats.overview.blockedThreats}
           />
 
           {/* Metric Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <MetricCard icon={ShieldCheckIcon} label="Protected Endpoints" value={dashboardStats.overview.totalApis} delay={0.1} />
-            <MetricCard icon={BoltIcon} label="Threats Blocked" value={dashboardStats.overview.blockedThreats} delay={0.15} />
+            <MetricCard icon={ShieldCheckIcon} label="Monitored Endpoints" value={endpointCount || dashboardStats.overview.totalApis} delay={0.1} />
+            <MetricCard icon={BoltIcon} label="Policies Active" value={dashboardStats.overview.activePolicies ?? 0} delay={0.15} />
             <MetricCard icon={BugAntIcon} label="Scans (7 days)" value={dashboardStats.overview.scansLast7Days} delay={0.2} />
             <MetricCard icon={ChartBarIcon} label="Total Scans" value={dashboardStats.overview.totalScans} delay={0.25} />
           </div>
@@ -516,6 +529,31 @@ export default function AdvancedDashboard() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Your APIs — per-endpoint scores */}
+          {endpointsList.length > 0 && (
+            <div className="bg-slate-800/50 border border-white/[0.06] rounded-2xl p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-[13px] font-medium text-gray-400">Your APIs</h3>
+                <button onClick={() => setActiveFeature("api-management")} className="text-[11px] text-gray-500 hover:text-white transition-colors">View all →</button>
+              </div>
+              <div className="space-y-2">
+                {endpointsList.slice(0, 6).map((ep: any) => {
+                  const score = ep.score ?? 0;
+                  const color = score >= 70 ? "text-emerald-400 bg-emerald-500/15" : score >= 40 ? "text-amber-400 bg-amber-500/15" : "text-red-400 bg-red-500/15";
+                  return (
+                    <div key={ep.url} className="flex items-center justify-between py-2.5 px-3 rounded-xl bg-white/[0.02] border border-white/[0.03]">
+                      <span className="text-[12px] text-cyan-400 font-mono truncate max-w-[60%]">{ep.url}</span>
+                      <div className="flex items-center gap-3">
+                        {ep.vulnCount > 0 && <span className="text-[11px] text-gray-500">{ep.vulnCount} vuln{ep.vulnCount !== 1 ? "s" : ""}</span>}
+                        <span className={`px-2 py-0.5 text-[11px] font-bold rounded-full ${color}`}>{score}/100</span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

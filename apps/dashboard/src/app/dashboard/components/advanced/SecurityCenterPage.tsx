@@ -218,7 +218,7 @@ export function SecurityCenterPage({ company, onNavigate }: any) {
           <div className="flex items-center gap-8">
             {[
               { label: "Security Score", value: `${metrics.securityScore}/100`, color: scoreColor(metrics.securityScore) },
-              { label: "Active Threats", value: metrics.activeThreats },
+              { label: "Security Findings", value: metrics.activeThreats },
               { label: "Open Vulns", value: metrics.openVulnerabilities, color: metrics.openVulnerabilities > 0 ? "#f59e0b" : undefined },
               { label: "Compliance", value: `${metrics.complianceScore}%` },
               { label: "Scan Hygiene", value: `${metrics.scanHygieneScore}%` },
@@ -295,7 +295,7 @@ export function SecurityCenterPage({ company, onNavigate }: any) {
                   <RechartsTooltip {...tip} />
                   <Legend wrapperStyle={{ fontSize: 11, color: "#9ca3af" }} />
                   <Area yAxisId="left" type="monotone" dataKey="securityScore" name="Score" stroke="#06b6d4" fill="url(#sc-fill)" strokeWidth={1.5} />
-                  <Line yAxisId="right" type="monotone" dataKey="activeThreats" name="Threats" stroke="#ef4444" strokeWidth={1.5} dot={false} />
+                  <Line yAxisId="right" type="monotone" dataKey="activeThreats" name="Vulnerabilities" stroke="#ef4444" strokeWidth={1.5} dot={false} />
                 </ComposedChart>
               </ResponsiveContainer>
             ) : (
@@ -310,7 +310,7 @@ export function SecurityCenterPage({ company, onNavigate }: any) {
       {/* metric cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {[
-          { label: "Active Threats", value: metrics?.activeThreats ?? 0, icon: FireIcon, live: (metrics?.activeThreats ?? 0) > 0 },
+          { label: "Security Findings", value: metrics?.activeThreats ?? 0, icon: FireIcon, live: (metrics?.activeThreats ?? 0) > 0 },
           { label: "Critical Vulns", value: metrics?.criticalVulns ?? 0, icon: BugAntIcon },
           { label: "Scans Running", value: metrics?.scansRunning ?? 0, icon: ChartBarIcon },
           { label: "Compliance", value: `${metrics?.complianceScore ?? 0}%`, icon: ShieldExclamationIcon },

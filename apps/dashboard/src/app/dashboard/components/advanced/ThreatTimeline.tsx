@@ -100,8 +100,8 @@ export function ThreatTimeline({ companyId }: { companyId: string }) {
                 <RechartsTooltip {...tip} />
                 <Legend wrapperStyle={{ fontSize: 11, color: "#9ca3af" }} />
                 <Bar dataKey="scans" name="Scans" fill="#06b6d4" radius={[3, 3, 0, 0]} />
-                <Bar dataKey="threats" name="Threats" fill="#ef4444" radius={[3, 3, 0, 0]} />
-                <Bar dataKey="blocked" name="Blocked" fill="#10b981" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="threats" name="Findings" fill="#ef4444" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="blocked" name="Resolved" fill="#10b981" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
