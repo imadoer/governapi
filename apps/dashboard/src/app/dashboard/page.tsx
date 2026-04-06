@@ -158,11 +158,15 @@ export default function AdvancedDashboard() {
     }
   }, []);
 
-  // SWR fetcher — uses company.id as tenant header
-  const dashFetcher = (url: string) =>
-    fetch(url, { headers: { "x-tenant-id": company?.id?.toString() || "" } })
+  // SWR fetcher — uses session token for auth
+  const dashFetcher = (url: string) => {
+    const token = typeof window !== "undefined" ? sessionStorage.getItem("sessionToken") || "" : "";
+    const headers: Record<string, string> = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    return fetch(url, { headers, credentials: "include" })
       .then((r) => r.json())
       .then((d) => (d.success ? d.dashboard : null));
+  };
 
   const { data: swrDashboard, mutate: refreshDashboard } = useSWR(
     company?.id ? "/api/customer/dashboard" : null,
@@ -373,7 +377,7 @@ export default function AdvancedDashboard() {
                 </div>
                 <p className="text-white text-[16px] font-semibold mb-2">Scan complete!</p>
                 <p className="text-gray-500 text-[13px] mb-5">Your security dashboard is ready</p>
-                <button onClick={() => { refreshDashboard(); }}
+                <button onClick={() => { setActiveFeature("overview"); refreshDashboard(); }}
                   className="px-8 py-2.5 rounded-xl text-[13px] font-medium bg-gradient-to-r from-cyan-500 to-emerald-500 text-white shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:shadow-[0_0_30px_rgba(6,182,212,0.4)] transition-all">
                   View Dashboard →
                 </button>
