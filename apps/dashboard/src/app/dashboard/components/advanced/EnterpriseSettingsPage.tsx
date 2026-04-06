@@ -20,6 +20,7 @@ interface EnterpriseSettings {
   customBranding: boolean;
   auditLogging: boolean;
   dataRetentionDays: number;
+  weeklyReportEnabled: boolean;
   apiRateLimits: {
     requests_per_minute: number;
     burst_limit: number;
@@ -93,6 +94,7 @@ export function EnterpriseSettingsPage({ companyId }: { companyId: string }) {
           customBranding: settings.customBranding,
           auditLogging: settings.auditLogging,
           dataRetentionDays: settings.dataRetentionDays,
+          weeklyReportEnabled: settings.weeklyReportEnabled ?? true,
           apiRateLimits: {
             requestsPerMinute: settings.apiRateLimits.requests_per_minute,
             burstLimit: settings.apiRateLimits.burst_limit,
@@ -136,6 +138,8 @@ export function EnterpriseSettingsPage({ companyId }: { companyId: string }) {
     { key: "security", label: "Security Policies" },
     { key: "data", label: "Data & Compliance" },
     { key: "api", label: "API Configuration" },
+    { key: "badge", label: "Security Badge" },
+    { key: "reports", label: "Reports" },
   ];
 
   return (
@@ -506,6 +510,128 @@ export function EnterpriseSettingsPage({ companyId }: { companyId: string }) {
                   <p className="text-cyan-400 text-sm">
                     <strong>Tip:</strong> Higher rate limits allow more
                     concurrent requests but may increase costs.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "badge" && (
+          <div className="space-y-6">
+            <div className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
+              <h3 className="text-xl font-bold text-white mb-2">Embeddable Security Badge</h3>
+              <p className="text-sm text-slate-400 mb-6">
+                Add this badge to your website or API docs to show customers you take security seriously.
+                Every badge is free marketing for your security posture.
+              </p>
+
+              {/* Badge Preview */}
+              <div className="p-6 bg-slate-900/50 rounded-xl text-center mb-6">
+                <p className="text-xs text-slate-500 mb-3">Preview</p>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`/api/badge/${companyId}`}
+                  alt="GovernAPI Security Badge"
+                  style={{ display: "inline-block" }}
+                />
+              </div>
+
+              {/* HTML Snippet */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">HTML Embed Code</label>
+                  <div className="relative">
+                    <textarea
+                      readOnly
+                      rows={3}
+                      value={`<a href="http://146.190.99.58:3000/report/${companyId}" target="_blank" rel="noopener">\n  <img src="http://146.190.99.58:3000/api/badge/${companyId}" alt="API Security Score" />\n</a>`}
+                      className="w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl text-cyan-400 font-mono text-xs focus:outline-none resize-none"
+                    />
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(`<a href="http://146.190.99.58:3000/report/${companyId}" target="_blank" rel="noopener">\n  <img src="http://146.190.99.58:3000/api/badge/${companyId}" alt="API Security Score" />\n</a>`);
+                        showToast("Copied to clipboard!", "success");
+                      }}
+                      className="absolute top-2 right-2 px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs text-white transition-colors"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Markdown</label>
+                  <div className="relative">
+                    <textarea
+                      readOnly
+                      rows={2}
+                      value={`[![API Security Score](http://146.190.99.58:3000/api/badge/${companyId})](http://146.190.99.58:3000/report/${companyId})`}
+                      className="w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl text-cyan-400 font-mono text-xs focus:outline-none resize-none"
+                    />
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(`[![API Security Score](http://146.190.99.58:3000/api/badge/${companyId})](http://146.190.99.58:3000/report/${companyId})`);
+                        showToast("Copied to clipboard!", "success");
+                      }}
+                      className="absolute top-2 right-2 px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs text-white transition-colors"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-cyan-500/10 border border-cyan-500/30 rounded-xl">
+                  <p className="text-cyan-400 text-sm">
+                    <strong>Public Report:</strong> The badge links to a minimal public report showing your overall score, last scan date, and compliance summary — no sensitive details exposed.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "reports" && (
+          <div className="space-y-6">
+            <div className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
+              <h3 className="text-xl font-bold text-white mb-6">Weekly Security Report</h3>
+
+              <div className="space-y-6">
+                <div className="flex items-center justify-between p-4 bg-slate-900/50 rounded-xl">
+                  <div>
+                    <p className="text-white font-semibold">Enable Weekly Email Report</p>
+                    <p className="text-sm text-slate-400">
+                      Receive a security summary every Monday at 8:00 AM UTC with score changes,
+                      new vulnerabilities, and top priority fixes.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setSettings({ ...settings, weeklyReportEnabled: !(settings.weeklyReportEnabled ?? true) })}
+                    className={`relative w-12 h-7 rounded-full transition-colors shrink-0 ml-4 ${
+                      (settings.weeklyReportEnabled ?? true) ? "bg-cyan-500" : "bg-slate-600"
+                    }`}
+                  >
+                    <div className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow-md transition-transform ${
+                      (settings.weeklyReportEnabled ?? true) ? "translate-x-5" : "translate-x-0.5"
+                    }`} />
+                  </button>
+                </div>
+
+                <div className="p-4 bg-slate-900/50 rounded-xl">
+                  <p className="text-white font-semibold mb-2">Report Contents</p>
+                  <ul className="text-sm text-slate-400 space-y-1.5">
+                    <li>• Security score this week vs last week (↑ or ↓)</li>
+                    <li>• New vulnerabilities found this week</li>
+                    <li>• Vulnerabilities resolved</li>
+                    <li>• Compliance score across all frameworks</li>
+                    <li>• Top 3 priority fixes with one-line descriptions</li>
+                  </ul>
+                </div>
+
+                <div className="p-4 bg-slate-900/50 rounded-xl">
+                  <p className="text-white font-semibold mb-1">Delivery</p>
+                  <p className="text-sm text-slate-400">
+                    Sent to the account owner&apos;s email every Monday at 8:00 AM UTC.
                   </p>
                 </div>
               </div>
