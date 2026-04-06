@@ -42,6 +42,16 @@ export function DataManagementPage({ companyId }: { companyId: string }) {
     ([u, id]: [string, string]) => fetcher(u, id),
   );
 
+  const { data: endpointsData } = useSWR(
+    [`/api/customer/api-endpoints`, companyId],
+    ([u, id]: [string, string]) => fetcher(u, id),
+  );
+
+  const { data: vulnsData } = useSWR(
+    [`/api/customer/vulnerabilities`, companyId],
+    ([u, id]: [string, string]) => fetcher(u, id),
+  );
+
   const stats = dashData?.success ? dashData.stats : null;
 
   const handleExport = async (dataType: string, format: string) => {
@@ -92,16 +102,16 @@ export function DataManagementPage({ companyId }: { companyId: string }) {
   const exportItems = [
     { id: "all", name: "Complete Export", desc: "All data including APIs, scans, threats, and vulnerabilities", icon: ServerIcon },
     { id: "scans", name: "Security Scans", desc: "Scan results and security scores", icon: ShieldCheckIcon },
-    { id: "threats", name: "Threat Events", desc: "Detected threats and incidents", icon: ExclamationTriangleIcon },
+    { id: "threats", name: "Security Findings", desc: "Security findings and scan results", icon: ExclamationTriangleIcon },
     { id: "vulnerabilities", name: "Vulnerabilities", desc: "Discovered vulnerabilities and CVEs", icon: ShieldCheckIcon },
     { id: "webhooks", name: "Webhooks", desc: "Webhook configurations and delivery logs", icon: DocumentArrowDownIcon },
   ];
 
   const storageItems = [
-    { label: "API Endpoints", value: stats?.totalEndpoints ?? 0, color: "#06b6d4" },
+    { label: "API Endpoints", value: endpointsData?.total ?? 0, color: "#06b6d4" },
     { label: "Security Scans", value: stats?.totalScans ?? 0, color: "#10b981" },
-    { label: "Threats", value: stats?.totalThreats ?? 0, color: "#ef4444" },
-    { label: "Blocked Events", value: stats?.blockedThreats ?? 0, color: "#f59e0b" },
+    { label: "Vulnerabilities", value: vulnsData?.summary?.total ?? 0, color: "#ef4444" },
+    { label: "Discovery Scans", value: stats?.completedScans ?? 0, color: "#f59e0b" },
   ];
 
   const totalRecords = storageItems.reduce((s, i) => s + i.value, 0);
@@ -159,18 +169,10 @@ export function DataManagementPage({ companyId }: { companyId: string }) {
               <ArrowPathIcon className="w-4 h-4 text-gray-500" />
               <h3 className="text-[13px] font-medium text-gray-400">Automated Backups</h3>
             </div>
-            <div className="space-y-2 text-[13px]">
-              {[
-                ["Status", "Enabled", "text-emerald-400"],
-                ["Last Backup", stats?.totalScans ? "Today at 2:00 AM" : "Never", "text-white"],
-                ["Next Backup", "Tomorrow at 2:00 AM", "text-white"],
-                ["Frequency", "Daily", "text-white"],
-              ].map(([label, value, color]) => (
-                <div key={label} className="flex justify-between py-1.5 border-b border-white/[0.03]">
-                  <span className="text-gray-500">{label}</span>
-                  <span className={color as string}>{value}</span>
-                </div>
-              ))}
+            <div className="flex flex-col items-center justify-center py-6 text-center">
+              <span className="px-2.5 py-0.5 text-[10px] font-medium rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 mb-3">Coming Soon</span>
+              <p className="text-[12px] text-gray-500">Automated daily backups with point-in-time recovery.</p>
+              <p className="text-[11px] text-gray-600 mt-1">Your data is stored in PostgreSQL with standard replication.</p>
             </div>
           </Card>
         </div>
@@ -254,10 +256,10 @@ export function DataManagementPage({ companyId }: { companyId: string }) {
               Delete Scan History
             </button>
             <button
-              onClick={() => { setDeleteTarget("threat logs"); setDeleteModal(true); }}
+              onClick={() => { setDeleteTarget("security findings"); setDeleteModal(true); }}
               className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors"
             >
-              Delete Threat Logs
+              Delete Security Findings
             </button>
             <button
               onClick={() => { setDeleteTarget("all data"); setDeleteModal(true); }}
