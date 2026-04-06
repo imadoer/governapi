@@ -16,8 +16,10 @@ import {
   ClockIcon,
 } from "@heroicons/react/24/outline";
 
-const fetcher = (url: string, tenantId: string) =>
-  fetch(url, { headers: { "x-tenant-id": tenantId } }).then((res) => res.json());
+const fetcher = (url: string, _tid: string) => {
+  const token = typeof window !== "undefined" ? sessionStorage.getItem("sessionToken") || "" : "";
+  return fetch(url, { headers: token ? { "Authorization": `Bearer ${token}` } : {}, credentials: "include" }).then((r) => r.json());
+};
 
 const tip = {
   contentStyle: { background: "#111318", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, fontSize: 12 },

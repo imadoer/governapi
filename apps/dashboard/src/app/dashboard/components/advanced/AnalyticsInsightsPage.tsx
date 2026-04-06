@@ -24,8 +24,10 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-const fetcher = (url: string, tid: string) =>
-  fetch(url, { headers: { "x-tenant-id": tid } }).then((r) => r.json());
+const fetcher = (url: string, _tid: string) => {
+  const token = typeof window !== "undefined" ? sessionStorage.getItem("sessionToken") || "" : "";
+  return fetch(url, { headers: token ? { "Authorization": `Bearer ${token}` } : {}, credentials: "include" }).then((r) => r.json());
+};
 
 const tip = {
   contentStyle: {

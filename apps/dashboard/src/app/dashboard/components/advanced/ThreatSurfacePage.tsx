@@ -7,8 +7,10 @@ import { ArrowPathIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from "recharts";
 import { PageSkeleton } from "./PageSkeleton";
 
-const fetcher = (url: string, tid: string) =>
-  fetch(url, { headers: { "x-tenant-id": tid } }).then((r) => r.json());
+const fetcher = (url: string, _tid: string) => {
+  const token = typeof window !== "undefined" ? sessionStorage.getItem("sessionToken") || "" : "";
+  return fetch(url, { headers: token ? { "Authorization": `Bearer ${token}` } : {}, credentials: "include" }).then((r) => r.json());
+};
 
 const tip = {
   contentStyle: { background: "#111318", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, fontSize: 12 },

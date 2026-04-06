@@ -5,8 +5,10 @@ import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import { ArrowPathIcon, ArrowDownTrayIcon, ChevronDownIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
 import { PageSkeleton } from "../PageSkeleton";
 
-const fetcher = (url: string, tid: string) =>
-  fetch(url, { headers: { "x-tenant-id": tid } }).then((r) => r.json());
+const fetcher = (url: string, _tid: string) => {
+  const token = typeof window !== "undefined" ? sessionStorage.getItem("sessionToken") || "" : "";
+  return fetch(url, { headers: token ? { "Authorization": `Bearer ${token}` } : {}, credentials: "include" }).then((r) => r.json());
+};
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <div className={`bg-slate-800/50 border border-white/[0.06] rounded-2xl ${className}`}>{children}</div>;
