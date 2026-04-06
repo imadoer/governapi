@@ -139,6 +139,7 @@ export default function AdvancedDashboard() {
   const [addApiName, setAddApiName] = useState("");
   const [onboardingLoading, setOnboardingLoading] = useState(false);
   const [onboardingDone, setOnboardingDone] = useState(false);
+  const [onboardingError, setOnboardingError] = useState("");
   const [plan, setPlan] = useState("free");
 
   // All data comes from dashboardStats (fetched from /api/customer/dashboard)
@@ -322,8 +323,6 @@ export default function AdvancedDashboard() {
       </div>
     );
   }
-
-  const [onboardingError, setOnboardingError] = useState("");
 
   const handleOnboardingAddApi = async () => {
     if (!addApiUrl || !company?.id) return;
