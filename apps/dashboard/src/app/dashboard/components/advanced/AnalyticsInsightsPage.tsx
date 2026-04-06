@@ -361,15 +361,22 @@ function ScansTab({ scans, loading }: { scans: any[]; loading: boolean }) {
 /* ───────────────── Vulnerabilities ──────────────── */
 
 function VulnerabilitiesTab({ vulns, summary }: { vulns: any[]; summary: any }) {
-  /* severity over time — group by created_at date + severity */
-  const byDate: Record<string, { critical: number; high: number; medium: number; low: number }> = {};
+  /* severity over time — group by created_at date + severity, sorted chronologically */
+  const byDateMap: Record<string, { ts: number; critical: number; high: number; medium: number; low: number }> = {};
   vulns.forEach((v: any) => {
-    const d = new Date(v.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-    if (!byDate[d]) byDate[d] = { critical: 0, high: 0, medium: 0, low: 0 };
+    const dt = new Date(v.created_at);
+    const key = dt.toISOString().slice(0, 10); // YYYY-MM-DD for sorting
+    const label = dt.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    if (!byDateMap[key]) byDateMap[key] = { ts: dt.getTime(), critical: 0, high: 0, medium: 0, low: 0 };
     const sev = v.severity?.toLowerCase();
-    if (sev && sev in byDate[d]) (byDate[d] as any)[sev]++;
+    if (sev && sev in byDateMap[key]) (byDateMap[key] as any)[sev]++;
   });
-  const trendData = Object.entries(byDate).map(([date, counts]) => ({ date, ...counts })).reverse();
+  const trendData = Object.entries(byDateMap)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, counts]) => ({
+      date: new Date(key).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      critical: counts.critical, high: counts.high, medium: counts.medium, low: counts.low,
+    }));
 
   /* most targeted endpoints */
   const epCount: Record<string, number> = {};
@@ -451,7 +458,7 @@ function TrendsTab({ trends, loading }: { trends: any[]; loading: boolean }) {
   const data = trends.map((t: any) => ({
     date: new Date(t.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
     score: t.securityScore ?? 0,
-    threats: t.activeThreats ?? 0,
+    scans: t.scanCount ?? 1,
   }));
 
   return (
@@ -480,25 +487,25 @@ function TrendsTab({ trends, loading }: { trends: any[]; loading: boolean }) {
       </Card>
 
       <Card className="p-6">
-        <h3 className="text-[13px] font-medium text-gray-400 mb-6">Active Threats Over Time</h3>
+        <h3 className="text-[13px] font-medium text-gray-400 mb-6">Scan Activity Over Time</h3>
         {data.length > 0 ? (
           <ResponsiveContainer width="100%" height={220}>
             <AreaChart data={data}>
               <defs>
-                <linearGradient id="ai-threat" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#ef4444" stopOpacity={0.25} />
-                  <stop offset="100%" stopColor="#ef4444" stopOpacity={0} />
+                <linearGradient id="ai-scans" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.25} />
+                  <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
               <XAxis dataKey="date" stroke="#4b5563" tick={{ fontSize: 11 }} />
               <YAxis allowDecimals={false} stroke="#4b5563" tick={{ fontSize: 11 }} />
               <RechartsTooltip {...tip} />
-              <Area type="monotone" dataKey="threats" name="Active Threats" stroke="#ef4444" fill="url(#ai-threat)" strokeWidth={1.5} />
+              <Area type="monotone" dataKey="scans" name="Scans" stroke="#10b981" fill="url(#ai-scans)" strokeWidth={1.5} />
             </AreaChart>
           </ResponsiveContainer>
         ) : (
-          <Empty text="No threat history" />
+          <Empty text="No scan history" />
         )}
       </Card>
     </div>
