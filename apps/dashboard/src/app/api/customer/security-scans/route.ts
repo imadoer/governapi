@@ -470,6 +470,29 @@ async function runQuickScan(targetUrl: string): Promise<any[]> {
       });
     }
 
+    // Rate Limiting Check
+    const rateLimitHeaders = [
+      "x-ratelimit-limit",
+      "x-ratelimit-remaining",
+      "x-ratelimit-reset",
+      "retry-after",
+      "ratelimit-limit",
+      "ratelimit-policy",
+    ];
+    const foundRateLimitHeader = rateLimitHeaders.find((h) => headers.get(h));
+    if (!foundRateLimitHeader) {
+      vulnerabilities.push({
+        vulnerability_type: "Missing Rate Limiting",
+        severity: "MEDIUM",
+        title: "No Rate Limiting Detected",
+        description: "No rate limiting headers found (X-RateLimit-Limit, RateLimit-Limit, Retry-After, etc). Without rate limiting, attackers can send unlimited requests, leading to denial of service, credential stuffing, or data scraping.",
+        cwe_id: "CWE-770",
+        cvss_score: 5.3,
+        affected_url: targetUrl,
+        remediation: "Implement rate limiting on your API. Examples:\n\n• Express: Use express-rate-limit middleware\n  const rateLimit = require('express-rate-limit');\n  app.use(rateLimit({ windowMs: 15*60*1000, max: 100 }));\n\n• Nginx: Use limit_req directive\n  limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;\n  location /api/ { limit_req zone=api burst=20; }\n\n• Django: Use django-ratelimit\n  @ratelimit(key='ip', rate='100/h')\n  def api_view(request): ...",
+      });
+    }
+
     // SSL/TLS Check
     if (targetUrl.startsWith('http://')) {
       vulnerabilities.push({

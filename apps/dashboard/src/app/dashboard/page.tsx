@@ -14,7 +14,6 @@ import {
   FireIcon,
   GlobeAltIcon,
   CubeIcon,
-  ClockIcon,
   Bars3Icon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
@@ -38,7 +37,7 @@ const CustomRulesPage = dynamic(() => import("./components/advanced/CustomRulesP
 const PerformanceMonitorPage = dynamic(() => import("./components/advanced/PerformanceMonitorPage").then(m => ({ default: m.PerformanceMonitorPage })), { loading: () => <PageSkeleton /> });
 const ComplianceHubPage = dynamic(() => import("./components/advanced/ComplianceHubPage").then(m => ({ default: m.ComplianceHubPage })), { loading: () => <PageSkeleton /> });
 const WebhookCenterPage = dynamic(() => import("./components/advanced/WebhookCenterPage").then(m => ({ default: m.WebhookCenterPage })), { loading: () => <PageSkeleton /> });
-const RateLimitingPage = dynamic(() => import("./components/advanced/RateLimitingPage").then(m => ({ default: m.RateLimitingPage })), { loading: () => <PageSkeleton /> });
+
 const AnalyticsInsightsPage = dynamic(() => import("./components/advanced/AnalyticsInsightsPage").then(m => ({ default: m.AnalyticsInsightsPage })), { loading: () => <PageSkeleton /> });
 const DataManagementPage = dynamic(() => import("./components/advanced/DataManagementPage").then(m => ({ default: m.DataManagementPage })), { loading: () => <PageSkeleton /> });
 const BillingSubscriptionPage = dynamic(() => import("./components/advanced/BillingSubscriptionPage").then(m => ({ default: m.BillingSubscriptionPage })), { loading: () => <PageSkeleton /> });
@@ -102,7 +101,6 @@ const SIDEBAR_ITEMS = [
       { id: "api-management", label: "API Management", icon: GlobeAltIcon },
       { id: "custom-rules", label: "Security Policies", icon: CubeIcon },
       { id: "webhook-center", label: "Webhook Center", icon: BoltIcon },
-      { id: "rate-limiting", label: "Rate Limiting", icon: ClockIcon },
     ],
   },
   {
@@ -477,8 +475,6 @@ export default function AdvancedDashboard() {
         return <ComplianceHubPage company={company} />;
       case "webhook-center":
         return <WebhookCenterPage companyId={company?.id.toString()} />;
-      case "rate-limiting":
-        return <RateLimitingPage companyId={company?.id.toString()} />;
       case "threat-surface":
         return <ThreatSurfacePage companyId={company?.id.toString()} />;
       case "api-discovery":
