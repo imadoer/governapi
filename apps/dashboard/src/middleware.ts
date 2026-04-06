@@ -6,6 +6,7 @@ const authPublicRoutes = [
   "/api/auth/",
   "/api/badge/",
   "/api/ci/",
+  "/api/customer/data-export",
   "/report/",
   // "/api/customer/", // ✅ Commented out so authentication will apply
 ];
@@ -28,7 +29,7 @@ const customAuthRoutes = [
 
 // ✅ Security processor exclusions (different purpose)
 const securityExemptRoutes = [
-  "/api/integrations", // Exempt from security processor
+  "/api/integrations",
   // "/api/customer/", // Now scanned for threats
 ];
 
@@ -117,7 +118,10 @@ export async function middleware(request: NextRequest) {
     // For all other API routes, redirect through security processor
     if (pathname.startsWith("/api/")) {
       const securityUrl = new URL("/api/security-processor", request.url);
-      securityUrl.searchParams.set("target", pathname);
+      // Include original query string with the target path
+      const origUrl = new URL(request.url);
+      const fullTarget = pathname + origUrl.search;
+      securityUrl.searchParams.set("target", fullTarget);
       securityUrl.searchParams.set("rid", requestId);
       securityUrl.searchParams.set("ip", ip);
       securityUrl.searchParams.set("method", request.method);

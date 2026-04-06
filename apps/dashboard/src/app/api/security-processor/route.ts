@@ -93,7 +93,7 @@ async function processRequest(request: NextRequest) {
       }
     }
 
-    // Forward authenticated request to target route
+    // Forward authenticated request to target route (target includes query string)
     const targetUrl = `http://localhost:3000${target}`;
     // Read body if present
     let bodyContent: string | undefined;
@@ -121,15 +121,15 @@ async function processRequest(request: NextRequest) {
     const data = await response.text();
     logger.apiRequest(request.method, target, { requestId, ip });
 
-    return new NextResponse(data, {
-      status: response.status,
-      headers: {
-        "x-internal-request": "true",
-        "content-type":
-          response.headers.get("content-type") || "application/json",
-        "x-request-id": requestId,
-      },
-    });
+    const respHeaders: Record<string, string> = {
+      "x-internal-request": "true",
+      "content-type": response.headers.get("content-type") || "application/json",
+      "x-request-id": requestId,
+    };
+    const disposition = response.headers.get("content-disposition");
+    if (disposition) respHeaders["content-disposition"] = disposition;
+
+    return new NextResponse(data, { status: response.status, headers: respHeaders });
   } catch (error) {
     logger.error("Security processor error", {
       requestId,
