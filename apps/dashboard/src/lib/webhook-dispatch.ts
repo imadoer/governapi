@@ -76,6 +76,7 @@ export async function dispatchWebhooks(
 
 function buildPayload(type: string, event: string, data: Record<string, any>) {
   if (type === "slack") {
+    if (event === "policy.triggered") return buildSlackPolicyPayload(data);
     return buildSlackPayload(event, data);
   }
 
@@ -95,6 +96,23 @@ function buildPayload(type: string, event: string, data: Record<string, any>) {
 
   // Generic webhook
   return { event, timestamp: new Date().toISOString(), data };
+}
+
+function buildSlackPolicyPayload(data: Record<string, any>) {
+  const url = data.url || "Unknown";
+  const score = data.securityScore ?? 0;
+  return {
+    text: `⚠️ Policy triggered: ${data.policyName} — ${data.details}. Endpoint: ${url}, Score: ${score}`,
+    blocks: [
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `:warning: *Policy Triggered: ${data.policyName}*\n*Details:* ${data.details}\n*Endpoint:* ${url}\n*Score:* ${score}/100\n*Vulnerabilities:* ${data.vulnerabilityCount ?? 0}`,
+        },
+      },
+    ],
+  };
 }
 
 function buildSlackPayload(event: string, data: Record<string, any>) {

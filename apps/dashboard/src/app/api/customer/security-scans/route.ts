@@ -2,6 +2,7 @@ import { logger } from "../../../../utils/logging/logger";
 import { NextRequest, NextResponse } from "next/server";
 import { database } from "../../../../infrastructure/database";
 import { dispatchWebhooks } from "../../../../lib/webhook-dispatch";
+import { evaluatePolicies } from "../../../../lib/policy-engine";
 
 export async function GET(request: NextRequest) {
   const tenantId = request.headers.get("x-tenant-id");
@@ -369,6 +370,15 @@ async function startSecurityScan(
       criticalVulns: criticals,
       scanType,
     }).catch((err) => console.error("Webhook dispatch failed:", err));
+
+    // Evaluate security policies after scan completion
+    evaluatePolicies({
+      scanId,
+      tenantId,
+      url: targetUrl,
+      securityScore,
+      vulnerabilities,
+    }).catch((err) => console.error("Policy evaluation failed:", err));
 
   } catch (error) {
     logger.error("Security scan execution failed:", error);

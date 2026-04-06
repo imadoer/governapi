@@ -8,6 +8,7 @@ import {
   ArrowPathIcon,
   TrashIcon,
   XMarkIcon,
+  ChevronDownIcon,
 } from "@heroicons/react/24/outline";
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
@@ -15,23 +16,33 @@ function Card({ children, className = "" }: { children: React.ReactNode; classNa
 }
 
 const RULE_TYPES = [
-  { id: "score_alert", label: "Score Alert", desc: "Trigger when an endpoint's score drops below a threshold" },
-  { id: "vuln_alert", label: "Vulnerability Alert", desc: "Trigger when a new vulnerability of a specific severity is found" },
-  { id: "header_check", label: "Header Check", desc: "Trigger when a specific security header is missing" },
-  { id: "compliance_alert", label: "Compliance Alert", desc: "Trigger when a compliance framework score drops below a threshold" },
-  { id: "endpoint_down", label: "Endpoint Down", desc: "Trigger when a scanned endpoint returns 5xx or times out" },
-  { id: "new_exposure", label: "New Exposure", desc: "Trigger when API Discovery finds a new exposed endpoint" },
+  { id: "score_alert", label: "Score Alert", desc: "Alert when any endpoint score drops below a threshold" },
+  { id: "vuln_alert", label: "Vulnerability Alert", desc: "Alert when a vulnerability of a specific severity is found" },
+  { id: "header_check", label: "Header Check", desc: "Alert when a specific security header is missing" },
+  { id: "compliance_alert", label: "Compliance Alert", desc: "Alert when compliance score drops below a threshold" },
+  { id: "endpoint_down", label: "Endpoint Down", desc: "Alert when a monitored endpoint returns 5xx or times out" },
 ];
 
 const ACTIONS = [
   { id: "notify", label: "Notify", desc: "Send alert to Slack/PagerDuty/webhook" },
-  { id: "flag_critical", label: "Flag Critical", desc: "Mark the vulnerability as critical" },
-  { id: "fail_cicd", label: "Fail CI/CD", desc: "Return failure status via API key" },
-  { id: "auto_rescan", label: "Auto-Rescan", desc: "Immediately rescan the endpoint" },
+  { id: "flag_critical", label: "Flag Critical", desc: "Override severity to critical" },
+  { id: "fail_cicd", label: "Fail CI/CD", desc: "Return failure status via API" },
 ];
 
 const HEADERS = ["HSTS", "CSP", "X-Frame-Options", "X-Content-Type-Options", "CORS", "Referrer-Policy"];
 const SEVERITIES = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
+
+function timeAgo(date: string | null): string {
+  if (!date) return "Never";
+  const now = Date.now();
+  const then = new Date(date).getTime();
+  const diff = now - then;
+  if (diff < 60000) return "Just now";
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+  if (diff < 604800000) return `${Math.floor(diff / 86400000)}d ago`;
+  return new Date(date).toLocaleDateString();
+}
 
 export function CustomRulesPage({ companyId }: { companyId: string }) {
   const [rules, setRules] = useState<any[]>([]);
@@ -39,6 +50,7 @@ export function CustomRulesPage({ companyId }: { companyId: string }) {
   const [modal, setModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null);
+  const [expandedRule, setExpandedRule] = useState<number | null>(null);
 
   // Form state
   const [name, setName] = useState("");
@@ -73,7 +85,6 @@ export function CustomRulesPage({ companyId }: { companyId: string }) {
       case "header_check": return { type: "header_missing", header };
       case "compliance_alert": return { type: "compliance_below", threshold };
       case "endpoint_down": return { type: "endpoint_error" };
-      case "new_exposure": return { type: "new_exposure" };
       default: return {};
     }
   };
@@ -86,7 +97,6 @@ export function CustomRulesPage({ companyId }: { companyId: string }) {
       case "header_missing": return `Alert when ${c.header} header is missing`;
       case "compliance_below": return `Alert when compliance drops below ${c.threshold}%`;
       case "endpoint_error": return "Alert when endpoint returns 5xx or times out";
-      case "new_exposure": return "Alert when new exposed endpoint is found";
       default: return rule.description || "Custom policy";
     }
   };
@@ -95,15 +105,16 @@ export function CustomRulesPage({ companyId }: { companyId: string }) {
     if (!name) { flash("Name required", false); return; }
     setSubmitting(true);
     try {
+      const conditions = buildConditions();
       const r = await fetch("/api/customer/custom-rules", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-tenant-id": companyId },
         body: JSON.stringify({
           name,
           ruleType,
-          conditions: buildConditions(),
+          conditions,
           action,
-          description: describeRule({ conditions: buildConditions() }),
+          description: describeRule({ conditions }),
         }),
       });
       const d = await r.json();
@@ -138,6 +149,7 @@ export function CustomRulesPage({ companyId }: { companyId: string }) {
   if (loading) return <PageSkeleton />;
 
   const activeCount = rules.filter((r) => r.isActive).length;
+  const totalTriggers = rules.reduce((sum, r) => sum + (r.triggeredCount || 0), 0);
 
   return (
     <div>
@@ -155,7 +167,7 @@ export function CustomRulesPage({ companyId }: { companyId: string }) {
       <div className="flex items-end justify-between mb-10">
         <div>
           <h1 className="text-2xl font-semibold text-white tracking-tight">Security Policies</h1>
-          <p className="text-sm text-gray-500 mt-1">Automated alerts and actions based on scan results</p>
+          <p className="text-sm text-gray-500 mt-1">Automated alerts and actions triggered after every scan</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={fetchRules} className="p-2 rounded-lg text-gray-500 hover:text-white hover:bg-white/5 transition-colors">
@@ -173,8 +185,8 @@ export function CustomRulesPage({ companyId }: { companyId: string }) {
         {[
           { label: "Total Policies", value: rules.length },
           { label: "Active", value: activeCount },
-          { label: "Alert Policies", value: rules.filter((r) => r.action === "notify").length },
-          { label: "CI/CD Policies", value: rules.filter((r) => r.action === "fail_cicd").length },
+          { label: "Total Triggers", value: totalTriggers },
+          { label: "CI/CD Gates", value: rules.filter((r) => r.action === "fail_cicd").length },
         ].map((s) => (
           <Card key={s.label} className="p-5">
             <div className="text-[12px] text-gray-500 mb-2">{s.label}</div>
@@ -188,25 +200,74 @@ export function CustomRulesPage({ companyId }: { companyId: string }) {
         {rules.length > 0 ? (
           <div className="divide-y divide-white/[0.03]">
             {rules.map((rule) => (
-              <div key={rule.id} className="flex items-center justify-between px-5 py-4 hover:bg-white/[0.02] transition-colors">
-                <div className="flex items-center gap-4 min-w-0">
-                  <button onClick={() => handleToggle(rule)}
-                    className={`w-9 h-5 rounded-full transition-colors relative shrink-0 ${rule.isActive ? "bg-emerald-500" : "bg-gray-700"}`}>
-                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${rule.isActive ? "left-[18px]" : "left-0.5"}`} />
-                  </button>
-                  <div className="min-w-0">
-                    <div className="text-[13px] text-white font-medium">{rule.name}</div>
-                    <div className="text-[11px] text-gray-500 mt-0.5">{describeRule(rule)}</div>
+              <div key={rule.id}>
+                <div className="flex items-center justify-between px-5 py-4 hover:bg-white/[0.02] transition-colors">
+                  <div className="flex items-center gap-4 min-w-0">
+                    <button onClick={() => handleToggle(rule)}
+                      className={`w-9 h-5 rounded-full transition-colors relative shrink-0 ${rule.isActive ? "bg-emerald-500" : "bg-gray-700"}`}>
+                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${rule.isActive ? "left-[18px]" : "left-0.5"}`} />
+                    </button>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[13px] text-white font-medium">{rule.name}</span>
+                        {rule.triggeredCount > 0 && (
+                          <span className="px-1.5 py-0.5 text-[9px] font-medium rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/20">
+                            {rule.triggeredCount}x triggered
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-gray-500 mt-0.5">{describeRule(rule)}</div>
+                      <div className="text-[10px] text-gray-600 mt-0.5">
+                        {rule.triggeredCount > 0
+                          ? `Last triggered ${timeAgo(rule.lastTriggeredAt)}`
+                          : "Never triggered"}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-white/[0.04] text-gray-400 border border-white/[0.06]">
+                      {ACTIONS.find((a) => a.id === rule.action)?.label || rule.action}
+                    </span>
+                    {rule.recentTriggers && rule.recentTriggers.length > 0 && (
+                      <button
+                        onClick={() => setExpandedRule(expandedRule === rule.id ? null : rule.id)}
+                        className={`p-1 text-gray-500 hover:text-white transition-all ${expandedRule === rule.id ? "rotate-180" : ""}`}
+                      >
+                        <ChevronDownIcon className="w-4 h-4" />
+                      </button>
+                    )}
+                    <button onClick={() => handleDelete(rule.id)} className="p-1 text-gray-600 hover:text-red-400 transition-colors">
+                      <TrashIcon className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-white/[0.04] text-gray-400 border border-white/[0.06]">
-                    {ACTIONS.find((a) => a.id === rule.action)?.label || rule.action}
-                  </span>
-                  <button onClick={() => handleDelete(rule.id)} className="p-1 text-gray-600 hover:text-red-400 transition-colors">
-                    <TrashIcon className="w-4 h-4" />
-                  </button>
-                </div>
+
+                {/* Trigger history */}
+                <AnimatePresence>
+                  {expandedRule === rule.id && rule.recentTriggers && rule.recentTriggers.length > 0 && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="px-5 pb-4 pl-[72px]">
+                        <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-2">Recent Triggers</div>
+                        <div className="space-y-1.5">
+                          {rule.recentTriggers.slice(0, 5).map((t: any, i: number) => (
+                            <div key={i} className="flex items-start gap-2 text-[11px]">
+                              <span className="text-gray-600 shrink-0 w-16">{timeAgo(t.triggeredAt)}</span>
+                              <span className="text-gray-400">{t.details}</span>
+                              {t.endpointUrl && (
+                                <span className="text-gray-600 ml-auto shrink-0 max-w-[200px] truncate">{t.endpointUrl}</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             ))}
           </div>
@@ -253,7 +314,7 @@ export function CustomRulesPage({ companyId }: { companyId: string }) {
                   </select>
                 </div>
 
-                {/* Condition fields — depend on rule type */}
+                {/* Condition fields */}
                 {(ruleType === "score_alert" || ruleType === "compliance_alert") && (
                   <div>
                     <label className="block text-[12px] text-gray-400 mb-1.5">
@@ -281,6 +342,12 @@ export function CustomRulesPage({ companyId }: { companyId: string }) {
                       className="w-full px-3 py-2 rounded-lg bg-white/[0.03] border border-white/[0.06] text-[13px] text-white focus:outline-none appearance-none cursor-pointer">
                       {HEADERS.map((h) => <option key={h} value={h}>{h}</option>)}
                     </select>
+                  </div>
+                )}
+
+                {ruleType === "endpoint_down" && (
+                  <div className="px-3 py-2 rounded-lg bg-white/[0.02] border border-white/[0.04] text-[12px] text-gray-500">
+                    This policy triggers when any scanned endpoint returns a 5xx error or is unreachable.
                   </div>
                 )}
 
