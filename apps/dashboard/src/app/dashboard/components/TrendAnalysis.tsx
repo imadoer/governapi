@@ -74,7 +74,7 @@ export function TrendAnalysis() {
           </div>
         </div>
         <div>
-          <div className="text-sm text-gray-400 mb-1">Threats Blocked</div>
+          <div className="text-sm text-gray-400 mb-1">Policies Active</div>
           <div className="text-2xl font-bold text-emerald-400">{trends.threats.current}</div>
           <div className={`text-xs mt-1 ${getTrendColor(trends.threats.change, false)}`}>
             {getTrendSymbol(trends.threats.change)} {Math.abs(trends.threats.change)} from last month

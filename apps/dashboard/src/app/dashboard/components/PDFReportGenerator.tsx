@@ -90,7 +90,7 @@ export function PDFReportGenerator() {
                 <h3>Traffic Analysis</h3>
                 <p><strong>Total Traffic Analyzed:</strong> ${reportData.metrics.total_traffic} requests</p>
                 <p><strong>Bot Detection Rate:</strong> ${reportData.metrics.bot_detection_rate}%</p>
-                <p><strong>Automated Threats Blocked:</strong> ${reportData.metrics.bots_blocked}</p>
+                <p><strong>Automated Policies Triggered:</strong> ${reportData.metrics.bots_blocked}</p>
               </div>
 
               <div class="section recommendations">

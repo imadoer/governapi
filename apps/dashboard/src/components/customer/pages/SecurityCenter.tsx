@@ -417,7 +417,7 @@ export default function SecurityCenter({
                   {threatData.length}
                 </div>
                 <div style={{ color: "rgba(255,255,255,0.9)" }}>
-                  Threats Blocked Today
+                  Policies Active
                 </div>
               </div>
             </div>

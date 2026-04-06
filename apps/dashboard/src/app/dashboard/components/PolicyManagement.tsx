@@ -28,7 +28,7 @@ export function PolicyManagement() {
           <div className="text-2xl font-bold text-white">4,295</div>
         </div>
         <div className="rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-5">
-          <div className="text-sm text-gray-400 mb-1">Threats Blocked</div>
+          <div className="text-sm text-gray-400 mb-1">Policies Active</div>
           <div className="text-2xl font-bold text-white">80</div>
         </div>
         <div className="rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-5">

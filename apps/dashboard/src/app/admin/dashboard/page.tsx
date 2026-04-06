@@ -77,7 +77,7 @@ export default function AdminDashboard() {
       change: 'Stable'
     },
     {
-      title: 'Active Threats',
+      title: 'Security Findings',
       value: stats.activeThreats,
       icon: ExclamationTriangleIcon,
       color: 'red',

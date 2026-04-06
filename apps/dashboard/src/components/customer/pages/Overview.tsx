@@ -273,7 +273,7 @@ export default function Overview({
               <Title level={2} style={{ margin: 0 }}>
                 {totalThreatsBlocked}
               </Title>
-              <Text type="secondary">Threats Blocked</Text>
+              <Text type="secondary">Policies Active</Text>
             </Space>
           </Card>
         </Col>

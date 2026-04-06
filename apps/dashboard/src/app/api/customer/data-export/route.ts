@@ -146,7 +146,7 @@ export async function GET(request: NextRequest) {
       csvContent += "Data Type,Count,Latest Record\n";
       csvContent += `APIs,${apis.length},${apis[0]?.created_at || "No data"}\n`;
       csvContent += `Security Scans,${scans.length},${scans[0]?.created_at || "No data"}\n`;
-      csvContent += `Threat Events,${threats.length},${threats[0]?.created_at || "No data"}\n`;
+      csvContent += `Security Findings,${threats.length},${threats[0]?.created_at || "No data"}\n`;
       csvContent += `Vulnerabilities,${vulnerabilities.length},${vulnerabilities[0]?.discovered_at || "No data"}\n`;
       csvContent += `Webhooks,${webhooks.length},${webhooks[0]?.created_at || "No data"}\n`;
 

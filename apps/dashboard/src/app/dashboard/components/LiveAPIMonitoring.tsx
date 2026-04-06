@@ -60,7 +60,7 @@ export function LiveAPIMonitoring() {
         </div>
         <div className="text-center">
           <div className="text-2xl font-bold text-emerald-400">{liveData.threatsBlocked}</div>
-          <div className="text-gray-400 text-sm">Threats Blocked Today</div>
+          <div className="text-gray-400 text-sm">Policies Active</div>
         </div>
         <div className="text-center">
           <div className="text-2xl font-bold text-emerald-400">{liveData.avgLatency} ms</div>

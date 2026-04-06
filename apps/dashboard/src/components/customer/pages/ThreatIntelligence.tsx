@@ -60,7 +60,7 @@ export default function ThreatIntelligence({
         <Col xs={12} sm={6}>
           <Card>
             <Statistic
-              title="Threats Blocked Today"
+              title="Policies Active"
               value={
                 blockedThreats.filter(
                   (t) =>

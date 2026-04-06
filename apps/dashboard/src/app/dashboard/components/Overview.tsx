@@ -156,7 +156,7 @@ export function OverviewTab({
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { icon: ShieldCheckIcon, label: "Security Score", value: securityMetrics?.securityScore || 0, suffix: "/100", trend: securityMetrics?.securityScoreTrend },
-          { icon: FireIcon, label: "Threats Blocked Today", value: securityMetrics?.threatsBlockedToday || 0, color: "text-red-400", link: "/dashboard?tab=threat-intelligence" },
+          { icon: FireIcon, label: "Policies Active", value: securityMetrics?.threatsBlockedToday || 0, color: "text-red-400", link: "/dashboard?tab=threat-intelligence" },
           { icon: BugAntIcon, label: "Open Vulnerabilities", value: securityMetrics?.openVulnerabilities || 0, color: "text-amber-400", badge: securityMetrics?.criticalVulns },
           { icon: ShieldCheckIcon, label: "Compliance Score", value: securityMetrics?.complianceScore || 0, suffix: "%", link: "/dashboard?tab=compliance-hub" },
         ].map((metric, i) => {
