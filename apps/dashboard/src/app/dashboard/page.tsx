@@ -239,9 +239,14 @@ export default function AdvancedDashboard() {
           <div className="backdrop-blur-xl bg-white/[0.03] border border-white/[0.07] rounded-2xl p-8 shadow-[0_8px_60px_rgba(0,0,0,0.4)]">
             {onboardingStep === 0 && (
               <div className="space-y-5">
+                {onboardingError && (
+                  <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-[12px] text-red-400">
+                    {onboardingError}
+                  </div>
+                )}
                 <div>
                   <label className="block text-[12px] text-gray-400 mb-2">Your API URL</label>
-                  <input type="text" value={addApiUrl} onChange={(e) => setAddApiUrl(e.target.value)}
+                  <input type="text" value={addApiUrl} onChange={(e) => { setAddApiUrl(e.target.value); setOnboardingError(""); }}
                     placeholder="https://api.yourcompany.com"
                     className="w-full px-4 py-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white text-[15px] placeholder-gray-600 focus:outline-none focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/20 transition-all"
                     onKeyDown={(e) => { if (e.key === "Enter" && addApiUrl) { setOnboardingStep(1); handleOnboardingAddApi(); } }}
@@ -318,42 +323,63 @@ export default function AdvancedDashboard() {
     );
   }
 
+  const [onboardingError, setOnboardingError] = useState("");
+
   const handleOnboardingAddApi = async () => {
     if (!addApiUrl || !company?.id) return;
     setOnboardingLoading(true);
+    setOnboardingError("");
 
-    // Normalize URL — add https:// if missing
+    // Normalize URL
     let scanUrl = addApiUrl.trim();
     if (!scanUrl.startsWith("http://") && !scanUrl.startsWith("https://")) {
       scanUrl = "https://" + scanUrl;
     }
 
     try {
-      // Skip endpoint registration — just trigger the scan directly
-      // The scan creates the endpoint record in security_scans automatically
       setOnboardingStep(2);
+
+      // Use session token from sessionStorage as Authorization header
+      // This bypasses the cookie issue entirely
+      const sessionToken = sessionStorage.getItem("sessionToken") || "";
 
       const scanRes = await fetch("/api/customer/security-scans", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(sessionToken ? { "Authorization": `Bearer ${sessionToken}` } : {}),
+        },
         credentials: "include",
         body: JSON.stringify({ url: scanUrl, scanType: "quick" }),
       });
-      const scanResult = await scanRes.json();
+
+      let scanResult: any;
+      try { scanResult = await scanRes.json(); } catch {
+        setOnboardingStep(0);
+        setOnboardingLoading(false);
+        setOnboardingError("Server error — please try logging out and back in.");
+        return;
+      }
 
       if (!scanResult.success) {
         setOnboardingStep(0);
         setOnboardingLoading(false);
-        alert(scanResult.error || "Scan failed to start");
+        setOnboardingError(scanResult.error || "Scan failed to start. Try logging out and back in.");
         return;
       }
 
       setOnboardingStep(3);
 
       // Poll for scan completion
+      const headers: Record<string, string> = {};
+      if (sessionToken) headers["Authorization"] = `Bearer ${sessionToken}`;
+
       const poll = setInterval(async () => {
         try {
-          const dashRes = await fetch("/api/customer/dashboard", { credentials: "include" });
+          const dashRes = await fetch("/api/customer/dashboard", {
+            headers,
+            credentials: "include",
+          });
           const dashData = await dashRes.json();
           if (dashData.success && (dashData.stats?.totalScans > 0 || dashData.stats?.completedScans > 0)) {
             clearInterval(poll);
@@ -364,7 +390,6 @@ export default function AdvancedDashboard() {
         } catch {}
       }, 3000);
 
-      // Stop polling after 60s regardless
       setTimeout(() => {
         clearInterval(poll);
         setOnboardingLoading(false);
@@ -375,6 +400,7 @@ export default function AdvancedDashboard() {
       console.error("Onboarding error:", err);
       setOnboardingStep(0);
       setOnboardingLoading(false);
+      setOnboardingError("Something went wrong. Please try again.");
     }
   };
 
