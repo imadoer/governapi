@@ -14,6 +14,7 @@ import {
   FireIcon,
   GlobeAltIcon,
   CubeIcon,
+  CogIcon,
   Bars3Icon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
@@ -42,6 +43,7 @@ const AnalyticsInsightsPage = dynamic(() => import("./components/advanced/Analyt
 const DataManagementPage = dynamic(() => import("./components/advanced/DataManagementPage").then(m => ({ default: m.DataManagementPage })), { loading: () => <PageSkeleton /> });
 const BillingSubscriptionPage = dynamic(() => import("./components/advanced/BillingSubscriptionPage").then(m => ({ default: m.BillingSubscriptionPage })), { loading: () => <PageSkeleton /> });
 const EnterpriseSettingsPage = dynamic(() => import("./components/advanced/EnterpriseSettingsPage").then(m => ({ default: m.EnterpriseSettingsPage })), { loading: () => <PageSkeleton /> });
+const SettingsPage = dynamic(() => import("./components/advanced/SettingsPage").then(m => ({ default: m.SettingsPage })), { loading: () => <PageSkeleton /> });
 
 const SIDEBAR_ITEMS = [
   {
@@ -115,18 +117,9 @@ const SIDEBAR_ITEMS = [
     ],
   },
   {
-    category: "Settings",
+    category: "Account",
     items: [
-      {
-        id: "billing-subscription",
-        label: "Billing & Subscription",
-        icon: ChartBarIcon,
-      },
-      {
-        id: "enterprise-settings",
-        label: "Enterprise Settings",
-        icon: ShieldCheckIcon,
-      },
+      { id: "settings", label: "Settings", icon: CogIcon },
     ],
   },
 ];
@@ -491,6 +484,8 @@ export default function AdvancedDashboard() {
         return <BillingSubscriptionPage companyId={company?.id.toString()} />;
       case "enterprise-settings":
         return <EnterpriseSettingsPage companyId={company?.id.toString()} />;
+      case "settings":
+        return <SettingsPage companyId={company?.id.toString()} />;
       case "api-management":
         return <ApiManagementPage companyId={company?.id.toString()} />;
       default:
