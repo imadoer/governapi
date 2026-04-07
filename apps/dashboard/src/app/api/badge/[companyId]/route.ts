@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { database } from "../../../../infrastructure/database";
+import { database } from "@/infrastructure/database";
 
 export async function GET(
   request: NextRequest,

@@ -61,14 +61,22 @@ function SecurityGauge({ score, animating }: { score: number; animating: boolean
         {animating ? (
           <>
             <motion.span
-              className="text-4xl font-bold text-white tabular-nums"
+              className={`text-2xl font-black ${score >= 90 ? "text-emerald-400" : score >= 80 ? "text-teal-400" : score >= 70 ? "text-yellow-400" : score >= 60 ? "text-orange-400" : "text-red-400"}`}
+              initial={{ opacity: 0, scale: 0.4 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.2 }}
+            >
+              {score >= 90 ? "A" : score >= 80 ? "B" : score >= 70 ? "C" : score >= 60 ? "D" : "F"}
+            </motion.span>
+            <motion.span
+              className="text-3xl font-bold text-white tabular-nums"
               initial={{ opacity: 0, scale: 0.6 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.3 }}
             >
               {score}
             </motion.span>
-            <span className="text-[10px] text-slate-500 uppercase tracking-widest mt-1">/ 100</span>
+            <span className="text-[10px] text-slate-500 uppercase tracking-widest">/ 100</span>
           </>
         ) : (
           <span className="text-sm text-slate-600">—</span>
@@ -257,14 +265,17 @@ export default function LandingPage() {
             {/* ── Left: Copy + Input ── */}
             <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
               <h1 className="text-4xl sm:text-5xl lg:text-[3.5rem] font-bold leading-[1.1] tracking-tight mb-5">
-                Is your API secure?{" "}
+                Your API might be exposed.{" "}
                 <span className="bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent">
                   Find out in 60&nbsp;seconds.
                 </span>
               </h1>
 
-              <p className="text-lg text-slate-400 mb-8 max-w-lg leading-relaxed">
+              <p className="text-lg text-slate-400 mb-3 max-w-lg leading-relaxed">
                 Paste your API URL below for a free security scan. No signup, no credit card.
+              </p>
+              <p className="text-sm text-slate-500/80 mb-8 max-w-lg leading-relaxed">
+                Unprotected APIs expose user data, enable unauthorized access, and lead to costly breaches.
               </p>
 
               {/* Input + Button */}
@@ -292,14 +303,18 @@ export default function LandingPage() {
                   ) : (
                     <>
                       <MagnifyingGlassIcon className="w-4 h-4" />
-                      Scan Now
+                      Scan My API
                     </>
                   )}
                 </motion.button>
               </div>
 
               <p className="text-xs text-slate-600 mt-3.5">
-                Checks HTTPS, security headers, CORS, server info leaks, and response time.
+                Detects vulnerabilities, misconfigurations, and exposed data in seconds.
+              </p>
+              <p className="text-[11px] text-slate-700 mt-1.5 flex items-center gap-1.5">
+                <ShieldCheckIcon className="w-3.5 h-3.5 text-emerald-500/60" />
+                No access to your data. Scan is read-only and takes 10 seconds.
               </p>
             </motion.div>
 
@@ -328,11 +343,35 @@ export default function LandingPage() {
 
                   <ScanResults findings={findings} visible={scanDone} />
 
+                  {/* Fix impact line */}
+                  {scanDone && findings.filter(f => f.status !== "pass").length > 0 && (
+                    <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.2 }} className="mt-4 w-full">
+                      {(() => {
+                        const failCount = findings.filter(f => f.status !== "pass").length;
+                        const currentGrade = scanScore >= 90 ? "A" : scanScore >= 80 ? "B" : scanScore >= 70 ? "C" : scanScore >= 60 ? "D" : "F";
+                        const currentGradeColor = scanScore >= 90 ? "text-emerald-400" : scanScore >= 80 ? "text-teal-400" : scanScore >= 70 ? "text-yellow-400" : scanScore >= 60 ? "text-orange-400" : "text-red-400";
+                        const projected = Math.min(100, scanScore + failCount * 5);
+                        const projGrade = projected >= 90 ? "A" : projected >= 80 ? "B" : projected >= 70 ? "C" : projected >= 60 ? "D" : "F";
+                        const projGradeColor = projected >= 90 ? "text-emerald-400" : projected >= 80 ? "text-teal-400" : projected >= 70 ? "text-yellow-400" : projected >= 60 ? "text-orange-400" : "text-red-400";
+                        return (
+                          <div className="px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] text-center">
+                            <span className="text-[12px] text-slate-400">
+                              Fix {failCount} issue{failCount !== 1 ? "s" : ""} → improve your score from{" "}
+                              <span className={`font-bold ${currentGradeColor}`}>{currentGrade} ({scanScore})</span>
+                              {" → "}
+                              <span className={`font-bold ${projGradeColor}`}>{projGrade} ({projected})</span>
+                            </span>
+                          </div>
+                        );
+                      })()}
+                    </motion.div>
+                  )}
+
                   {scanDone && (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.4 }} className="mt-6 w-full space-y-2">
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.4 }} className="mt-4 w-full space-y-2">
                       <Link href="/login?mode=register">
                         <button className="w-full py-2.5 text-[13px] font-medium bg-white text-black rounded-xl hover:bg-gray-200 transition-colors">
-                          Want daily monitoring? Sign up free →
+                          Sign up free to get fix instructions and improve your score →
                         </button>
                       </Link>
                       <p className="text-[10px] text-slate-600 text-center">Get alerts when your security score changes</p>
@@ -432,22 +471,22 @@ export default function LandingPage() {
               },
               {
                 name: "Starter",
-                price: "$29",
+                price: "$19",
                 period: "/mo",
                 desc: "For solo developers & small APIs",
-                features: ["10 endpoints", "Daily monitoring", "Email alerts", "Fix suggestions", "7-day history"],
+                features: ["25 endpoints", "Daily monitoring", "Email alerts", "Fix suggestions", "30-day history"],
                 cta: "Start Free Trial",
                 href: "/login?mode=register&plan=starter",
                 popular: true,
               },
               {
-                name: "Growth",
-                price: "$79",
+                name: "Professional",
+                price: "$49",
                 period: "/mo",
                 desc: "For teams shipping fast",
-                features: ["100 endpoints", "Hourly monitoring", "Slack + email alerts", "Team dashboard", "90-day history", "Priority support"],
+                features: ["200 endpoints", "Real-time monitoring", "Slack + email alerts", "AI Security Assistant", "Compliance reports", "90-day history"],
                 cta: "Start Free Trial",
-                href: "/login?mode=register&plan=growth",
+                href: "/login?mode=register&plan=professional",
                 popular: false,
               },
             ].map((plan, i) => (
