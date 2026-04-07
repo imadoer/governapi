@@ -177,6 +177,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Normalize: strip trailing slash for deduplication
+    // https://stripe.com/ and https://stripe.com are the same endpoint
+    let normalizedUrl = parsedUrl.toString();
+    if (normalizedUrl.endsWith("/") && parsedUrl.pathname === "/") {
+      normalizedUrl = normalizedUrl.slice(0, -1);
+    } else if (parsedUrl.pathname.length > 1 && normalizedUrl.endsWith("/")) {
+      normalizedUrl = normalizedUrl.slice(0, -1);
+    }
+
     // Block scanning of webhook/integration URLs
     const blockedDomains = ["hooks.slack.com", "events.pagerduty.com", "discord.com/api/webhooks"];
     // Also check tenant's own webhook URLs
@@ -216,7 +225,7 @@ export async function POST(request: NextRequest) {
     const existingScan = await database.queryOne(
       `SELECT id FROM security_scans
        WHERE tenant_id = $1 AND url = $2 AND status IN ('pending', 'running')`,
-      [tenantId, url],
+      [tenantId, normalizedUrl],
     );
 
     if (existingScan) {
@@ -232,7 +241,7 @@ export async function POST(request: NextRequest) {
     const securityScan = await database.queryOne(
       `INSERT INTO security_scans (tenant_id, url, target, scan_type, status, created_at, created_by)
        VALUES ($1, $2, $2, $3, $4, NOW(), $5) RETURNING *`,
-      [tenantId, url, scanType, "pending", userId || "system"],
+      [tenantId, normalizedUrl, scanType, "pending", userId || "system"],
     );
 
     if (!securityScan) {
@@ -248,7 +257,7 @@ export async function POST(request: NextRequest) {
       [securityScan.id, tenantId, "security", "normal"],
     );
 
-    startSecurityScan(securityScan.id, tenantId, url, scanType).catch(err => {
+    startSecurityScan(securityScan.id, tenantId, normalizedUrl, scanType).catch(err => {
       logger.error("Async scan start failed:", err);
     });
 
