@@ -98,6 +98,11 @@ export class UserAuthService {
       // Create session
       const sessionToken = await this.createSession(user.id);
 
+      // Seed default security policies (non-blocking)
+      import("../../lib/seed-default-policies").then(({ seedDefaultPolicies }) => {
+        seedDefaultPolicies(company.id).catch(() => {});
+      });
+
       return {
         success: true,
         user: this.formatUser(user),
@@ -106,8 +111,8 @@ export class UserAuthService {
       };
     } catch (error) {
       console.error("Registration error:", error);
-      return { 
-        success: false, 
+      return {
+        success: false,
         error: error instanceof Error ? error.message : "Registration failed"
       };
     }
