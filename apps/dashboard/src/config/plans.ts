@@ -1,70 +1,66 @@
 export const PLANS = {
+  free: {
+    key: 'free',
+    name: 'Free',
+    priceId: null,
+    price: 0,
+    limits: {
+      endpoints: 3,
+      apiCalls: 10_000,
+      scansPerMonth: 2,
+      users: 1,
+      dataRetention: 3 // days
+    },
+    features: [
+      '3 APIs monitored',
+      '10,000 API calls/month',
+      '2 scans/month',
+      'Basic vulnerability alerts',
+      '3-day data retention',
+      '1 user seat'
+    ]
+  },
   starter: {
     key: 'starter',
     name: 'Starter',
-    priceId: null, // Free plan
-    price: 0,
+    priceId: process.env.NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID || 'price_starter',
+    price: 19,
     limits: {
-      endpoints: 10,
-      apiCalls: 50_000,
-      scansPerMonth: 4, // Weekly
-      users: 1,
-      dataRetention: 7 // days
-    },
-    features: [
-      '10 APIs monitored',
-      '50,000 API calls/month',
-      'Weekly security scans',
-      'Email alerts',
-      '7-day data retention',
-      '1 user seat',
-      'Community support'
-    ]
-  },
-  growth: {
-    key: 'growth',
-    name: 'Growth',
-    priceId: 'price_1SITABRNg6lRSwWthYLgffLm', // Will replace after seeding
-    price: 49,
-    limits: {
-      endpoints: 100,
-      apiCalls: 250_000,
+      endpoints: 25,
+      apiCalls: 100_000,
       scansPerMonth: 30, // Daily
-      users: 3,
+      users: 2,
       dataRetention: 30
     },
     features: [
-      '100 APIs monitored',
-      '250,000 API calls/month',
+      '25 APIs monitored',
+      '100,000 API calls/month',
       'Daily security scans',
-      'Basic AI insights',
-      'Email + Slack alerts',
+      'Email alerts',
       '30-day data retention',
-      '3 user seats',
-      'Email support (48h response)'
+      '2 user seats',
+      'Email support'
     ]
   },
-  pro: {
-    key: 'pro',
+  professional: {
+    key: 'professional',
     name: 'Professional',
-    priceId: 'price_1SITABRNg6lRSwWtX1tDD8lt', // Will replace after seeding
-    price: 199,
+    priceId: process.env.NEXT_PUBLIC_STRIPE_PRO_PRICE_ID || 'price_professional',
+    price: 49,
     limits: {
-      endpoints: 1000,
-      apiCalls: 1_000_000,
+      endpoints: 200,
+      apiCalls: 500_000,
       scansPerMonth: 1000, // Real-time
       users: 10,
       dataRetention: 90
     },
     features: [
-      '1,000 APIs monitored',
-      '1M API calls/month',
+      '200 APIs monitored',
+      '500,000 API calls/month',
       'Real-time threat detection',
-      'Full AI Security Assistant',
-      'Advanced bot protection',
-      'Compliance automation (SOC2, GDPR, HIPAA)',
+      'AI Security Assistant',
       'Slack/Teams/Webhook integration',
-      'Custom reporting',
+      'Compliance reports (SOC2, GDPR, HIPAA)',
       '90-day data retention',
       '10 user seats',
       'Priority support (24h response)'
@@ -94,8 +90,7 @@ export const PLANS = {
       '24x7 premium support',
       '2-year data retention',
       'On-premise deployment option',
-      'Custom SLA',
-      'Annual security review'
+      'Custom SLA'
     ]
   }
 } as const;

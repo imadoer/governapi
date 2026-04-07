@@ -26,6 +26,7 @@ import { MetricCard } from "./components/advanced/MetricCard";
 import { ThreatTimeline } from "./components/advanced/ThreatTimeline";
 import { ScoreBreakdown } from "./components/advanced/ScoreBreakdown";
 import { PageSkeleton } from "./components/advanced/PageSkeleton";
+import { getLetterGrade, calcImpactPoints } from "../../utils/score-utils";
 
 // Lazy-load feature pages — only loaded when navigated to
 const SecurityCenterPage = dynamic(() => import("./components/advanced/SecurityCenterPage").then(m => ({ default: m.SecurityCenterPage })), { loading: () => <PageSkeleton /> });
@@ -491,6 +492,68 @@ export default function AdvancedDashboard() {
             </div>
           )}
 
+          {/* Top 3 Fixes Banner */}
+          {(() => {
+            const currentScore = dashboardStats.security.overallScore;
+            const grade = getLetterGrade(currentScore);
+            const vulns = dashboardStats.topVulnerabilities || dashboardStats.latestScanReport?.vulnerabilities || [];
+            if (currentScore >= 90 && vulns.length === 0) {
+              return (
+                <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
+                  className="bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border border-emerald-500/20 rounded-2xl p-5">
+                  <div className="flex items-center gap-3">
+                    <div className={`text-4xl font-black ${grade.color}`}>{grade.letter}</div>
+                    <div>
+                      <h2 className="text-[15px] font-semibold text-white">Your APIs are well secured</h2>
+                      <p className="text-[12px] text-emerald-400/80">Score: {currentScore}/100 — Keep monitoring for new threats</p>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            }
+            const ranked = vulns.map((v: any) => ({ ...v, impactPts: calcImpactPoints(v) }))
+              .sort((a: any, b: any) => b.impactPts - a.impactPts)
+              .slice(0, 3);
+            if (ranked.length === 0) return null;
+            const projectedScore = Math.min(100, currentScore + ranked.reduce((s: number, v: any) => s + v.impactPts, 0));
+            const projectedGrade = getLetterGrade(projectedScore);
+            return (
+              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
+                className="bg-gradient-to-r from-cyan-500/[0.07] to-emerald-500/[0.07] border border-cyan-500/20 rounded-2xl p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-[14px] font-semibold text-white">
+                    Fix these {ranked.length} issue{ranked.length > 1 ? "s" : ""} to increase your score from{" "}
+                    <span className={grade.color}>{currentScore}</span>
+                    {" → "}
+                    <span className="text-emerald-400 font-bold">{projectedScore}</span>
+                  </h2>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-2xl font-black ${grade.color}`}>{grade.letter}</span>
+                    <span className="text-gray-600">→</span>
+                    <span className={`text-2xl font-black ${projectedGrade.color}`}>{projectedGrade.letter}</span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {ranked.map((v: any, i: number) => (
+                    <button key={v.id || i} onClick={() => setActiveFeature("vulnerability-scanner")}
+                      className="w-full flex items-center justify-between py-2 px-3 rounded-xl bg-white/[0.03] border border-white/[0.04] hover:bg-white/[0.06] transition-colors text-left">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="text-[13px] text-gray-500 font-mono w-5">{i + 1}.</span>
+                        <div className="min-w-0">
+                          <div className="text-[13px] text-white truncate">{v.title}</div>
+                          {(v.remediation || v.description) && (
+                            <div className="text-[11px] text-gray-600 truncate">{v.remediation || v.description}</div>
+                          )}
+                        </div>
+                      </div>
+                      <span className="shrink-0 px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-500/15 text-emerald-400">+{v.impactPts} pts</span>
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            );
+          })()}
+
           {/* Hero Security Score */}
           <SecurityScore
             score={dashboardStats.security.overallScore}
@@ -506,7 +569,7 @@ export default function AdvancedDashboard() {
             <MetricCard icon={ChartBarIcon} label="Total Scans" value={dashboardStats.overview.totalScans} delay={0.25} />
           </div>
 
-          {/* Top Vulnerabilities — critical findings from latest scans */}
+          {/* Top Vulnerabilities — sorted by impact score */}
           {dashboardStats.topVulnerabilities && dashboardStats.topVulnerabilities.length > 0 && (
             <div className="bg-slate-800/50 border border-white/[0.06] rounded-2xl p-6">
               <div className="flex items-center justify-between mb-4">
@@ -514,7 +577,11 @@ export default function AdvancedDashboard() {
                 <button onClick={() => setActiveFeature("vulnerability-scanner")} className="text-[11px] text-gray-500 hover:text-white transition-colors">View all →</button>
               </div>
               <div className="space-y-2">
-                {dashboardStats.topVulnerabilities.slice(0, 3).map((v: any, i: number) => (
+                {[...dashboardStats.topVulnerabilities]
+                  .map((v: any) => ({ ...v, impactPts: calcImpactPoints(v) }))
+                  .sort((a: any, b: any) => b.impactPts - a.impactPts)
+                  .slice(0, 5)
+                  .map((v: any, i: number) => (
                   <div key={v.id || i} className="flex items-center justify-between py-2.5 px-3 rounded-xl bg-white/[0.02] border border-white/[0.03]">
                     <div className="flex items-center gap-3 min-w-0">
                       <span className={`shrink-0 px-2 py-0.5 text-[10px] font-bold rounded-full ${
@@ -527,6 +594,7 @@ export default function AdvancedDashboard() {
                         {v.affectedUrl && <div className="text-[11px] text-gray-600 truncate">{v.affectedUrl}</div>}
                       </div>
                     </div>
+                    <span className="shrink-0 px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-500/15 text-emerald-400">+{v.impactPts} pts</span>
                   </div>
                 ))}
               </div>
@@ -543,13 +611,14 @@ export default function AdvancedDashboard() {
               <div className="space-y-2">
                 {endpointsList.slice(0, 6).map((ep: any) => {
                   const score = ep.score ?? 0;
-                  const color = score >= 70 ? "text-emerald-400 bg-emerald-500/15" : score >= 40 ? "text-amber-400 bg-amber-500/15" : "text-red-400 bg-red-500/15";
+                  const grade = getLetterGrade(score);
                   return (
                     <div key={ep.url} className="flex items-center justify-between py-2.5 px-3 rounded-xl bg-white/[0.02] border border-white/[0.03]">
-                      <span className="text-[12px] text-cyan-400 font-mono truncate max-w-[60%]">{ep.url}</span>
+                      <span className="text-[12px] text-cyan-400 font-mono truncate max-w-[55%]">{ep.url}</span>
                       <div className="flex items-center gap-3">
                         {ep.vulnCount > 0 && <span className="text-[11px] text-gray-500">{ep.vulnCount} vuln{ep.vulnCount !== 1 ? "s" : ""}</span>}
-                        <span className={`px-2 py-0.5 text-[11px] font-bold rounded-full ${color}`}>{score}/100</span>
+                        <span className={`text-[13px] font-black ${grade.color}`}>{grade.letter}</span>
+                        <span className={`px-2 py-0.5 text-[11px] font-bold rounded-full ${grade.bgColor} ${grade.color}`}>{score}/100</span>
                       </div>
                     </div>
                   );

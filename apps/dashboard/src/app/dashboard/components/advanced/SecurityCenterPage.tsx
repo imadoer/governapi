@@ -15,6 +15,7 @@ import {
   CheckCircleIcon,
   ClockIcon,
 } from "@heroicons/react/24/outline";
+import { getLetterGrade } from "../../../../utils/score-utils";
 
 const fetcher = (url: string, _tid: string) => {
   const token = typeof window !== "undefined" ? sessionStorage.getItem("sessionToken") || "" : "";
@@ -260,8 +261,9 @@ export function SecurityCenterPage({ company, onNavigate }: any) {
                         transition={{ duration: 1.2, ease: "easeOut" }} />
                     </svg>
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-3xl font-semibold text-white">{s}</span>
-                      <span className="text-[11px] text-gray-500">/ 100</span>
+                      <span className={`text-lg font-black ${getLetterGrade(s).color}`}>{getLetterGrade(s).letter}</span>
+                      <span className="text-2xl font-semibold text-white">{s}</span>
+                      <span className="text-[10px] text-gray-500">/ 100</span>
                     </div>
                   </div>
                   {metrics?.securityScoreTrend !== undefined && (

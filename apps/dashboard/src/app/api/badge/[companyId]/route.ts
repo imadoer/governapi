@@ -48,26 +48,43 @@ function svgResponse(svg: string, status: number) {
   });
 }
 
+function getGrade(score: number): { letter: string; color: string } {
+  if (score >= 90) return { letter: "A", color: "#10b981" };
+  if (score >= 80) return { letter: "B", color: "#2dd4bf" };
+  if (score >= 70) return { letter: "C", color: "#eab308" };
+  if (score >= 60) return { letter: "D", color: "#f97316" };
+  return { letter: "F", color: "#ef4444" };
+}
+
 function buildSvg(name: string, score: number | null): string {
   const hasScore = score !== null && score > 0;
-  const scoreText = hasScore ? `${score}` : "—";
+  const grade = hasScore ? getGrade(score) : null;
+  const label = "GovernAPI";
+  const labelW = 80;
+  const gradeW = hasScore ? 28 : 0;
+  const scoreW = hasScore ? 55 : 70;
+  const scoreText = hasScore ? `${score}/100` : "Not Scanned";
+  const verW = 110;
+  const w = labelW + gradeW + scoreW + verW;
+
+  const gradeSection = hasScore && grade
+    ? `<rect x="${labelW}" width="${gradeW}" height="24" fill="${grade.color}"/>
+<text x="${labelW + gradeW / 2}" y="13" fill="#fff" font-family="system-ui,sans-serif" font-size="13" font-weight="900" text-anchor="middle" dominant-baseline="central">${grade.letter}</text>`
+    : "";
+
   const scoreColor = hasScore
-    ? score >= 80 ? "#10b981" : score >= 50 ? "#f59e0b" : "#ef4444"
+    ? (score >= 80 ? "#10b981" : score >= 50 ? "#f59e0b" : "#ef4444")
     : "#6b7280";
-  const label = hasScore ? "API Security Score" : "Not Scanned";
-  const labelW = 120;
-  const scoreW = hasScore ? 40 : 70;
-  const verW = 130;
-  const w = labelW + scoreW + verW;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="24" viewBox="0 0 ${w} 24">
 <rect width="${w}" height="24" rx="4" fill="#0f172a"/>
 <rect width="${labelW}" height="24" rx="4" fill="#1e293b"/>
-<text x="${labelW / 2}" y="13" fill="#94a3b8" font-family="system-ui,sans-serif" font-size="11" font-weight="500" text-anchor="middle" dominant-baseline="central">${label}</text>
-<rect x="${labelW}" width="${scoreW}" height="24" fill="${scoreColor}"/>
-<text x="${labelW + scoreW / 2}" y="13" fill="#fff" font-family="system-ui,sans-serif" font-size="12" font-weight="700" text-anchor="middle" dominant-baseline="central">${scoreText}</text>
-<rect x="${labelW + scoreW}" width="${verW}" height="24" fill="#0f172a"/>
+<text x="${labelW / 2}" y="13" fill="#94a3b8" font-family="system-ui,sans-serif" font-size="11" font-weight="600" text-anchor="middle" dominant-baseline="central">${label}</text>
+${gradeSection}
+<rect x="${labelW + gradeW}" width="${scoreW}" height="24" fill="${scoreColor}"/>
+<text x="${labelW + gradeW + scoreW / 2}" y="13" fill="#fff" font-family="system-ui,sans-serif" font-size="11" font-weight="700" text-anchor="middle" dominant-baseline="central">${scoreText}</text>
+<rect x="${labelW + gradeW + scoreW}" width="${verW}" height="24" fill="#0f172a"/>
 <rect x="${w - 4}" y="0" width="4" height="24" rx="4" fill="#0f172a"/>
-<text x="${labelW + scoreW + 12}" y="13" fill="#64748b" font-family="system-ui,sans-serif" font-size="10" dominant-baseline="central">Verified by GovernAPI</text>
+<text x="${labelW + gradeW + scoreW + 10}" y="13" fill="#64748b" font-family="system-ui,sans-serif" font-size="10" dominant-baseline="central">Verified</text>
 </svg>`;
 }

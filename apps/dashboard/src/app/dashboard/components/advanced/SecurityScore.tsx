@@ -2,6 +2,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { useState } from "react";
+import { getLetterGrade } from "../../../../utils/score-utils";
 
 interface SecurityScoreProps {
   score: number;
@@ -32,7 +33,8 @@ function Ring({ value, color, size = 100 }: { value: number; color: string; size
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-2xl font-semibold text-white">{Math.round(value)}</span>
+        <span className={`text-lg font-black ${getLetterGrade(value).color}`}>{getLetterGrade(value).letter}</span>
+        <span className="text-xl font-semibold text-white">{Math.round(value)}</span>
       </div>
     </div>
   );

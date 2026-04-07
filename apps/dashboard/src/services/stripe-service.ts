@@ -90,11 +90,13 @@ export class StripeService {
     }
 
     const priceId = subscription.items.data[0]?.price.id;
-    let planKey = 'starter';
+    let planKey = 'free';
 
-    // Map price ID to plan
-    if (priceId === 'price_1SITABRNg6lRSwWthYLgffLm') planKey = 'growth';
-    if (priceId === 'price_1SITABRNg6lRSwWtX1tDD8lt') planKey = 'pro';
+    // Map price ID to plan - check env vars first, fall back to hardcoded
+    const starterPriceId = process.env.NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID || 'price_starter';
+    const proPriceId = process.env.NEXT_PUBLIC_STRIPE_PRO_PRICE_ID || 'price_professional';
+    if (priceId === starterPriceId) planKey = 'starter';
+    if (priceId === proPriceId) planKey = 'professional';
 
     await database.query(
       `UPDATE companies
@@ -121,7 +123,7 @@ export class StripeService {
   private static async handleSubscriptionDeleted(subscription: Stripe.Subscription) {
     await database.query(
       `UPDATE companies
-       SET subscription_plan = 'starter',
+       SET subscription_plan = 'free',
            subscription_status = 'canceled',
            updated_at = NOW()
        WHERE stripe_subscription_id = $1`,

@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { calcImpactPoints } from "../../../../utils/score-utils";
 
 // ==================== TYPES ====================
 
@@ -423,7 +424,9 @@ export function VulnerabilitiesPage({ company }: { company?: any }) {
     if (sortField) {
       data.sort((a, b) => {
         let cmp = 0;
-        if (sortField === "severity") {
+        if (sortField === "impact") {
+          cmp = calcImpactPoints(a) - calcImpactPoints(b);
+        } else if (sortField === "severity") {
           const order: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
           cmp = order[a.severity] - order[b.severity];
         } else if (sortField === "created_at") {
@@ -431,6 +434,9 @@ export function VulnerabilitiesPage({ company }: { company?: any }) {
         }
         return sortDirection === "asc" ? cmp : -cmp;
       });
+    } else {
+      // Default sort: impact score descending
+      data.sort((a, b) => calcImpactPoints(b) - calcImpactPoints(a));
     }
     return data;
   };
@@ -701,6 +707,7 @@ export function VulnerabilitiesPage({ company }: { company?: any }) {
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-white/10 bg-slate-900/40">
+                        <SortHeader field="impact" label="Impact" />
                         <SortHeader field="severity" label="Severity" />
                         <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Title</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Type</th>
@@ -719,6 +726,9 @@ export function VulnerabilitiesPage({ company }: { company?: any }) {
                             key={vuln.id}
                             className="hover:bg-slate-700/20 transition-colors"
                           >
+                            <td className="px-4 py-3">
+                              <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-500/15 text-emerald-400">+{calcImpactPoints(vuln)} pts</span>
+                            </td>
                             <td className="px-4 py-3">
                               <Pill className={getSeverityClasses(vuln.severity)}>
                                 {vuln.severity.toUpperCase()}

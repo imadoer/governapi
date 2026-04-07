@@ -106,13 +106,14 @@ export function BillingSubscriptionPage({ companyId }: { companyId: string }) {
     {
       id: "starter",
       name: "Starter",
-      price: 29,
+      price: 19,
       features: [
-        "Up to 10 APIs",
-        "100 scans/month",
-        "Basic security monitoring",
-        "Email support",
+        "25 APIs monitored",
+        "100,000 API calls/month",
+        "Daily security scans",
+        "Email alerts",
         "30-day data retention",
+        "2 user seats",
       ],
       color: "blue",
       btnClasses: "bg-blue-500 hover:bg-blue-600",
@@ -120,33 +121,34 @@ export function BillingSubscriptionPage({ companyId }: { companyId: string }) {
     {
       id: "professional",
       name: "Professional",
-      price: 99,
+      price: 49,
+      popular: true,
       features: [
-        "Up to 50 APIs",
-        "Unlimited scans",
-        "Advanced threat detection",
+        "200 APIs monitored",
+        "500,000 API calls/month",
+        "Real-time threat detection",
+        "AI Security Assistant",
+        "Compliance reports",
         "Priority support",
         "90-day data retention",
-        "Custom webhooks",
-        "Compliance reports",
+        "10 user seats",
       ],
       color: "cyan",
-      popular: true,
       btnClasses: "bg-cyan-500 hover:bg-cyan-600",
     },
     {
       id: "enterprise",
       name: "Enterprise",
-      price: 299,
+      price: null,
       features: [
         "Unlimited APIs",
-        "Unlimited scans",
-        "AI-powered security",
-        "24/7 support",
-        "Unlimited data retention",
-        "Custom integrations",
+        "Unlimited API calls",
+        "AI threat intelligence",
+        "Custom policy engine",
+        "SSO / SAML",
+        "24/7 premium support",
         "Dedicated account manager",
-        "SLA guarantee",
+        "Custom SLA",
       ],
       color: "purple",
       btnClasses: "bg-purple-500 hover:bg-purple-600",
@@ -309,10 +311,16 @@ export function BillingSubscriptionPage({ companyId }: { companyId: string }) {
                   {plan.name}
                 </h3>
                 <div className="mb-6">
-                  <span className="text-4xl font-bold text-white">
-                    ${plan.price}
-                  </span>
-                  <span className="text-slate-400">/month</span>
+                  {plan.price !== null ? (
+                    <>
+                      <span className="text-4xl font-bold text-white">
+                        ${plan.price}
+                      </span>
+                      <span className="text-slate-400">/month</span>
+                    </>
+                  ) : (
+                    <span className="text-2xl font-bold text-white">Contact Sales</span>
+                  )}
                 </div>
 
                 <ul className="space-y-3 mb-6">

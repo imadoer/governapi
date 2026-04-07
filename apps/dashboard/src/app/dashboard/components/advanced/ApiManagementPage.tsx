@@ -17,6 +17,8 @@ import {
   XMarkIcon,
   ClockIcon,
   CommandLineIcon,
+  ArrowUpTrayIcon,
+  DocumentArrowUpIcon,
 } from "@heroicons/react/24/outline";
 
 interface PlatformApiKey {
@@ -137,6 +139,16 @@ export function ApiManagementPage({ companyId }: { companyId: string }) {
   const [schedules, setSchedules] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  // OpenAPI Import state
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{
+    name: string;
+    endpoints_imported: number;
+    endpoints: { id: string; name: string; url: string; method: string }[];
+  } | null>(null);
+  const [scanningAll, setScanningAll] = useState(false);
 
   // Tabs state
   const [activeTab, setActiveTab] = useState("platform-keys");
@@ -302,6 +314,89 @@ export function ApiManagementPage({ companyId }: { companyId: string }) {
     }
   };
 
+  const handleOpenApiImport = async () => {
+    if (!importFile) {
+      showToast("Please select an OpenAPI spec file", "error");
+      return;
+    }
+
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const text = await importFile.text();
+      let content: any;
+      try {
+        content = JSON.parse(text);
+      } catch {
+        // Try YAML-like parsing (basic: if it's not JSON, send as string and let the server handle it)
+        content = text;
+      }
+
+      const response = await fetch("/api/import/openapi", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-tenant-id": companyId,
+          ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}),
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          content: typeof content === "string" ? content : content,
+          name: importFile.name.replace(/\.(json|ya?ml)$/i, ""),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setImportResult({
+          name: data.import.name,
+          endpoints_imported: data.import.endpoints_imported,
+          endpoints: data.endpoints,
+        });
+        showToast(`Imported ${data.import.endpoints_imported} endpoints from ${data.import.name}`, "success");
+        fetchApiEndpoints();
+      } else {
+        showToast(data.error || "Failed to import OpenAPI spec", "error");
+      }
+    } catch (error) {
+      showToast("Failed to import OpenAPI specification", "error");
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const handleScanAllImported = async () => {
+    if (!importResult?.endpoints?.length) return;
+    setScanningAll(true);
+    let successCount = 0;
+    try {
+      for (const ep of importResult.endpoints) {
+        try {
+          const resp = await fetch("/api/customer/security-scans", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-tenant-id": companyId,
+              ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}),
+            },
+            credentials: "include",
+            body: JSON.stringify({ url: ep.url, scanType: "full" }),
+          });
+          const data = await resp.json();
+          if (data.success) successCount++;
+        } catch {
+          // Continue with next endpoint
+        }
+      }
+      showToast(`Triggered scans on ${successCount} of ${importResult.endpoints.length} endpoints`, "success");
+    } catch {
+      showToast("Failed to trigger scans", "error");
+    } finally {
+      setScanningAll(false);
+    }
+  };
+
   const copyToClipboard = (text: string, keyId: string) => {
     navigator.clipboard.writeText(text);
     setCopiedKeyId(keyId);
@@ -378,6 +473,11 @@ export function ApiManagementPage({ companyId }: { companyId: string }) {
       key: "monitored-apis",
       icon: <ShieldCheckIcon className="w-5 h-5" />,
       label: `Monitored APIs (${apiEndpoints.length})`,
+    },
+    {
+      key: "import-openapi",
+      icon: <DocumentArrowUpIcon className="w-5 h-5" />,
+      label: "Import OpenAPI",
     },
     {
       key: "cicd",
@@ -700,6 +800,118 @@ export function ApiManagementPage({ companyId }: { companyId: string }) {
             )}
           </motion.div>
         )}
+        {/* Import OpenAPI Tab */}
+        {activeTab === "import-openapi" && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-6"
+          >
+            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
+              <h3 className="text-lg font-bold text-white mb-2">Import OpenAPI Spec</h3>
+              <p className="text-slate-400 mb-6">
+                Upload a JSON or YAML OpenAPI/Swagger specification to automatically import all endpoints as scan targets.
+              </p>
+
+              <div className="space-y-4">
+                <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-slate-600 rounded-2xl cursor-pointer hover:border-cyan-500/50 transition-colors bg-slate-900/30">
+                  <div className="flex flex-col items-center">
+                    <ArrowUpTrayIcon className="w-10 h-10 text-slate-500 mb-3" />
+                    {importFile ? (
+                      <span className="text-cyan-400 font-medium">{importFile.name}</span>
+                    ) : (
+                      <>
+                        <span className="text-slate-400 font-medium">Drop your OpenAPI spec here or click to browse</span>
+                        <span className="text-slate-600 text-sm mt-1">Supports .json and .yaml/.yml files</span>
+                      </>
+                    )}
+                  </div>
+                  <input
+                    type="file"
+                    accept=".json,.yaml,.yml"
+                    className="hidden"
+                    onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                  />
+                </label>
+
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleOpenApiImport}
+                  disabled={importing || !importFile}
+                  className="w-full px-8 py-3 bg-cyan-500 hover:bg-cyan-600 text-white rounded-xl font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {importing ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                      Importing...
+                    </>
+                  ) : (
+                    <>
+                      <DocumentArrowUpIcon className="w-5 h-5" />
+                      Import OpenAPI Spec
+                    </>
+                  )}
+                </motion.button>
+              </div>
+            </div>
+
+            {/* Import Results */}
+            {importResult && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-slate-800/50 border border-emerald-500/30 rounded-2xl p-6"
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-white">
+                      Import Complete: {importResult.name}
+                    </h3>
+                    <p className="text-emerald-400">
+                      {importResult.endpoints_imported} endpoint{importResult.endpoints_imported !== 1 ? "s" : ""} imported successfully
+                    </p>
+                  </div>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleScanAllImported}
+                    disabled={scanningAll}
+                    className="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-semibold flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {scanningAll ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                        Scanning...
+                      </>
+                    ) : (
+                      <>
+                        <ShieldCheckIcon className="w-5 h-5" />
+                        Scan All Endpoints
+                      </>
+                    )}
+                  </motion.button>
+                </div>
+
+                <div className="space-y-2 max-h-80 overflow-y-auto">
+                  {importResult.endpoints.map((ep, index) => (
+                    <motion.div
+                      key={ep.id}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: Math.min(index * 0.03, 0.5) }}
+                      className="flex items-center gap-3 p-3 bg-slate-900/50 rounded-lg"
+                    >
+                      <MethodTag method={ep.method} />
+                      <span className="text-white font-mono text-sm truncate">{ep.url}</span>
+                    </motion.div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </motion.div>
+        )}
+
         {/* CI/CD Integration Tab */}
         {activeTab === "cicd" && (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">

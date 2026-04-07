@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDownIcon } from "@heroicons/react/24/outline";
+import { calcImpactPoints } from "../../../../utils/score-utils";
 
 /* ── Fix guides keyed by vulnerability_type ── */
 const FIX_GUIDES: Record<string, {
@@ -132,17 +133,18 @@ export function ScoreBreakdown({ score, url, vulnerabilities, onNavigate }: Prop
     },
   ];
 
-  // Build prioritized action plan
+  // Build prioritized action plan — sorted by impact score descending
   const actions = vulnerabilities.map(v => {
     const guide = FIX_GUIDES[v.type] || DEFAULT_GUIDE;
+    const impactPts = calcImpactPoints(v);
     return {
       vuln: v,
       guide,
-      priority: v.severity === "CRITICAL" ? 1 : v.severity === "HIGH" ? 2 : 3,
+      impactPts,
     };
-  }).sort((a, b) => a.priority - b.priority);
+  }).sort((a, b) => b.impactPts - a.impactPts);
 
-  const potentialScore = Math.min(100, score + actions.reduce((s, a) => s + a.guide.points, 0));
+  const potentialScore = Math.min(100, score + actions.reduce((s, a) => s + a.impactPts, 0));
 
   if (vulnerabilities.length === 0 && score === 0) return null;
 
@@ -179,7 +181,7 @@ export function ScoreBreakdown({ score, url, vulnerabilities, onNavigate }: Prop
           <p className="text-[11px] text-gray-600 mb-4">Ordered by impact on your security score</p>
 
           <div className="space-y-2">
-            {actions.map(({ vuln, guide }, i) => {
+            {actions.map(({ vuln, guide, impactPts }, i) => {
               const isOpen = expanded === vuln.id;
               return (
                 <div key={vuln.id} className="rounded-xl border border-white/[0.04] overflow-hidden">
@@ -193,10 +195,11 @@ export function ScoreBreakdown({ score, url, vulnerabilities, onNavigate }: Prop
                       }`} />
                       <div className="min-w-0">
                         <div className="text-[13px] text-white">{vuln.title}</div>
-                        <div className="text-[11px] text-gray-600">{guide.impact}</div>
+                        <div className="text-[11px] text-gray-600">Fixing this will improve your score by ~{impactPts} points</div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ml-2">
+                      <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-500/15 text-emerald-400">+{impactPts} pts</span>
                       <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${
                         vuln.severity === "CRITICAL" ? "bg-red-500/15 text-red-400" :
                         vuln.severity === "HIGH" ? "bg-amber-500/15 text-amber-400" :

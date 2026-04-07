@@ -6,6 +6,7 @@ import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import { ArrowPathIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from "recharts";
 import { PageSkeleton } from "./PageSkeleton";
+import { getLetterGrade } from "../../../../utils/score-utils";
 
 const fetcher = (url: string, _tid: string) => {
   const token = typeof window !== "undefined" ? sessionStorage.getItem("sessionToken") || "" : "";
@@ -137,7 +138,7 @@ export default function ThreatSurfacePage({ companyId }: { companyId: string }) 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {[
-          { label: "Security Score", value: metrics?.securityScore ?? 0 },
+          { label: "Security Score", value: `${getLetterGrade(metrics?.securityScore ?? 0).letter} ${metrics?.securityScore ?? 0}/100` },
           { label: "Open Findings", value: summary?.total ?? vulns.length },
           { label: "Attack Vectors", value: attackSurface.length },
           { label: "High Risk", value: attackSurface.filter((a) => a.risk === "high").length },
