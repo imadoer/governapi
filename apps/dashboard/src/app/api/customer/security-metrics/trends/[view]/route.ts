@@ -1,38 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { database } from '../../../../../infrastructure/database';
+import { database } from '../../../../../../infrastructure/database';
 
-export async function GET(request: NextRequest) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ view: string }> }
+) {
   try {
+    const { view: viewParam } = await params;
     const tenantId = request.headers.get('x-tenant-id');
     if (!tenantId) {
       return NextResponse.json({ success: false, error: 'Tenant ID required' }, { status: 401 });
     }
 
-    // Parse query params from multiple sources — the security processor middleware chain
-    // may lose query params, so we check: URL params, x-original-query header, x-original-url header
-    const reqUrl = new URL(request.url);
-    const origQuery = request.headers.get('x-original-query');
-    const origUrl = request.headers.get('x-original-url') || '';
-    const origUrlParams = origUrl.includes('?') ? new URLSearchParams(origUrl.split('?')[1]) : null;
-    const origQueryParams = origQuery ? new URLSearchParams(origQuery) : null;
-    const view = reqUrl.searchParams.get('view') || origQueryParams?.get('view') || origUrlParams?.get('view') || 'auto';
-    const range = reqUrl.searchParams.get('range') || origQueryParams?.get('range') || origUrlParams?.get('range') || '30d';
-
-    const intervalMap: Record<string, string> = { '24h': '1 day', '7d': '7 days', '30d': '30 days' };
-    const interval = intervalMap[range] || '30 days';
+    const interval = '30 days';
 
     // Get total scan count for auto-selection
     const countRow = await database.queryOne(
       `SELECT COUNT(*) as total FROM security_scans
        WHERE tenant_id = $1 AND status = 'completed' AND security_score IS NOT NULL
-         AND created_at >= NOW() - INTERVAL '${interval}'`,
+         AND created_at >= NOW() - INTERVAL '30 days'`,
       [tenantId],
     );
     const totalScans = parseInt(countRow?.total || '0');
 
-    // Auto-select view based on data density
-    let effectiveView = view;
-    if (view === 'auto') {
+    let effectiveView = viewParam || 'auto';
+    if (effectiveView === 'auto') {
       if (totalScans < 7) effectiveView = 'per-scan';
       else if (totalScans < 30) effectiveView = 'daily';
       else effectiveView = 'weekly';
@@ -41,25 +33,15 @@ export async function GET(request: NextRequest) {
     let trends: any[] = [];
 
     if (effectiveView === 'per-scan') {
-      // Each scan is its own data point
       const rows = await database.queryMany(
-        `SELECT
-           ss.id,
-           ss.created_at as date,
-           ss.security_score,
-           ss.url as target,
-           (SELECT COUNT(*) FROM vulnerabilities v
-            WHERE v.scan_id = ss.id AND v.status = 'open') as vuln_count
+        `SELECT ss.id, ss.created_at as date, ss.security_score, ss.url as target,
+           (SELECT COUNT(*) FROM vulnerabilities v WHERE v.scan_id = ss.id AND v.status = 'open') as vuln_count
          FROM security_scans ss
-         WHERE ss.tenant_id = $1
-           AND ss.status = 'completed'
-           AND ss.security_score IS NOT NULL
+         WHERE ss.tenant_id = $1 AND ss.status = 'completed' AND ss.security_score IS NOT NULL
            AND ss.created_at >= NOW() - INTERVAL '${interval}'
          ORDER BY ss.created_at ASC`,
         [tenantId],
       );
-
-      // Compute cumulative vuln count
       let cumulativeVulns = 0;
       for (const row of rows) {
         cumulativeVulns += parseInt(row.vuln_count || '0');
@@ -72,36 +54,24 @@ export async function GET(request: NextRequest) {
         });
       }
     } else {
-      // Aggregate by day or week
       const groupExpr = effectiveView === 'weekly'
         ? `date_trunc('week', created_at)::date`
         : `created_at::date`;
-
       const rows = await database.queryMany(
-        `SELECT
-           ${groupExpr} as date,
-           ROUND(AVG(security_score)) as avg_score,
-           COUNT(*) as scan_count
+        `SELECT ${groupExpr} as date, ROUND(AVG(security_score)) as avg_score, COUNT(*) as scan_count
          FROM security_scans
-         WHERE tenant_id = $1
-           AND status = 'completed'
-           AND security_score IS NOT NULL
+         WHERE tenant_id = $1 AND status = 'completed' AND security_score IS NOT NULL
            AND created_at >= NOW() - INTERVAL '${interval}'
-         GROUP BY ${groupExpr}
-         ORDER BY date ASC`,
+         GROUP BY ${groupExpr} ORDER BY date ASC`,
         [tenantId],
       );
-
       for (const row of rows) {
         const vulns = await database.queryOne(
-          `SELECT COUNT(*) as total
-           FROM vulnerabilities
+          `SELECT COUNT(*) as total FROM vulnerabilities
            WHERE tenant_id = $1 AND created_at <= ($2::date + INTERVAL '1 day')
-             AND (resolved_at IS NULL OR resolved_at > $2::date)
-             AND status = 'open'`,
+             AND (resolved_at IS NULL OR resolved_at > $2::date) AND status = 'open'`,
           [tenantId, row.date],
         );
-
         trends.push({
           date: row.date,
           securityScore: parseInt(row.avg_score || '0'),
@@ -111,12 +81,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const res = NextResponse.json({
-      success: true,
-      trends,
-      view: effectiveView,
-      totalScans,
-    });
+    const res = NextResponse.json({ success: true, trends, view: effectiveView, totalScans });
     res.headers.set("Cache-Control", "private, max-age=15, stale-while-revalidate=30");
     return res;
   } catch (error) {

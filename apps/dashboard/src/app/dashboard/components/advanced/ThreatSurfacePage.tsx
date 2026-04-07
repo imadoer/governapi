@@ -6,8 +6,6 @@ import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import { ArrowPathIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from "recharts";
 import { PageSkeleton } from "./PageSkeleton";
-import { getLetterGrade } from "../../../../utils/score-utils";
-
 const fetcher = (url: string, _tid: string) => {
   const token = typeof window !== "undefined" ? sessionStorage.getItem("sessionToken") || "" : "";
   return fetch(url, { headers: token ? { "Authorization": `Bearer ${token}` } : {}, credentials: "include" }).then((r) => r.json());
@@ -138,7 +136,7 @@ export default function ThreatSurfacePage({ companyId }: { companyId: string }) 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {[
-          { label: "Security Score", value: `${getLetterGrade(metrics?.securityScore ?? 0).letter} ${metrics?.securityScore ?? 0}/100` },
+          { label: "Security Score", value: `${metrics?.securityScore ?? 0}/100`, color: (metrics?.securityScore ?? 0) >= 80 ? "#10b981" : (metrics?.securityScore ?? 0) >= 60 ? "#f59e0b" : "#ef4444" },
           { label: "Open Findings", value: summary?.total ?? vulns.length },
           { label: "Attack Vectors", value: attackSurface.length },
           { label: "High Risk", value: attackSurface.filter((a) => a.risk === "high").length },
@@ -146,7 +144,7 @@ export default function ThreatSurfacePage({ companyId }: { companyId: string }) 
           <motion.div key={k.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
             <Card className="p-5">
               <div className="text-[12px] text-gray-500 mb-2">{k.label}</div>
-              <div className="text-2xl font-semibold text-white">{k.value}</div>
+              <div className="text-2xl font-semibold" style={{ color: (k as any).color || "white" }}>{k.value}</div>
             </Card>
           </motion.div>
         ))}

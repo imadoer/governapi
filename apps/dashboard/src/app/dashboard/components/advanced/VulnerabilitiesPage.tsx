@@ -208,7 +208,15 @@ export function VulnerabilitiesPage({ company }: { company?: any }) {
   const fetchOwaspData = async () => {
     const data = await safeFetch("/api/customer/vulnerabilities/owasp-breakdown");
     if (data?.success) {
-      setOwaspData(data.owaspCategories || data.breakdown || []);
+      const raw = data.owaspCategories || data.breakdown || [];
+      // Map API response {category, count, critical, high, medium, low}
+      // to component's OWASPCategory {id, name, count, severity}
+      setOwaspData(raw.map((cat: any, i: number) => ({
+        id: cat.id || `V${String(i + 1).padStart(2, "0")}`,
+        name: cat.name || cat.category || "Unknown",
+        count: cat.count || 0,
+        severity: cat.critical > 0 ? "critical" : cat.high > 0 ? "high" : cat.medium > 0 ? "medium" : cat.low > 0 ? "low" : "info",
+      })));
     }
   };
 

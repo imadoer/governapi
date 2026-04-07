@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { database } from '../../../../../infrastructure/database';
+import { assessCompliance } from '../../../../../lib/compliance-mapper';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -70,7 +71,7 @@ export async function GET(request: NextRequest) {
         [tenantId]
       ),
 
-      // Compliance data
+      // Compliance data (OWASP categories)
       database.queryMany(
         `SELECT DISTINCT owasp_category, COUNT(*) as count
          FROM vulnerabilities
@@ -80,6 +81,28 @@ export async function GET(request: NextRequest) {
         [tenantId]
       ),
     ]);
+
+    // Build full compliance assessment with endpoint URLs
+    const vulnSummariesForCompliance = await database.queryMany(
+      `SELECT vulnerability_type as type, severity, title, COUNT(*) as count,
+         array_agg(DISTINCT affected_url) FILTER (WHERE affected_url IS NOT NULL) as affected_urls
+       FROM vulnerabilities
+       WHERE tenant_id = $1 AND status = 'open'
+       GROUP BY vulnerability_type, severity, title
+       ORDER BY count DESC`,
+      [tenantId]
+    );
+    const recentScanCount = await database.queryOne(
+      `SELECT COUNT(*) as count FROM security_scans WHERE tenant_id = $1 AND status = 'completed' AND created_at >= NOW() - INTERVAL '30 days'`,
+      [tenantId]
+    );
+    const complianceFrameworks = assessCompliance(
+      vulnSummariesForCompliance.map((v: any) => ({
+        type: v.type, severity: v.severity, title: v.title,
+        count: parseInt(v.count), affectedUrls: v.affected_urls || [],
+      })),
+      parseInt(recentScanCount?.count || '0') > 0,
+    );
 
     const securityScore = Math.round(Number(metricsRow?.avg_score) || 0);
     const totalScans = Number(metricsRow?.total_scans) || 0;
@@ -220,20 +243,46 @@ export async function GET(request: NextRequest) {
     const compStatusColor = complianceScore >= 80 ? [34, 197, 94] : complianceScore >= 50 ? [245, 158, 11] : [239, 68, 68];
     doc.setTextColor(compStatusColor[0], compStatusColor[1], compStatusColor[2]);
     doc.text(`Compliance Score: ${complianceScore}%`, margin, y);
-    y += 7;
+    y += 10;
 
-    doc.setFontSize(9);
-    doc.setTextColor(80, 80, 80);
-    if (hasCompliance) {
-      doc.text('OWASP Categories with open findings:', margin, y);
+    // Framework-level compliance findings with endpoint URLs
+    for (const fw of complianceFrameworks) {
+      if (y > 240) { doc.addPage(); y = 20; }
+      const failingReqs = fw.requirements.filter(r => r.status === 'fail');
+      if (failingReqs.length === 0) continue;
+
+      doc.setFontSize(11);
+      doc.setTextColor(20, 60, 120);
+      doc.text(`${fw.shortName} — ${fw.score}% (${fw.failing} failing)`, margin, y);
       y += 6;
-      for (const c of (complianceData || [])) {
-        doc.text(`  - ${c.owasp_category}: ${c.count} finding${Number(c.count) !== 1 ? 's' : ''}`, margin, y);
+
+      for (const req of failingReqs) {
+        if (y > 265) { doc.addPage(); y = 20; }
+        doc.setFontSize(9);
+        doc.setTextColor(220, 38, 38);
+        doc.text(`FAIL`, margin + 2, y);
+        doc.setTextColor(60, 60, 60);
+        doc.text(`${req.id} ${req.name}`, margin + 16, y);
         y += 5;
-        if (y > 270) { doc.addPage(); y = 20; }
+
+        // Evidence line with endpoint URLs
+        doc.setFontSize(8);
+        doc.setTextColor(100, 100, 100);
+        const evidenceLines = doc.splitTextToSize(req.evidence, pageWidth - 2 * margin - 6);
+        for (const line of evidenceLines) {
+          if (y > 270) { doc.addPage(); y = 20; }
+          doc.text(line, margin + 6, y);
+          y += 4;
+        }
+        y += 2;
       }
-    } else {
-      doc.text('No OWASP category violations detected.', margin, y);
+      y += 4;
+    }
+
+    if (complianceFrameworks.every(fw => fw.failing === 0)) {
+      doc.setFontSize(9);
+      doc.setTextColor(34, 197, 94);
+      doc.text('All compliance framework checks are passing.', margin, y);
       y += 6;
     }
     y += 5;

@@ -24,7 +24,9 @@ export async function DELETE(request: NextRequest) {
 
 async function processRequest(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const target = searchParams.get("target") || request.nextUrl.pathname;
+  const targetPath = searchParams.get("target") || request.nextUrl.pathname;
+  const targetQuery = searchParams.get("targetQuery") || "";
+  const target = targetPath + targetQuery;
   const requiresAuth = request.headers.get("x-requires-auth") === "true";
   const requiresRateLimit = request.headers.get("x-requires-rate-limit") === "true";
   const requestId = searchParams.get("rid") || crypto.randomUUID();
@@ -105,6 +107,10 @@ async function processRequest(request: NextRequest) {
       }
     }
 
+    // Extract query params from target to pass as headers (Next.js internal fetch loses query strings)
+    const queryStart = target.indexOf('?');
+    const targetQueryString = queryStart >= 0 ? target.substring(queryStart + 1) : '';
+
     const response = await fetch(targetUrl, {
       method: request.method,
       headers: {
@@ -113,6 +119,8 @@ async function processRequest(request: NextRequest) {
         "content-type":
           request.headers.get("content-type") || "application/json",
         "x-request-id": requestId,
+        "x-original-url": target,
+        "x-original-query": targetQueryString,
         ...authHeaders,
       },
       body: bodyContent,

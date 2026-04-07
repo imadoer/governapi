@@ -51,7 +51,7 @@ export function ThreatTimeline({ companyId }: { companyId: string }) {
   return (
     <div className="bg-slate-800/50 border border-white/[0.06] rounded-2xl p-6">
       <div className="flex items-center justify-between mb-6">
-        <h3 className="text-[13px] font-medium text-gray-400">Threat Detection Timeline</h3>
+        <h3 className="text-[13px] font-medium text-gray-400">Security Timeline</h3>
         <div className="flex gap-1">
           {ranges.map((r) => (
             <button

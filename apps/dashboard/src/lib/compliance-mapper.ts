@@ -231,6 +231,7 @@ interface VulnSummary {
   severity: string;
   title: string;
   count: number;
+  affectedUrls?: string[];
 }
 
 interface RequirementResult {
@@ -297,14 +298,27 @@ export function assessCompliance(
       }
 
       const relatedEntries = vulnSummaries.filter((v) => matchingVulns.includes(v.type));
-      const relatedTitles = relatedEntries.map((v) => v.title);
+
+      // Build evidence with endpoint URLs for each finding
+      const findingParts = relatedEntries.map((v) => {
+        const urls = v.affectedUrls || (v as any)._urls || [];
+        const hostnames = urls
+          .map((u: string) => { try { return new URL(u).hostname; } catch { return u; } })
+          .filter((h: string, i: number, arr: string[]) => arr.indexOf(h) === i)
+          .slice(0, 3);
+        const suffix = hostnames.length > 0 ? ` — ${hostnames.join(", ")}` : "";
+        return `${v.title}${suffix}`;
+      });
 
       // For "No Authentication", include the endpoint URLs in evidence
-      let evidence = `Found: ${relatedTitles.join(", ")}`;
+      let evidence: string;
       const noAuthEntry = relatedEntries.find((v) => v.type === "No Authentication");
-      if (noAuthEntry && (noAuthEntry as any)._urls) {
-        const urls = (noAuthEntry as any)._urls as string[];
-        evidence = `Public endpoints with no authentication: ${urls.slice(0, 5).join(", ")}${urls.length > 5 ? ` (+${urls.length - 5} more)` : ""}`;
+      if (noAuthEntry && ((noAuthEntry as any)._urls || noAuthEntry.affectedUrls)) {
+        const urls = (noAuthEntry as any)._urls || noAuthEntry.affectedUrls || [];
+        const hostnames = urls.map((u: string) => { try { return new URL(u).hostname; } catch { return u; } });
+        evidence = `Public endpoints with no authentication: ${hostnames.slice(0, 5).join(", ")}${hostnames.length > 5 ? ` (+${hostnames.length - 5} more)` : ""}`;
+      } else {
+        evidence = `Found: ${findingParts.join(", ")}`;
       }
 
       return {

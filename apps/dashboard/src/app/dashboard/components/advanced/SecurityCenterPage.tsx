@@ -40,6 +40,8 @@ export function SecurityCenterPage({ company, onNavigate }: any) {
   const [formError, setFormError] = useState("");
   const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null);
   const [planInfo, setPlanInfo] = useState<any>(null);
+  const [trendView, setTrendView] = useState("auto");
+  const [activeTrendView, setActiveTrendView] = useState("per-scan");
 
   const tenantId = company?.id || "1";
   const userPlan = company?.subscriptionPlan || "free";
@@ -75,9 +77,9 @@ export function SecurityCenterPage({ company, onNavigate }: any) {
     { refreshInterval: 10000 },
   );
   const { data: trendsData, mutate: refreshTrends, isLoading: trendsLoading } = useSWR(
-    [`/api/customer/security-metrics/trends`, tenantId],
+    [`/api/customer/security-metrics/trends/${trendView}`, tenantId],
     ([u, id]: [string, string]) => fetcher(u, id),
-    { refreshInterval: 60000 },
+    { refreshInterval: 60000, onSuccess: (d) => { if (d?.view) setActiveTrendView(d.view); } },
   );
 
   const refreshAll = async () => {
@@ -282,7 +284,26 @@ export function SecurityCenterPage({ company, onNavigate }: any) {
 
         <div className="lg:col-span-9">
           <Card className="p-6 h-full">
-            <h3 className="text-[13px] font-medium text-gray-400 mb-6">30-Day Security Trend</h3>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-[13px] font-medium text-gray-400">Security Trend</h3>
+              <div className="flex gap-1">
+                {[
+                  { key: "per-scan", label: "Per Scan" },
+                  { key: "daily", label: "Daily" },
+                  { key: "weekly", label: "Weekly" },
+                ].map((v) => (
+                  <button
+                    key={v.key}
+                    onClick={() => { setTrendView(v.key); }}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors ${
+                      activeTrendView === v.key ? "bg-white/[0.08] text-white" : "text-gray-600 hover:text-gray-400"
+                    }`}
+                  >
+                    {v.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             {trendsLoading ? (
               <div className="animate-pulse space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="bg-slate-700/30 rounded h-5 w-3/4" />)}</div>
             ) : trends.length > 0 ? (
@@ -294,18 +315,32 @@ export function SecurityCenterPage({ company, onNavigate }: any) {
                       <stop offset="100%" stopColor="#06b6d4" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <XAxis dataKey="date" stroke="#4b5563" tick={{ fontSize: 11 }} tickFormatter={(v) => new Date(v).toLocaleDateString("en-US", { month: "short", day: "numeric" })} />
+                  <XAxis dataKey="date" stroke="#4b5563" tick={{ fontSize: 10 }}
+                    tickFormatter={(v) => {
+                      const d = new Date(v);
+                      return activeTrendView === "per-scan"
+                        ? d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+                        : d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                    }}
+                  />
                   <YAxis yAxisId="left" stroke="#4b5563" tick={{ fontSize: 11 }} domain={[0, 100]} />
                   <YAxis yAxisId="right" orientation="right" stroke="#4b5563" tick={{ fontSize: 11 }} />
-                  <RechartsTooltip {...tip} />
+                  <RechartsTooltip {...tip}
+                    labelFormatter={(v) => {
+                      const d = new Date(v);
+                      return activeTrendView === "per-scan"
+                        ? d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+                        : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+                    }}
+                  />
                   <Legend wrapperStyle={{ fontSize: 11, color: "#9ca3af" }} />
-                  <Area yAxisId="left" type="monotone" dataKey="securityScore" name="Score" stroke="#06b6d4" fill="url(#sc-fill)" strokeWidth={1.5} />
-                  <Line yAxisId="right" type="monotone" dataKey="activeThreats" name="Vulnerabilities" stroke="#ef4444" strokeWidth={1.5} dot={false} />
+                  <Area yAxisId="left" type="monotone" dataKey="securityScore" name="Score" stroke="#06b6d4" fill="url(#sc-fill)" strokeWidth={1.5} dot={activeTrendView === "per-scan"} />
+                  <Line yAxisId="right" type="monotone" dataKey="activeThreats" name="Vulnerabilities" stroke="#ef4444" strokeWidth={1.5} dot={activeTrendView === "per-scan"} />
                 </ComposedChart>
               </ResponsiveContainer>
             ) : (
               <div className="flex items-center justify-center h-[230px] text-gray-600 text-[13px]">
-                <ChartBarIcon className="w-6 h-6 mr-2 opacity-40" /> No trend data
+                <ChartBarIcon className="w-6 h-6 mr-2 opacity-40" /> No trend data — run a scan to see your first data point
               </div>
             )}
           </Card>
@@ -408,20 +443,38 @@ export function SecurityCenterPage({ company, onNavigate }: any) {
           <div className="p-4 grid grid-cols-3 gap-3">{[...Array(3)].map((_, i) => <div key={i} className="animate-pulse bg-slate-700/30 rounded-xl h-20" />)}</div>
         ) : scans.length > 0 ? (
           <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {scans.slice(0, 6).map((s: any, i: number) => (
-              <div key={i} className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.03]">
-                <div className="text-[12px] text-cyan-400 font-mono mb-2 truncate">{s.target}</div>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-cyan-500/15 text-cyan-400">{s.scan_type}</span>
-                  <span className={`px-2 py-0.5 text-[10px] font-medium rounded-full ${s.status === "completed" ? "bg-emerald-500/15 text-emerald-400" : "bg-amber-500/15 text-amber-400"}`}>{s.status}</span>
-                </div>
-                {s.security_score != null && (
-                  <div className="h-1.5 rounded-full bg-white/[0.04] overflow-hidden">
-                    <div className="h-full rounded-full" style={{ width: `${s.security_score}%`, background: s.security_score >= 80 ? "#10b981" : "#f59e0b" }} />
+            {scans.slice(0, 6).map((s: any, i: number) => {
+              const score = s.securityScore ?? s.security_score;
+              const grade = score != null ? getLetterGrade(score) : null;
+              const vulnCount = s.vulnerabilityCount ?? s.vulnerabilities_found ?? s.vulnCount ?? 0;
+              return (
+                <button
+                  key={i}
+                  onClick={() => onNavigate?.("vulnerability-scanner")}
+                  className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.03] hover:bg-white/[0.05] hover:border-white/[0.08] transition-colors text-left"
+                >
+                  <div className="text-[12px] text-cyan-400 font-mono mb-2 truncate">{s.target}</div>
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    {score != null && grade && (
+                      <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${grade.bgColor} ${grade.color}`}>
+                        {grade.letter} {score}/100
+                      </span>
+                    )}
+                    {vulnCount > 0 && (
+                      <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-amber-500/15 text-amber-400">
+                        {vulnCount} vuln{vulnCount !== 1 ? "s" : ""}
+                      </span>
+                    )}
+                    <span className={`px-2 py-0.5 text-[10px] font-medium rounded-full ${s.status === "completed" ? "bg-emerald-500/15 text-emerald-400" : s.status === "running" ? "bg-cyan-500/15 text-cyan-400" : "bg-amber-500/15 text-amber-400"}`}>{s.status}</span>
                   </div>
-                )}
-              </div>
-            ))}
+                  {score != null && (
+                    <div className="h-1.5 rounded-full bg-white/[0.04] overflow-hidden">
+                      <div className="h-full rounded-full transition-all" style={{ width: `${score}%`, background: score >= 80 ? "#10b981" : score >= 50 ? "#f59e0b" : "#ef4444" }} />
+                    </div>
+                  )}
+                </button>
+              );
+            })}
           </div>
         ) : (
           <div className="p-8 text-center">

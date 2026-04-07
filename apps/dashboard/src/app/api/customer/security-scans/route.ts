@@ -638,38 +638,97 @@ async function runComprehensiveScan(targetUrl: string): Promise<any[]> {
       });
     }
 
-    // Check for common sensitive files
+    // Check for common sensitive files with false-positive detection.
+    // Many sites return 200 with a custom "not found" page for all paths (soft 404).
+    // We fetch a known-bad path first as a baseline, then compare.
     const sensitiveFiles = [
-      '/.env',
-      '/.git/config',
-      '/config.json',
-      '/package.json',
-      '/.htaccess',
-      '/wp-config.php',
-      '/admin',
-      '/phpmyadmin'
+      { path: '/.env', signatures: ['DB_PASSWORD', 'DATABASE_URL', 'SECRET_KEY', 'API_KEY', 'APP_KEY='] },
+      { path: '/.git/config', signatures: ['[core]', '[remote', 'repositoryformatversion'] },
+      { path: '/config.json', signatures: ['"database"', '"host"', '"password"', '"secret"'] },
+      { path: '/package.json', signatures: ['"name"', '"version"', '"dependencies"'] },
+      { path: '/.htaccess', signatures: ['RewriteEngine', 'RewriteRule', 'Deny from', 'AuthType'] },
+      { path: '/wp-config.php', signatures: ['DB_NAME', 'DB_USER', 'DB_PASSWORD', 'table_prefix'] },
+      { path: '/admin', signatures: [] },
+      { path: '/phpmyadmin', signatures: ['phpMyAdmin', 'pma_', 'server_type'] },
     ];
 
-    for (const file of sensitiveFiles) {
+    // Fetch a baseline response from a random nonexistent path to detect soft 404s
+    let baselineSize = -1;
+    let baselineBodySnippet = '';
+    try {
+      const baselineUrl = new URL('/___governapi_probe_404_' + Date.now(), targetUrl).toString();
+      const baselineResp = await fetch(baselineUrl, {
+        method: 'GET',
+        signal: AbortSignal.timeout(5000),
+        headers: { 'User-Agent': 'GovernAPI-Scanner/1.0' },
+      });
+      if (baselineResp.status === 200) {
+        const baselineBody = await baselineResp.text();
+        baselineSize = baselineBody.length;
+        baselineBodySnippet = baselineBody.slice(0, 2000).toLowerCase();
+      }
+    } catch {}
+
+    const softNotFoundPatterns = [
+      'not found', 'page not found', '404', 'does not exist',
+      'no results', 'nothing here', 'page you requested',
+      'couldn\'t find', 'could not find', 'unavailable',
+    ];
+
+    for (const { path: file, signatures } of sensitiveFiles) {
       try {
         const fileUrl = new URL(file, targetUrl).toString();
         const fileResponse = await fetch(fileUrl, {
-          method: 'HEAD',
+          method: 'GET',
           signal: AbortSignal.timeout(5000),
+          headers: { 'User-Agent': 'GovernAPI-Scanner/1.0' },
         });
-        
-        if (fileResponse.status === 200) {
-          vulnerabilities.push({
-            vulnerability_type: "Information Disclosure",
-            severity: "CRITICAL",
-            title: `Exposed Sensitive File: ${file}`,
-            description: `Sensitive file ${file} is publicly accessible`,
-            cwe_id: "CWE-548",
-            cvss_score: 9.8,
-            affected_url: fileUrl,
-            remediation: `Restrict access to ${file} or remove from public directory`,
-          });
+
+        if (fileResponse.status !== 200) continue;
+
+        const body = await fileResponse.text();
+        const bodyLower = body.slice(0, 2000).toLowerCase();
+        const bodySize = body.length;
+
+        // Check 1: If response is same size as baseline (±10%), it's a soft 404
+        if (baselineSize > 0 && Math.abs(bodySize - baselineSize) < baselineSize * 0.1) {
+          continue; // Same as the 404 page — skip
         }
+
+        // Check 2: If body contains "not found" type messages, skip
+        if (softNotFoundPatterns.some(p => bodyLower.includes(p))) {
+          continue;
+        }
+
+        // Check 3: If body content closely matches baseline content, skip
+        if (baselineBodySnippet && baselineBodySnippet.length > 100) {
+          // Simple similarity: if >80% of baseline snippet appears in this response
+          const overlap = baselineBodySnippet.split(' ').filter(w => w.length > 4 && bodyLower.includes(w)).length;
+          const totalWords = baselineBodySnippet.split(' ').filter(w => w.length > 4).length;
+          if (totalWords > 10 && overlap / totalWords > 0.8) {
+            continue; // Content is too similar to baseline 404
+          }
+        }
+
+        // Check 4: For files with known signatures, verify at least one signature is present
+        if (signatures.length > 0) {
+          const hasSignature = signatures.some(sig => body.includes(sig));
+          if (!hasSignature) {
+            continue; // No expected content signatures found — likely not a real exposure
+          }
+        }
+
+        // Passed all checks — this is a real exposure
+        vulnerabilities.push({
+          vulnerability_type: "Information Disclosure",
+          severity: "CRITICAL",
+          title: `Exposed Sensitive File: ${file}`,
+          description: `Sensitive file ${file} is publicly accessible and contains expected content`,
+          cwe_id: "CWE-548",
+          cvss_score: 9.8,
+          affected_url: fileUrl,
+          remediation: `Restrict access to ${file} or remove from public directory`,
+        });
       } catch {}
     }
 

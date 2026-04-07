@@ -9,9 +9,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Get all open vulnerabilities grouped by type
+    // Get all open vulnerabilities grouped by type, with affected endpoints
     const vulnSummaries = await database.queryMany(
-      `SELECT vulnerability_type as type, severity, title, COUNT(*) as count
+      `SELECT vulnerability_type as type, severity, title, COUNT(*) as count,
+         array_agg(DISTINCT affected_url) FILTER (WHERE affected_url IS NOT NULL) as affected_urls
        FROM vulnerabilities
        WHERE tenant_id = $1 AND status = 'open'
        GROUP BY vulnerability_type, severity, title
@@ -76,6 +77,7 @@ export async function GET(request: NextRequest) {
         severity: v.severity,
         title: v.title,
         count: parseInt(v.count),
+        affectedUrls: v.affected_urls || [],
       })),
       hasRecentScans,
     );

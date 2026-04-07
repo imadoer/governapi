@@ -93,8 +93,11 @@ export async function middleware(request: NextRequest) {
     request.headers.get("x-internal-request") === "true" &&
     request.headers.get("x-request-id")
   ) {
-    const response = NextResponse.next();
-    // Forward tenant/user headers from security processor
+    // Forward all custom headers from internal requests to route handlers
+    const reqHeaders = new Headers(request.headers);
+    const response = NextResponse.next({
+      request: { headers: reqHeaders },
+    });
     const tenantId = request.headers.get("x-tenant-id");
     if (tenantId) response.headers.set("x-tenant-id", tenantId);
     return addSecurityHeaders(response, requestId);
@@ -118,10 +121,12 @@ export async function middleware(request: NextRequest) {
     // For all other API routes, redirect through security processor
     if (pathname.startsWith("/api/")) {
       const securityUrl = new URL("/api/security-processor", request.url);
-      // Include original query string with the target path
+      // Include original path and query string as separate params
       const origUrl = new URL(request.url);
-      const fullTarget = pathname + origUrl.search;
-      securityUrl.searchParams.set("target", fullTarget);
+      securityUrl.searchParams.set("target", pathname);
+      if (origUrl.search) {
+        securityUrl.searchParams.set("targetQuery", origUrl.search);
+      }
       securityUrl.searchParams.set("rid", requestId);
       securityUrl.searchParams.set("ip", ip);
       securityUrl.searchParams.set("method", request.method);

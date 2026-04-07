@@ -208,7 +208,12 @@ export default function AdvancedDashboard() {
 
   const handleLogout = () => {
     sessionStorage.clear();
-    router.push("/login");
+    // Clear auth cookies
+    document.cookie = "session_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+    document.cookie = "next-auth.session-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+    document.cookie = "__Secure-next-auth.session-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+    // Hard redirect to ensure full page reload and state reset
+    window.location.href = "/login";
   };
 
   const handleRefresh = () => refreshDashboard();
@@ -611,14 +616,13 @@ export default function AdvancedDashboard() {
               <div className="space-y-2">
                 {endpointsList.slice(0, 6).map((ep: any) => {
                   const score = ep.score ?? 0;
-                  const grade = getLetterGrade(score);
+                  const scoreColor = score >= 80 ? "text-emerald-400 bg-emerald-500/15" : score >= 60 ? "text-amber-400 bg-amber-500/15" : "text-red-400 bg-red-500/15";
                   return (
                     <div key={ep.url} className="flex items-center justify-between py-2.5 px-3 rounded-xl bg-white/[0.02] border border-white/[0.03]">
-                      <span className="text-[12px] text-cyan-400 font-mono truncate max-w-[55%]">{ep.url}</span>
+                      <span className="text-[12px] text-cyan-400 font-mono truncate max-w-[60%]">{ep.url}</span>
                       <div className="flex items-center gap-3">
                         {ep.vulnCount > 0 && <span className="text-[11px] text-gray-500">{ep.vulnCount} vuln{ep.vulnCount !== 1 ? "s" : ""}</span>}
-                        <span className={`text-[13px] font-black ${grade.color}`}>{grade.letter}</span>
-                        <span className={`px-2 py-0.5 text-[11px] font-bold rounded-full ${grade.bgColor} ${grade.color}`}>{score}/100</span>
+                        <span className={`px-2 py-0.5 text-[11px] font-bold rounded-full ${scoreColor}`}>{score}/100</span>
                       </div>
                     </div>
                   );
@@ -816,9 +820,10 @@ export default function AdvancedDashboard() {
           company={company}
           onLogout={handleLogout}
           onRefresh={handleRefresh}
+          onNavigate={setActiveFeature}
         />
 
-        <div className="flex-1 p-8 overflow-auto">
+        <div className="flex-1 p-8 overflow-auto relative z-0">
           <AnimatePresence mode="popLayout" initial={false}>
             <motion.div
               key={activeFeature}
