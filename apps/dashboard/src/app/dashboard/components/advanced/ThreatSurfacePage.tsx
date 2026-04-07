@@ -282,6 +282,7 @@ export default function ThreatSurfacePage({ companyId }: { companyId: string }) 
           <Card className="p-6">
             <h3 className="text-[13px] font-medium text-gray-400 mb-6">Security Score Over Time</h3>
             {trendChart.length > 1 ? (
+              <>
               <ResponsiveContainer width="100%" height={280}>
                 <AreaChart data={trendChart}>
                   <defs>
@@ -297,9 +298,16 @@ export default function ThreatSurfacePage({ companyId }: { companyId: string }) 
                   <Area type="monotone" dataKey="score" name="Score" stroke="#06b6d4" fill="url(#ts-fill)" strokeWidth={1.5} />
                 </AreaChart>
               </ResponsiveContainer>
+              {trendChart.length < 3 && (
+                <p className="text-[11px] text-gray-600 mt-3 text-center">
+                  Charts populate as you run more scans over time. Set up scheduled scans in API Management to track trends automatically.
+                </p>
+              )}
+              </>
             ) : (
               <div className="text-center py-16 text-gray-600 text-[13px]">
-                Need at least 2 data points. Run scans over multiple days to see trends.
+                Need at least 2 data points. Run more scans to see trends.
+                <p className="text-[11px] text-gray-700 mt-2">Set up scheduled scans in API Management to track trends automatically.</p>
               </div>
             )}
           </Card>

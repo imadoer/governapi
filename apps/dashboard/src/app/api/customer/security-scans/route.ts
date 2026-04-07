@@ -398,6 +398,46 @@ async function startSecurityScan(
       scanType,
     }).catch((err) => console.error("Webhook dispatch failed:", err));
 
+    // Send email alert for CRITICAL vulnerabilities
+    if (criticals.length > 0) {
+      import("../../../../lib/email").then(({ EmailService }) => {
+        database.queryOne(
+          `SELECT u.email, u.first_name, c.company_name FROM users u JOIN companies c ON u.company_id = c.id WHERE c.id = $1 ORDER BY u.created_at LIMIT 1`,
+          [tenantId],
+        ).then((owner) => {
+          if (!owner?.email) return;
+          const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || "https://governapi.com";
+          EmailService.send({
+            to: owner.email,
+            subject: `CRITICAL vulnerability found on ${targetUrl}`,
+            html: `<!DOCTYPE html><html><body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f172a;">
+<div style="max-width:600px;margin:0 auto;background:#1e293b;">
+<div style="padding:32px 40px;border-bottom:1px solid rgba(255,255,255,0.06);text-align:center;">
+  <div style="display:inline-block;padding:10px 20px;background:linear-gradient(135deg,#ef4444,#dc2626);border-radius:10px;margin-bottom:16px;">
+    <span style="color:white;font-size:18px;font-weight:bold;">CRITICAL Alert</span>
+  </div>
+  <h2 style="margin:0;color:white;font-size:20px;">Critical vulnerability detected</h2>
+</div>
+<div style="padding:32px 40px;">
+  <p style="color:#e2e8f0;font-size:15px;">Hi ${owner.first_name || "there"},</p>
+  <p style="color:#e2e8f0;font-size:15px;">A scan of <strong style="color:white;">${targetUrl}</strong> found ${criticals.length} CRITICAL vulnerabilit${criticals.length > 1 ? "ies" : "y"}:</p>
+  <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:16px;margin:16px 0;">
+    ${criticals.map(c => `<p style="margin:4px 0;color:#fca5a5;font-size:14px;">&#x2022; ${c}</p>`).join("")}
+  </div>
+  <p style="color:#94a3b8;font-size:14px;">Security score: <strong style="color:${securityScore >= 70 ? "#10b981" : securityScore >= 40 ? "#f59e0b" : "#ef4444"}">${securityScore}/100</strong></p>
+  <div style="text-align:center;margin:24px 0;">
+    <a href="${baseUrl}/dashboard" style="display:inline-block;padding:12px 32px;background:#ef4444;color:white;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;">View in Dashboard →</a>
+  </div>
+</div>
+<div style="padding:16px 40px;background:rgba(0,0,0,0.3);text-align:center;">
+  <p style="margin:0;color:#475569;font-size:10px;">GovernAPI Critical Vulnerability Alert — ${owner.company_name}</p>
+</div>
+</div></body></html>`,
+          }).catch(() => {});
+        }).catch(() => {});
+      }).catch(() => {});
+    }
+
     // Evaluate security policies after scan completion
     evaluatePolicies({
       scanId,

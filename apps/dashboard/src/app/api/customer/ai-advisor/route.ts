@@ -4,6 +4,23 @@ import { database } from "../../../../infrastructure/database";
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const DAILY_LIMIT = 20;
 
+export async function GET(request: NextRequest) {
+  const tenantId = request.headers.get("x-tenant-id");
+  if (!tenantId) return NextResponse.json({ error: "Auth required" }, { status: 401 });
+
+  try {
+    const todayCount = await database.queryOne(
+      `SELECT COUNT(*) as count FROM policy_triggers
+       WHERE tenant_id = $1 AND action_taken = 'ai_advisor' AND triggered_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'UTC')`,
+      [tenantId],
+    );
+    const used = parseInt(todayCount?.count || "0");
+    return NextResponse.json({ success: true, remaining: Math.max(0, DAILY_LIMIT - used), limit: DAILY_LIMIT, used });
+  } catch {
+    return NextResponse.json({ success: true, remaining: DAILY_LIMIT, limit: DAILY_LIMIT, used: 0 });
+  }
+}
+
 export async function POST(request: NextRequest) {
   const tenantId = request.headers.get("x-tenant-id");
   const userId = request.headers.get("x-user-id");
@@ -21,14 +38,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "AI Advisor not configured — ANTHROPIC_API_KEY missing" }, { status: 503 });
   }
 
-  // Rate limit: 20 messages/day/user
+  // Rate limit: 20 messages/day/user, resets at midnight UTC
   const todayCount = await database.queryOne(
     `SELECT COUNT(*) as count FROM policy_triggers
-     WHERE tenant_id = $1 AND action_taken = 'ai_advisor' AND triggered_at > NOW() - INTERVAL '24 hours'`,
+     WHERE tenant_id = $1 AND action_taken = 'ai_advisor' AND triggered_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'UTC')`,
     [tenantId],
   );
-  if (parseInt(todayCount?.count || "0") >= DAILY_LIMIT) {
-    return NextResponse.json({ error: `Daily limit reached (${DAILY_LIMIT} messages/day). Resets in 24 hours.` }, { status: 429 });
+  const usedToday = parseInt(todayCount?.count || "0");
+  if (usedToday >= DAILY_LIMIT) {
+    return NextResponse.json({ error: `Daily limit reached (${DAILY_LIMIT} messages/day). Resets at midnight UTC.`, remaining: 0 }, { status: 429 });
   }
 
   try {
@@ -117,7 +135,7 @@ RULES:
       [tenantId, message.substring(0, 200)],
     ).catch(() => {});
 
-    const remaining = DAILY_LIMIT - parseInt(todayCount?.count || "0") - 1;
+    const remaining = DAILY_LIMIT - usedToday - 1;
 
     return NextResponse.json({ success: true, reply, remaining });
   } catch (error: any) {

@@ -558,21 +558,15 @@ export function SettingsPage({ companyId }: { companyId: string }) {
               {tab === "danger" && (
                 <Card className="p-6 border-red-500/20">
                   <h3 className="text-[15px] font-semibold text-red-400 mb-2">Danger Zone</h3>
-                  <p className="text-[12px] text-gray-500 mb-6">
-                    Permanently delete your account and all associated data. This action cannot be undone.
+                  <p className="text-[12px] text-gray-500 mb-4">
+                    To delete your account and all associated data, contact our support team.
                   </p>
-                  <button
-                    onClick={() => {
-                      if (window.confirm("Are you sure you want to delete your account? This cannot be undone.")) {
-                        if (window.confirm("This will permanently delete all your scans, vulnerabilities, policies, and integrations. Type 'DELETE' to confirm.")) {
-                          flash("Account deletion is not available in this version", false);
-                        }
-                      }
-                    }}
-                    className="px-4 py-2 rounded-lg text-[12px] font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition-colors"
+                  <a
+                    href="mailto:support@governapi.com?subject=Account%20Deletion%20Request"
+                    className="inline-flex items-center px-4 py-2 rounded-lg text-[12px] font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition-colors"
                   >
-                    Delete Account
-                  </button>
+                    Contact support to delete your account
+                  </a>
                 </Card>
               )}
 

@@ -107,12 +107,17 @@ export function ThreatTimeline({ companyId }: { companyId: string }) {
               </BarChart>
             </ResponsiveContainer>
           </div>
+          {formatted.length < 3 && (
+            <p className="text-[11px] text-gray-600 mt-3 text-center">
+              Charts populate as you run more scans over time. Set up scheduled scans in API Management to track trends automatically.
+            </p>
+          )}
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <ChartBarIcon className="w-8 h-8 text-gray-700 mb-3" />
-          <p className="text-[13px] text-gray-500">No threat data yet</p>
-          <p className="text-[11px] text-gray-600 mt-1">Add an API endpoint to start monitoring</p>
+          <p className="text-[13px] text-gray-500">No scan data yet</p>
+          <p className="text-[11px] text-gray-600 mt-1">Run a scan or set up scheduled scans in API Management to start tracking trends.</p>
         </div>
       )}
     </div>

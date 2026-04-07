@@ -21,9 +21,23 @@ export function AiAdvisor({ companyId, plan }: { companyId: string; plan: string
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [remaining, setRemaining] = useState(20);
+  const [remaining, setRemaining] = useState<number | null>(null);
   const [error, setError] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Fetch remaining count from DB on mount
+  useEffect(() => {
+    const token = typeof window !== "undefined" ? sessionStorage.getItem("sessionToken") : null;
+    if (token && companyId) {
+      fetch("/api/customer/ai-advisor", {
+        headers: { "Authorization": `Bearer ${token}` },
+        credentials: "include",
+      })
+        .then((r) => r.json())
+        .then((d) => { if (d.remaining != null) setRemaining(d.remaining); })
+        .catch(() => {});
+    }
+  }, [companyId]);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -85,7 +99,7 @@ export function AiAdvisor({ companyId, plan }: { companyId: string; plan: string
                 <span className="text-[13px] font-semibold text-white">AI Security Advisor</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] text-gray-600">{remaining} msgs left today</span>
+                <span className="text-[10px] text-gray-600">{remaining != null ? `${remaining} msgs left today` : "..."}</span>
                 <span className="text-[9px] text-gray-700">Powered by AI</span>
               </div>
             </div>

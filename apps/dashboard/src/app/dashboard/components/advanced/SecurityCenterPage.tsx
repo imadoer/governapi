@@ -307,6 +307,7 @@ export function SecurityCenterPage({ company, onNavigate }: any) {
             {trendsLoading ? (
               <div className="animate-pulse space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="bg-slate-700/30 rounded h-5 w-3/4" />)}</div>
             ) : trends.length > 0 ? (
+              <>
               <ResponsiveContainer width="100%" height={230}>
                 <ComposedChart data={trends}>
                   <defs>
@@ -338,6 +339,13 @@ export function SecurityCenterPage({ company, onNavigate }: any) {
                   <Line yAxisId="right" type="monotone" dataKey="activeThreats" name="Vulnerabilities" stroke="#ef4444" strokeWidth={1.5} dot={activeTrendView === "per-scan"} />
                 </ComposedChart>
               </ResponsiveContainer>
+              {trends.length > 0 && trends.length < 3 && (
+                <p className="text-[11px] text-gray-600 mt-3 text-center">
+                  Charts populate as you run more scans over time.{" "}
+                  <button onClick={() => onNavigate?.("api-management")} className="text-cyan-500/70 hover:text-cyan-400 transition-colors">Set up scheduled scans</button> to track trends automatically.
+                </p>
+              )}
+            </>
             ) : (
               <div className="flex items-center justify-center h-[230px] text-gray-600 text-[13px]">
                 <ChartBarIcon className="w-6 h-6 mr-2 opacity-40" /> No trend data — run a scan to see your first data point

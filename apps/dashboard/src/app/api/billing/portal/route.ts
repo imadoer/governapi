@@ -11,30 +11,40 @@ export async function POST(request: NextRequest) {
     });
 
     const session = await getServerSession();
+    const tenantId = request.headers.get('x-tenant-id');
 
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    let company: any = null;
+
+    if (tenantId) {
+      company = await database.queryOne(
+        `SELECT c.stripe_customer_id, c.id, c.company_name
+         FROM companies c WHERE c.id = $1`,
+        [tenantId]
+      );
+    } else if (session?.user?.email) {
+      company = await database.queryOne(
+        `SELECT c.stripe_customer_id, c.id, c.company_name
+         FROM companies c
+         JOIN users u ON u.company_id = c.id
+         WHERE u.email = $1`,
+        [session.user.email]
+      );
     }
-
-    // Get user's company and Stripe customer ID
-    const company = await database.queryOne(
-      `SELECT c.stripe_customer_id, c.id, c.company_name
-       FROM companies c
-       JOIN users u ON u.company_id = c.id
-       WHERE u.email = $1`,
-      [session.user.email]
-    );
 
     if (!company) {
       return NextResponse.json({ error: 'Company not found' }, { status: 404 });
     }
+
+    const email = session?.user?.email || (await database.queryOne(
+      'SELECT email FROM users WHERE company_id = $1 LIMIT 1', [company.id]
+    ))?.email;
 
     let customerId = company.stripe_customer_id;
 
     // Create Stripe customer if doesn't exist
     if (!customerId) {
       const customer = await stripe.customers.create({
-        email: session.user.email,
+        email: email || 'unknown@governapi.com',
         metadata: {
           company_id: company.id.toString(),
           company_name: company.company_name
@@ -53,7 +63,7 @@ export async function POST(request: NextRequest) {
     // Create billing portal session
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: customerId,
-      return_url: `${process.env.NEXTAUTH_URL}/customer/billing`,
+      return_url: `${process.env.NEXTAUTH_URL || 'https://governapi.com'}/dashboard`,
     });
 
     return NextResponse.json({ url: portalSession.url });

@@ -44,6 +44,28 @@ export function BillingSubscriptionPage({ companyId }: { companyId: string }) {
     setTimeout(() => setToast(null), 3000);
   };
 
+  const handleManageSubscription = async () => {
+    try {
+      const response = await fetch("/api/billing/portal", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-tenant-id": companyId,
+          ...(typeof window !== "undefined" && sessionStorage.getItem("sessionToken") ? { "Authorization": `Bearer ${sessionStorage.getItem("sessionToken")}` } : {}),
+        },
+        credentials: "include",
+      });
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        showToast(data.error || "Failed to open billing portal", "error");
+      }
+    } catch {
+      showToast("Failed to open billing portal", "error");
+    }
+  };
+
   const fetchBillingData = async () => {
     setLoading(true);
     try {
@@ -190,14 +212,24 @@ export function BillingSubscriptionPage({ companyId }: { companyId: string }) {
             Manage your plan and billing information
           </p>
         </div>
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={fetchBillingData}
-          className="p-3 bg-slate-700 hover:bg-slate-600 rounded-xl transition-colors"
-        >
-          <ArrowPathIcon className="w-5 h-5 text-white" />
-        </motion.button>
+        <div className="flex items-center gap-3">
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleManageSubscription}
+            className="px-4 py-2.5 bg-cyan-500 hover:bg-cyan-600 text-white rounded-xl text-sm font-semibold transition-colors"
+          >
+            Manage Subscription
+          </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={fetchBillingData}
+            className="p-3 bg-slate-700 hover:bg-slate-600 rounded-xl transition-colors"
+          >
+            <ArrowPathIcon className="w-5 h-5 text-white" />
+          </motion.button>
+        </div>
       </div>
 
       {/* Current Usage & Costs */}

@@ -279,6 +279,7 @@ export default function LandingPage() {
               </p>
 
               {/* Input + Button */}
+              <label className="block text-[13px] text-slate-400 mb-2 max-w-lg">Paste any public API endpoint to scan</label>
               <div className="flex gap-3 max-w-lg">
                 <input
                   type="url"
@@ -334,7 +335,7 @@ export default function LandingPage() {
                       <span className="flex items-center gap-2 text-cyan-400 text-sm"><ClockIcon className="w-4 h-4 animate-pulse" /> Scanning endpoint…</span>
                     ) : scanDone ? (
                       <span className={`text-sm font-semibold ${scanScore >= 80 ? "text-emerald-400" : scanScore >= 50 ? "text-amber-400" : "text-red-400"}`}>
-                        {scanScore >= 80 ? "Looking good" : scanScore >= 50 ? "Needs attention" : "Critical issues found"}
+                        {scanScore >= 80 ? "Looking good" : scanScore >= 50 ? "Security risks detected" : "Critical issues found"}
                       </span>
                     ) : (
                       <span className="text-sm text-slate-600">Enter a URL to start</span>

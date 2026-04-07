@@ -44,6 +44,12 @@ export function DataManagementPage({ companyId }: { companyId: string }) {
     ([u, id]: [string, string]) => fetcher(u, id),
   );
 
+  const { data: backupData } = useSWR(
+    [`/api/system/backup-status`, companyId],
+    ([u, id]: [string, string]) => fetcher(u, id),
+    { refreshInterval: 300000 },
+  );
+
   const { data: endpointsData } = useSWR(
     [`/api/customer/api-endpoints`, companyId],
     ([u, id]: [string, string]) => fetcher(u, id),
@@ -171,12 +177,35 @@ export function DataManagementPage({ companyId }: { companyId: string }) {
             <div className="flex items-center gap-3 mb-4">
               <ArrowPathIcon className="w-4 h-4 text-gray-500" />
               <h3 className="text-[13px] font-medium text-gray-400">Automated Backups</h3>
+              <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Active</span>
             </div>
-            <div className="flex flex-col items-center justify-center py-6 text-center">
-              <span className="px-2.5 py-0.5 text-[10px] font-medium rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 mb-3">Coming Soon</span>
-              <p className="text-[12px] text-gray-500">Automated daily backups with point-in-time recovery.</p>
-              <p className="text-[11px] text-gray-600 mt-1">Your data is stored in PostgreSQL with standard replication.</p>
-            </div>
+            {backupData?.lastBackup ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between py-2 px-3 rounded-xl bg-white/[0.02] border border-white/[0.03]">
+                  <span className="text-[12px] text-gray-500">Last backup</span>
+                  <span className="text-[12px] text-white font-medium">
+                    {new Date(backupData.lastBackup.timestamp).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between py-2 px-3 rounded-xl bg-white/[0.02] border border-white/[0.03]">
+                  <span className="text-[12px] text-gray-500">Backup size</span>
+                  <span className="text-[12px] text-white font-medium">{backupData.lastBackup.size}</span>
+                </div>
+                <div className="flex items-center justify-between py-2 px-3 rounded-xl bg-white/[0.02] border border-white/[0.03]">
+                  <span className="text-[12px] text-gray-500">Schedule</span>
+                  <span className="text-[12px] text-white font-medium">{backupData.schedule}</span>
+                </div>
+                <div className="flex items-center justify-between py-2 px-3 rounded-xl bg-white/[0.02] border border-white/[0.03]">
+                  <span className="text-[12px] text-gray-500">Retention</span>
+                  <span className="text-[12px] text-white font-medium">{backupData.retention} ({backupData.totalBackups} stored)</span>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-[12px] text-gray-500">Daily backups at 3:00 AM UTC, 30-day retention.</p>
+                <p className="text-[11px] text-gray-600">First backup will run tonight.</p>
+              </div>
+            )}
           </Card>
         </div>
 
