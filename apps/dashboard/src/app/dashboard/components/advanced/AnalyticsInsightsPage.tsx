@@ -23,6 +23,7 @@ import {
   Tooltip as RechartsTooltip,
   ResponsiveContainer,
 } from "recharts";
+import { padChartData } from "../../../../utils/chart-utils";
 
 const fetcher = (url: string, _tid: string) => {
   const token = typeof window !== "undefined" ? sessionStorage.getItem("sessionToken") || "" : "";
@@ -62,7 +63,7 @@ export function AnalyticsInsightsPage({ companyId }: { companyId: string }) {
   );
 
   const { data: trendsData, isLoading: trendsLoading } = useSWR(
-    [`/api/customer/security-metrics/trends`, companyId],
+    [`/api/customer/security-metrics/trends/per-scan`, companyId],
     ([u, id]: [string, string]) => fetcher(u, id),
     { refreshInterval: 120_000 },
   );
@@ -176,13 +177,16 @@ function OverviewTab({ stats, metrics, scanStats, vulnSummary, trends, endpointC
     { label: "Policies Active", value: activePolicies, icon: ClockIcon },
   ];
 
-  /* scan frequency — group scans by week from trends */
-  const last14 = (trends ?? []).slice(-14);
-  const scoreChart = last14.map((t: any) => ({
-    date: new Date(t.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-    score: t.securityScore ?? 0,
-    scans: t.scanCount ?? 1,
-  }));
+  /* per-scan score chart */
+  const last20 = (trends ?? []).slice(-20);
+  const scoreChart = last20.map((t: any) => {
+    const host = t.target ? (() => { try { return new URL(t.target).hostname.replace(/^www\./, "").split(".")[0]; } catch { return ""; } })() : "";
+    return {
+      date: host || new Date(t.date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+      score: t.securityScore ?? 0,
+      scans: 1,
+    };
+  });
 
   /* vuln severity breakdown for bar chart */
   const vulnBars = vulnSummary
@@ -220,7 +224,7 @@ function OverviewTab({ stats, metrics, scanStats, vulnSummary, trends, endpointC
           <h3 className="text-[13px] font-medium text-gray-400 mb-6">Security Score (14 days)</h3>
           {scoreChart.length > 0 ? (
             <ResponsiveContainer width="100%" height={220}>
-              <AreaChart data={scoreChart}>
+              <AreaChart data={padChartData(scoreChart)}>
                 <defs>
                   <linearGradient id="ai-score" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#06b6d4" stopOpacity={0.25} />
@@ -231,7 +235,7 @@ function OverviewTab({ stats, metrics, scanStats, vulnSummary, trends, endpointC
                 <XAxis dataKey="date" stroke="#4b5563" tick={{ fontSize: 11 }} />
                 <YAxis domain={[0, 100]} stroke="#4b5563" tick={{ fontSize: 11 }} />
                 <RechartsTooltip {...tip} />
-                <Area type="monotone" dataKey="score" name="Score" stroke="#06b6d4" fill="url(#ai-score)" strokeWidth={1.5} />
+                <Area type="monotone" dataKey="score" name="Score" stroke="#06b6d4" fill="url(#ai-score)" strokeWidth={2} dot={{ r: 4, fill: "#06b6d4", strokeWidth: 0 }} connectNulls />
               </AreaChart>
             </ResponsiveContainer>
           ) : (
@@ -414,15 +418,15 @@ function VulnerabilitiesTab({ vulns, summary }: { vulns: any[]; summary: any }) 
           <h3 className="text-[13px] font-medium text-gray-400 mb-6">Vulnerability Trend</h3>
           {trendData.length > 0 ? (
             <ResponsiveContainer width="100%" height={220}>
-              <AreaChart data={trendData}>
+              <AreaChart data={padChartData(trendData)}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
                 <XAxis dataKey="date" stroke="#4b5563" tick={{ fontSize: 11 }} />
                 <YAxis allowDecimals={false} stroke="#4b5563" tick={{ fontSize: 11 }} />
                 <RechartsTooltip {...tip} />
-                <Area type="monotone" dataKey="critical" name="Critical" stackId="1" stroke="#ef4444" fill="#ef444420" strokeWidth={1.5} />
-                <Area type="monotone" dataKey="high" name="High" stackId="1" stroke="#f59e0b" fill="#f59e0b20" strokeWidth={1.5} />
-                <Area type="monotone" dataKey="medium" name="Medium" stackId="1" stroke="#eab308" fill="#eab30820" strokeWidth={1.5} />
-                <Area type="monotone" dataKey="low" name="Low" stackId="1" stroke="#06b6d4" fill="#06b6d420" strokeWidth={1.5} />
+                <Area type="monotone" dataKey="critical" name="Critical" stackId="1" stroke="#ef4444" fill="#ef444420" strokeWidth={2} dot={{ r: 4, fill: "#ef4444", strokeWidth: 0 }} connectNulls />
+                <Area type="monotone" dataKey="high" name="High" stackId="1" stroke="#f59e0b" fill="#f59e0b20" strokeWidth={2} dot={{ r: 4, fill: "#f59e0b", strokeWidth: 0 }} connectNulls />
+                <Area type="monotone" dataKey="medium" name="Medium" stackId="1" stroke="#eab308" fill="#eab30820" strokeWidth={2} dot={{ r: 4, fill: "#eab308", strokeWidth: 0 }} connectNulls />
+                <Area type="monotone" dataKey="low" name="Low" stackId="1" stroke="#06b6d4" fill="#06b6d420" strokeWidth={2} dot={{ r: 4, fill: "#06b6d4", strokeWidth: 0 }} connectNulls />
               </AreaChart>
             </ResponsiveContainer>
           ) : (
@@ -457,11 +461,14 @@ function VulnerabilitiesTab({ vulns, summary }: { vulns: any[]; summary: any }) 
 function TrendsTab({ trends, loading }: { trends: any[]; loading: boolean }) {
   if (loading) return <Spinner />;
 
-  const data = trends.map((t: any) => ({
-    date: new Date(t.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-    score: t.securityScore ?? 0,
-    scans: t.scanCount ?? 1,
-  }));
+  const data = trends.map((t: any) => {
+    const host = t.target ? (() => { try { return new URL(t.target).hostname.replace(/^www\./, "").split(".")[0]; } catch { return ""; } })() : "";
+    return {
+      date: host || new Date(t.date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+      score: t.securityScore ?? 0,
+      scans: 1,
+    };
+  });
 
   return (
     <div className="space-y-8">
@@ -469,7 +476,7 @@ function TrendsTab({ trends, loading }: { trends: any[]; loading: boolean }) {
         <h3 className="text-[13px] font-medium text-gray-400 mb-6">Security Score History (30 days)</h3>
         {data.length > 0 ? (
           <ResponsiveContainer width="100%" height={320}>
-            <AreaChart data={data}>
+            <AreaChart data={padChartData(data)}>
               <defs>
                 <linearGradient id="ai-hist" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#06b6d4" stopOpacity={0.3} />
@@ -480,7 +487,7 @@ function TrendsTab({ trends, loading }: { trends: any[]; loading: boolean }) {
               <XAxis dataKey="date" stroke="#4b5563" tick={{ fontSize: 11 }} />
               <YAxis domain={[0, 100]} stroke="#4b5563" tick={{ fontSize: 11 }} />
               <RechartsTooltip {...tip} />
-              <Area type="monotone" dataKey="score" name="Security Score" stroke="#06b6d4" fill="url(#ai-hist)" strokeWidth={2} />
+              <Area type="monotone" dataKey="score" name="Security Score" stroke="#06b6d4" fill="url(#ai-hist)" strokeWidth={2} dot={{ r: 4, fill: "#06b6d4", strokeWidth: 0 }} connectNulls />
             </AreaChart>
           </ResponsiveContainer>
         ) : (
@@ -492,7 +499,7 @@ function TrendsTab({ trends, loading }: { trends: any[]; loading: boolean }) {
         <h3 className="text-[13px] font-medium text-gray-400 mb-6">Scan Activity Over Time</h3>
         {data.length > 0 ? (
           <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={data}>
+            <AreaChart data={padChartData(data)}>
               <defs>
                 <linearGradient id="ai-scans" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#10b981" stopOpacity={0.25} />
@@ -503,7 +510,7 @@ function TrendsTab({ trends, loading }: { trends: any[]; loading: boolean }) {
               <XAxis dataKey="date" stroke="#4b5563" tick={{ fontSize: 11 }} />
               <YAxis allowDecimals={false} stroke="#4b5563" tick={{ fontSize: 11 }} />
               <RechartsTooltip {...tip} />
-              <Area type="monotone" dataKey="scans" name="Scans" stroke="#10b981" fill="url(#ai-scans)" strokeWidth={1.5} />
+              <Area type="monotone" dataKey="scans" name="Scans" stroke="#10b981" fill="url(#ai-scans)" strokeWidth={2} dot={{ r: 4, fill: "#10b981", strokeWidth: 0 }} connectNulls />
             </AreaChart>
           </ResponsiveContainer>
         ) : (

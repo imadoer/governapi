@@ -687,6 +687,51 @@ async function runComprehensiveScan(targetUrl: string): Promise<any[]> {
       });
     }
 
+    // ── Credential Leak Detection ──
+    // Scan response headers and body for exposed secrets/API keys
+    const credentialPatterns: { name: string; pattern: RegExp; mask: (m: string) => string }[] = [
+      { name: "AWS Access Key", pattern: /AKIA[0-9A-Z]{16}/g, mask: (m) => m.slice(0, 8) + "..." },
+      { name: "AWS Secret Key", pattern: /(?:aws_secret_access_key|AWS_SECRET)['"=:\s]+([A-Za-z0-9/+=]{40})/gi, mask: (m) => m.slice(0, 15) + "..." },
+      { name: "Stripe Secret Key", pattern: /sk_live_[0-9a-zA-Z]{24,}/g, mask: (m) => m.slice(0, 12) + "..." },
+      { name: "Stripe Publishable Key", pattern: /pk_live_[0-9a-zA-Z]{24,}/g, mask: (m) => m.slice(0, 12) + "..." },
+      { name: "GitHub Token", pattern: /gh[po]_[A-Za-z0-9_]{36,}/g, mask: (m) => m.slice(0, 8) + "..." },
+      { name: "GitHub Fine-Grained Token", pattern: /github_pat_[A-Za-z0-9_]{22,}/g, mask: (m) => m.slice(0, 15) + "..." },
+      { name: "Slack Token", pattern: /xox[bpras]-[0-9A-Za-z-]{10,}/g, mask: (m) => m.slice(0, 10) + "..." },
+      { name: "Google API Key", pattern: /AIza[0-9A-Za-z_-]{35}/g, mask: (m) => m.slice(0, 10) + "..." },
+      { name: "Bearer Token in HTML", pattern: /Bearer\s+[A-Za-z0-9._~+/=-]{20,}/g, mask: (m) => m.slice(0, 15) + "..." },
+      { name: "Private Key", pattern: /-----BEGIN\s+(RSA\s+)?PRIVATE\s+KEY-----/g, mask: () => "-----BEGIN PRIVATE KEY-----" },
+      { name: "Generic Secret Assignment", pattern: /(?:api[_-]?key|secret[_-]?key|access[_-]?token|auth[_-]?token|password)\s*[=:]\s*['"][A-Za-z0-9/+=_.-]{16,}['"]/gi, mask: (m) => m.slice(0, 20) + "..." },
+    ];
+
+    // Check headers for leaked credentials
+    const allHeaders = [...headers.entries()].map(([k, v]) => `${k}: ${v}`).join("\n");
+    const searchTargets = [
+      { source: "response body", text: body.slice(0, 500000) },
+      { source: "response headers", text: allHeaders },
+    ];
+
+    for (const { source, text } of searchTargets) {
+      for (const cred of credentialPatterns) {
+        const matches = text.match(cred.pattern);
+        if (matches) {
+          // Deduplicate matches
+          const unique = [...new Set(matches)];
+          for (const match of unique.slice(0, 3)) {
+            vulnerabilities.push({
+              vulnerability_type: "Credential Leak",
+              severity: "CRITICAL",
+              title: `Exposed ${cred.name}`,
+              description: `${cred.name} found in ${source}: ${cred.mask(match)}. This credential could be used by attackers to access your systems.`,
+              cwe_id: "CWE-798",
+              cvss_score: 9.8,
+              affected_url: targetUrl,
+              remediation: `Immediately rotate this ${cred.name}. Remove it from ${source}. Use environment variables or a secrets manager instead of hardcoding credentials.`,
+            });
+          }
+        }
+      }
+    }
+
     // Check for common sensitive files with false-positive detection.
     // Many sites return 200 with a custom "not found" page for all paths (soft 404).
     // We fetch a known-bad path first as a baseline, then compare.

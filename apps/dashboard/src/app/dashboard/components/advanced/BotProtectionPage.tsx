@@ -27,6 +27,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
+import { padChartData } from "../../../../utils/chart-utils";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Data                                                                     */
@@ -488,7 +489,7 @@ function TimelineChart({ trends }: { trends: any[] }) {
       <h3 className="text-[13px] font-medium text-gray-400 mb-6">24-Hour Activity</h3>
       {data.length > 0 ? (
         <ResponsiveContainer width="100%" height={220}>
-          <AreaChart data={data}>
+          <AreaChart data={padChartData(data)}>
             <defs>
               <linearGradient id="bp-req" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="#06b6d4" stopOpacity={0.25} />
@@ -504,8 +505,8 @@ function TimelineChart({ trends }: { trends: any[] }) {
             <YAxis stroke="#4b5563" tick={{ fontSize: 11 }} />
             <RechartsTooltip {...chartTooltipStyle} />
             <Legend wrapperStyle={{ fontSize: 11, color: "#9ca3af" }} />
-            <Area type="monotone" dataKey="requests" name="Requests" stroke="#06b6d4" fill="url(#bp-req)" strokeWidth={1.5} />
-            <Area type="monotone" dataKey="bots" name="Bots" stroke="#ef4444" fill="url(#bp-bot)" strokeWidth={1.5} />
+            <Area type="monotone" dataKey="requests" name="Requests" stroke="#06b6d4" fill="url(#bp-req)" strokeWidth={2} dot={{ r: 4, fill: "#06b6d4", strokeWidth: 0 }} connectNulls />
+            <Area type="monotone" dataKey="bots" name="Bots" stroke="#ef4444" fill="url(#bp-bot)" strokeWidth={2} dot={{ r: 4, fill: "#ef4444", strokeWidth: 0 }} connectNulls />
           </AreaChart>
         </ResponsiveContainer>
       ) : (
@@ -969,7 +970,7 @@ function AnalyticsTab({ asn, headless, velocity, crawler, trends }: any) {
           if (!data.length) return <div className="text-center py-12 text-gray-600 text-[12px]">No data</div>;
           return (
             <ResponsiveContainer width="100%" height={160}>
-              <AreaChart data={data}>
+              <AreaChart data={padChartData(data)}>
                 <defs>
                   <linearGradient id="bp-vel" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#eab308" stopOpacity={0.25} />
@@ -980,7 +981,7 @@ function AnalyticsTab({ asn, headless, velocity, crawler, trends }: any) {
                 <XAxis dataKey="hour" stroke="#4b5563" tick={{ fontSize: 11 }} />
                 <YAxis stroke="#4b5563" tick={{ fontSize: 11 }} />
                 <RechartsTooltip {...chartTooltipStyle} />
-                <Area type="monotone" dataKey="bots" stroke="#eab308" fill="url(#bp-vel)" strokeWidth={1.5} />
+                <Area type="monotone" dataKey="bots" stroke="#eab308" fill="url(#bp-vel)" strokeWidth={2} dot={{ r: 4, fill: "#eab308", strokeWidth: 0 }} connectNulls />
               </AreaChart>
             </ResponsiveContainer>
           );

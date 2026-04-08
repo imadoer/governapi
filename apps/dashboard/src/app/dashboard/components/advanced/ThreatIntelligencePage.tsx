@@ -21,6 +21,7 @@ import {
   XAxis, YAxis, CartesianGrid,
   Tooltip as RechartsTooltip, ResponsiveContainer,
 } from "recharts";
+import { padChartData } from "../../../../utils/chart-utils";
 
 const fetcher = (url: string, _tid: string) => {
   const token = typeof window !== "undefined" ? sessionStorage.getItem("sessionToken") || "" : "";
@@ -263,7 +264,7 @@ export function ThreatIntelligencePage({ companyId }: { companyId: string }) {
           <h3 className="text-[13px] font-medium text-gray-400 mb-6">Activity Timeline</h3>
           {timeline.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
-              <AreaChart data={timeline}>
+              <AreaChart data={padChartData(timeline, "timestamp")}>
                 <defs>
                   <linearGradient id="ti-fill" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#06b6d4" stopOpacity={0.2} />
@@ -274,8 +275,8 @@ export function ThreatIntelligencePage({ companyId }: { companyId: string }) {
                 <XAxis dataKey="timestamp" stroke="#4b5563" tick={{ fontSize: 10 }} tickFormatter={(v) => new Date(v).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} />
                 <YAxis stroke="#4b5563" tick={{ fontSize: 11 }} />
                 <RechartsTooltip {...tip} />
-                <Area type="monotone" dataKey="count" name="Threats" stroke="#06b6d4" fill="url(#ti-fill)" strokeWidth={1.5} />
-                <Line type="monotone" dataKey="blocked" name="Blocked" stroke="#10b981" strokeWidth={1.5} dot={false} />
+                <Area type="monotone" dataKey="count" name="Threats" stroke="#06b6d4" fill="url(#ti-fill)" strokeWidth={2} dot={{ r: 4, fill: "#06b6d4", strokeWidth: 0 }} connectNulls />
+                <Line type="monotone" dataKey="blocked" name="Blocked" stroke="#10b981" strokeWidth={2} dot={{ r: 4, fill: "#10b981", strokeWidth: 0 }} connectNulls />
               </AreaChart>
             </ResponsiveContainer>
           ) : <div className="text-center py-10 text-gray-600 text-[12px]">No data</div>}

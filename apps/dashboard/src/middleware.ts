@@ -4,6 +4,7 @@ const authPublicRoutes = [
   "/login",
   "/api/public/",
   "/api/auth/",
+  "/api/admin/auth/login",
   "/api/badge/",
   "/api/ci/",
   "/api/customer/data-export",

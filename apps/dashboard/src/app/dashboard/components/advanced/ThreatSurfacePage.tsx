@@ -5,6 +5,7 @@ import useSWR from "swr";
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import { ArrowPathIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from "recharts";
+import { padChartData } from "../../../../utils/chart-utils";
 import { PageSkeleton } from "./PageSkeleton";
 const fetcher = (url: string, _tid: string) => {
   const token = typeof window !== "undefined" ? sessionStorage.getItem("sessionToken") || "" : "";
@@ -70,7 +71,7 @@ export default function ThreatSurfacePage({ companyId }: { companyId: string }) 
   );
 
   const { data: trendsData } = useSWR(
-    [`/api/customer/security-metrics/trends`, companyId],
+    [`/api/customer/security-metrics/trends/per-scan`, companyId],
     ([u, id]: [string, string]) => fetcher(u, id),
   );
 
@@ -107,11 +108,15 @@ export default function ThreatSurfacePage({ companyId }: { companyId: string }) 
       vulns: vulnsByType[type],
     }));
 
-  // Trend data for chart
-  const trendChart = trends.slice(-14).map((t: any) => ({
-    date: new Date(t.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-    score: t.securityScore ?? 0,
-  }));
+  // Trend data for chart — per-scan: each scan is a point
+  const trendChart = trends.slice(-20).map((t: any, i: number) => {
+    const d = new Date(t.date);
+    const host = t.target ? (() => { try { return new URL(t.target).hostname.replace(/^www\./, ""); } catch { return ""; } })() : "";
+    return {
+      date: host ? `${host.split(".")[0]}` : d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+      score: t.securityScore ?? 0,
+    };
+  });
 
   const tabs = [
     { key: "surface", label: "Attack Surface" },
@@ -281,10 +286,10 @@ export default function ThreatSurfacePage({ companyId }: { companyId: string }) 
         <div className="space-y-6">
           <Card className="p-6">
             <h3 className="text-[13px] font-medium text-gray-400 mb-6">Security Score Over Time</h3>
-            {trendChart.length > 1 ? (
+            {trendChart.length > 0 ? (
               <>
               <ResponsiveContainer width="100%" height={280}>
-                <AreaChart data={trendChart}>
+                <AreaChart data={padChartData(trendChart)}>
                   <defs>
                     <linearGradient id="ts-fill" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#06b6d4" stopOpacity={0.25} />
@@ -295,7 +300,7 @@ export default function ThreatSurfacePage({ companyId }: { companyId: string }) 
                   <XAxis dataKey="date" stroke="#4b5563" tick={{ fontSize: 11 }} />
                   <YAxis domain={[0, 100]} stroke="#4b5563" tick={{ fontSize: 11 }} />
                   <RechartsTooltip {...tip} />
-                  <Area type="monotone" dataKey="score" name="Score" stroke="#06b6d4" fill="url(#ts-fill)" strokeWidth={1.5} />
+                  <Area type="monotone" dataKey="score" name="Score" stroke="#06b6d4" fill="url(#ts-fill)" strokeWidth={2} dot={{ r: 4, fill: "#06b6d4", strokeWidth: 0 }} connectNulls />
                 </AreaChart>
               </ResponsiveContainer>
               {trendChart.length < 3 && (

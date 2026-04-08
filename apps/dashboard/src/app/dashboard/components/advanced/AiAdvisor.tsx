@@ -25,8 +25,8 @@ export function AiAdvisor({ companyId, plan }: { companyId: string; plan: string
   const [error, setError] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Fetch remaining count from DB on mount
-  useEffect(() => {
+  // Fetch remaining count from DB on mount and when panel opens
+  const fetchRemaining = () => {
     const token = typeof window !== "undefined" ? sessionStorage.getItem("sessionToken") : null;
     if (token && companyId) {
       fetch("/api/customer/ai-advisor", {
@@ -37,7 +37,9 @@ export function AiAdvisor({ companyId, plan }: { companyId: string; plan: string
         .then((d) => { if (d.remaining != null) setRemaining(d.remaining); })
         .catch(() => {});
     }
-  }, [companyId]);
+  };
+  useEffect(() => { fetchRemaining(); }, [companyId]);
+  useEffect(() => { if (open) fetchRemaining(); }, [open]);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;

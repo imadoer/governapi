@@ -824,14 +824,13 @@ export default function AdvancedDashboard() {
         />
 
         <div className="flex-1 p-8 overflow-auto relative z-0">
-          <AnimatePresence mode="popLayout" initial={false}>
+          <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={activeFeature}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.15, ease: "easeOut" }}
-              style={{ willChange: "opacity" }}
+              transition={{ duration: 0.1, ease: "easeOut" }}
             >
               {renderContent()}
             </motion.div>

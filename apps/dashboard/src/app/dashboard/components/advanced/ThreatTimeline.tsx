@@ -7,6 +7,7 @@ import {
   XAxis, YAxis, CartesianGrid,
   Tooltip as RechartsTooltip, ResponsiveContainer, Legend,
 } from "recharts";
+import { padChartData } from "../../../../utils/chart-utils";
 import { ChartBarIcon } from "@heroicons/react/24/outline";
 
 const fetcher = (url: string, _tid: string) => {
@@ -29,8 +30,16 @@ export function ThreatTimeline({ companyId }: { companyId: string }) {
     { refreshInterval: 60_000 },
   );
 
+  // Per-scan data for the score chart
+  const { data: perScanData } = useSWR(
+    companyId ? [`/api/customer/security-metrics/trends/per-scan`, companyId] : null,
+    ([u, id]: [string, string]) => fetcher(u, id),
+    { refreshInterval: 60_000 },
+  );
+
   const timeline = raw?.success ? raw.timeline ?? [] : [];
-  const hasData = raw?.hasData ?? false;
+  const perScanTrends = perScanData?.success ? perScanData.trends ?? [] : [];
+  const hasData = (raw?.hasData ?? false) || perScanTrends.length > 0;
 
   const formatted = timeline.map((t: any) => {
     const d = new Date(t.bucket);
@@ -39,6 +48,15 @@ export function ThreatTimeline({ companyId }: { companyId: string }) {
       label: range === "24h"
         ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
         : d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    };
+  });
+
+  // Per-scan score chart data
+  const scanScoreData = perScanTrends.slice(-20).map((t: any) => {
+    const host = t.target ? (() => { try { return new URL(t.target).hostname.replace(/^www\./, "").split(".")[0]; } catch { return ""; } })() : "";
+    return {
+      label: host || new Date(t.date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+      avgScore: t.securityScore ?? 0,
     };
   });
 
@@ -69,12 +87,12 @@ export function ThreatTimeline({ companyId }: { companyId: string }) {
 
       {hasData ? (
         <div className="space-y-6">
-          {/* Scan scores area chart */}
-          {formatted.some((d: any) => d.avgScore != null) && (
+          {/* Scan scores area chart — per-scan view */}
+          {scanScoreData.length > 0 && (
             <div>
               <div className="text-[11px] text-gray-600 mb-2">Scan Scores</div>
               <ResponsiveContainer width="100%" height={160}>
-                <AreaChart data={formatted}>
+                <AreaChart data={padChartData(scanScoreData, "label")}>
                   <defs>
                     <linearGradient id="tl-score" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#06b6d4" stopOpacity={0.25} />
@@ -85,7 +103,7 @@ export function ThreatTimeline({ companyId }: { companyId: string }) {
                   <XAxis dataKey="label" stroke="#4b5563" tick={{ fontSize: 10 }} />
                   <YAxis domain={[0, 100]} stroke="#4b5563" tick={{ fontSize: 10 }} />
                   <RechartsTooltip {...tip} />
-                  <Area type="monotone" dataKey="avgScore" name="Avg Score" stroke="#06b6d4" fill="url(#tl-score)" strokeWidth={1.5} connectNulls />
+                  <Area type="monotone" dataKey="avgScore" name="Avg Score" stroke="#06b6d4" fill="url(#tl-score)" strokeWidth={2} dot={{ r: 4, fill: "#06b6d4", strokeWidth: 0 }} connectNulls />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -107,7 +125,7 @@ export function ThreatTimeline({ companyId }: { companyId: string }) {
               </BarChart>
             </ResponsiveContainer>
           </div>
-          {formatted.length < 3 && (
+          {scanScoreData.length < 3 && (
             <p className="text-[11px] text-gray-600 mt-3 text-center">
               Charts populate as you run more scans over time. Set up scheduled scans in API Management to track trends automatically.
             </p>

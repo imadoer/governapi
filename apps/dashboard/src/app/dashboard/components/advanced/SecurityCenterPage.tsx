@@ -4,6 +4,7 @@ import useSWR from "swr";
 import { FadeIn } from "./PageSkeleton";
 import { motion, AnimatePresence } from "framer-motion";
 import { ComposedChart, Line, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from "recharts";
+import { padChartData } from "../../../../utils/chart-utils";
 import {
   ArrowPathIcon,
   PlayCircleIcon,
@@ -40,7 +41,7 @@ export function SecurityCenterPage({ company, onNavigate }: any) {
   const [formError, setFormError] = useState("");
   const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null);
   const [planInfo, setPlanInfo] = useState<any>(null);
-  const [trendView, setTrendView] = useState("auto");
+  const [trendView, setTrendView] = useState("per-scan");
   const [activeTrendView, setActiveTrendView] = useState("per-scan");
 
   const tenantId = company?.id || "1";
@@ -309,7 +310,7 @@ export function SecurityCenterPage({ company, onNavigate }: any) {
             ) : trends.length > 0 ? (
               <>
               <ResponsiveContainer width="100%" height={230}>
-                <ComposedChart data={trends}>
+                <ComposedChart data={padChartData(trends)}>
                   <defs>
                     <linearGradient id="sc-fill" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#06b6d4" stopOpacity={0.2} />
@@ -335,8 +336,8 @@ export function SecurityCenterPage({ company, onNavigate }: any) {
                     }}
                   />
                   <Legend wrapperStyle={{ fontSize: 11, color: "#9ca3af" }} />
-                  <Area yAxisId="left" type="monotone" dataKey="securityScore" name="Score" stroke="#06b6d4" fill="url(#sc-fill)" strokeWidth={1.5} dot={activeTrendView === "per-scan"} />
-                  <Line yAxisId="right" type="monotone" dataKey="activeThreats" name="Vulnerabilities" stroke="#ef4444" strokeWidth={1.5} dot={activeTrendView === "per-scan"} />
+                  <Area yAxisId="left" type="monotone" dataKey="securityScore" name="Score" stroke="#06b6d4" fill="url(#sc-fill)" strokeWidth={2} dot={{ r: 4, fill: "#06b6d4", strokeWidth: 0 }} connectNulls />
+                  <Line yAxisId="right" type="monotone" dataKey="activeThreats" name="Vulnerabilities" stroke="#ef4444" strokeWidth={2} dot={{ r: 4, fill: "#ef4444", strokeWidth: 0 }} connectNulls />
                 </ComposedChart>
               </ResponsiveContainer>
               {trends.length > 0 && trends.length < 3 && (

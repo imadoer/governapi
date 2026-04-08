@@ -17,6 +17,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import { padChartData } from "../../../../utils/chart-utils";
 
 const fetcher = (url: string, _tid: string) => {
   const token = typeof window !== "undefined" ? sessionStorage.getItem("sessionToken") || "" : "";
@@ -124,7 +125,7 @@ export function PerformanceMonitorPage({ companyId }: { companyId: string }) {
         <h3 className="text-[13px] font-medium text-gray-400 mb-6">24-Hour Response Time</h3>
         {hourlyTrends.length > 0 ? (
           <ResponsiveContainer width="100%" height={240}>
-            <AreaChart data={hourlyTrends}>
+            <AreaChart data={padChartData(hourlyTrends, "hour")}>
               <defs>
                 <linearGradient id="pm-fill" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#06b6d4" stopOpacity={0.25} />
@@ -135,7 +136,7 @@ export function PerformanceMonitorPage({ companyId }: { companyId: string }) {
               <XAxis dataKey="hour" stroke="#4b5563" tick={{ fontSize: 11 }} tickFormatter={(v) => new Date(v).toLocaleTimeString([], { hour: "2-digit" })} />
               <YAxis stroke="#4b5563" tick={{ fontSize: 11 }} />
               <Tooltip {...tip} labelFormatter={(v) => new Date(v).toLocaleString()} />
-              <Area type="monotone" dataKey="averageResponseTime" name="Avg (ms)" stroke="#06b6d4" fill="url(#pm-fill)" strokeWidth={1.5} />
+              <Area type="monotone" dataKey="averageResponseTime" name="Avg (ms)" stroke="#06b6d4" fill="url(#pm-fill)" strokeWidth={2} dot={{ r: 4, fill: "#06b6d4", strokeWidth: 0 }} connectNulls />
             </AreaChart>
           </ResponsiveContainer>
         ) : (

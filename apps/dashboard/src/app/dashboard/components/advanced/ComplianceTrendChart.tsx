@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { padChartData } from "../../../../utils/chart-utils";
 
 interface ComplianceTrendChartProps {
   companyId: string;
@@ -118,7 +119,7 @@ export default function ComplianceTrendChart({ companyId }: ComplianceTrendChart
       </div>
 
       <ResponsiveContainer width="100%" height={300}>
-        <LineChart data={chartData}>
+        <LineChart data={padChartData(chartData)}>
           <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
           <XAxis 
             dataKey="date" 

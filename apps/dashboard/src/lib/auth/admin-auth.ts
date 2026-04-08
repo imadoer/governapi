@@ -61,8 +61,8 @@ export async function createAdminSession(userId: number): Promise<string> {
   expiresAt.setDate(expiresAt.getDate() + 7)
 
   await database.queryOne(
-    `INSERT INTO admin_sessions (user_id, token, expires_at)
-     VALUES ($1, $2, $3)
+    `INSERT INTO admin_sessions (admin_id, email, token, expires_at)
+     VALUES ($1::text, (SELECT email FROM users WHERE id = $1::uuid), $2, $3)
      ON CONFLICT (token) DO UPDATE SET expires_at = $3`,
     [userId, token, expiresAt]
   )
@@ -82,7 +82,7 @@ export async function verifyAdminSession(token: string): Promise<AdminUser | nul
     const session = await database.queryOne(
       `SELECT s.*, u.email, u.first_name, u.last_name, u.role
        FROM admin_sessions s
-       JOIN users u ON u.id = s.user_id
+       JOIN users u ON u.id::text = s.admin_id
        WHERE s.token = $1 AND s.expires_at > NOW()`,
       [token]
     )
