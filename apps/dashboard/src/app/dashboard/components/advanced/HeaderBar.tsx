@@ -118,8 +118,8 @@ export function HeaderBar({
                   <div className={`px-3 py-1.5 rounded-full ${c.bg} ${c.text} text-[11px] font-bold`}>
                     {c.label}
                   </div>
-                  {p === "free" && (
-                    <button className="text-[11px] text-cyan-400 hover:text-cyan-300 transition-colors font-medium">
+                  {p === "free" && onNavigate && (
+                    <button onClick={() => onNavigate("billing-subscription")} className="text-[11px] text-cyan-400 hover:text-cyan-300 transition-colors font-medium">
                       Upgrade
                     </button>
                   )}

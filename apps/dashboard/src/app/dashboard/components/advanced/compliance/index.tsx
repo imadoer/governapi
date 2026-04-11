@@ -14,8 +14,10 @@ function Card({ children, className = "" }: { children: React.ReactNode; classNa
   return <div className={`bg-slate-800/50 border border-white/[0.06] rounded-2xl ${className}`}>{children}</div>;
 }
 
-export function ComplianceHubPage({ company }: { company?: any }) {
+export function ComplianceHubPage({ company, plan }: { company?: any; plan?: string }) {
   const tenantId = company?.id || "1";
+  const userPlan = plan || company?.subscriptionPlan || "free";
+  const isFree = userPlan === "free";
   const [tab, setTab] = useState("overview");
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -81,7 +83,7 @@ export function ComplianceHubPage({ company }: { company?: any }) {
             <OverviewTab frameworks={frameworks} summary={summary} overallScore={d?.overallScore ?? 0} disclaimer={d?.disclaimer} />
           )}
           {tab === "frameworks" && (
-            <FrameworksTab frameworks={frameworks} expanded={expanded} setExpanded={setExpanded} />
+            <FrameworksTab frameworks={frameworks} expanded={expanded} setExpanded={setExpanded} isFree={isFree} />
           )}
           {tab === "report" && (
             <ReportTab companyName={d?.companyName} frameworks={frameworks} overallScore={d?.overallScore} summary={summary} disclaimer={d?.disclaimer} assessedAt={d?.assessedAt} />
@@ -152,7 +154,7 @@ function OverviewTab({ frameworks, summary, overallScore, disclaimer }: any) {
 
 /* ── Frameworks Detail Tab ── */
 
-function FrameworksTab({ frameworks, expanded, setExpanded }: any) {
+function FrameworksTab({ frameworks, expanded, setExpanded, isFree }: any) {
   return (
     <div className="space-y-6">
       {frameworks.map((f: any) => (
@@ -168,28 +170,32 @@ function FrameworksTab({ frameworks, expanded, setExpanded }: any) {
               </div>
             </div>
           </div>
-          <div>
+          <div className="relative">
             {f.requirements.map((req: any) => {
               const isOpen = expanded === `${f.id}-${req.id}`;
               return (
                 <div key={req.id} className="border-b border-white/[0.03] last:border-0">
                   <button
-                    onClick={() => setExpanded(isOpen ? null : `${f.id}-${req.id}`)}
+                    onClick={() => !isFree && setExpanded(isOpen ? null : `${f.id}-${req.id}`)}
                     className="w-full flex items-center justify-between p-4 hover:bg-white/[0.02] transition-colors text-left"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <span className={`shrink-0 text-[14px] ${req.status === "pass" ? "" : ""}`}>
+                      <span className="shrink-0 text-[14px]">
                         {req.status === "pass" ? "✅" : req.status === "warn" ? "⚠️" : "❌"}
                       </span>
                       <div className="min-w-0">
                         <span className="text-[13px] text-white">{req.id} — {req.name}</span>
-                        <div className="text-[11px] text-gray-600 truncate">{req.evidence}</div>
+                        {isFree ? (
+                          <div className="text-[11px] text-gray-600 blur-[4px] select-none">Evidence details require Starter plan</div>
+                        ) : (
+                          <div className="text-[11px] text-gray-600 truncate">{req.evidence}</div>
+                        )}
                       </div>
                     </div>
-                    <ChevronDownIcon className={`w-4 h-4 text-gray-500 shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                    {!isFree && <ChevronDownIcon className={`w-4 h-4 text-gray-500 shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`} />}
                   </button>
                   <AnimatePresence>
-                    {isOpen && (
+                    {isOpen && !isFree && (
                       <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.15 }} className="overflow-hidden">
                         <div className="px-4 pb-4 pl-12 space-y-3">
                           <div>
@@ -213,6 +219,15 @@ function FrameworksTab({ frameworks, expanded, setExpanded }: any) {
                 </div>
               );
             })}
+            {isFree && (
+              <div className="p-4 bg-slate-900/60 border-t border-white/[0.04] text-center">
+                <p className="text-[12px] text-gray-400 mb-2">Upgrade to Starter to see compliance details</p>
+                <button onClick={() => { import("../../../../../utils/checkout").then(m => m.goToBilling("starter")); }}
+                  className="px-4 py-1.5 rounded-lg text-[11px] font-medium bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:opacity-90 transition-opacity">
+                  Upgrade — $19/mo
+                </button>
+              </div>
+            )}
           </div>
         </Card>
       ))}

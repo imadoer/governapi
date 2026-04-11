@@ -1119,7 +1119,7 @@ export function VulnerabilitiesPage({ company }: { company?: any }) {
                               <div className="absolute inset-0 flex items-center justify-center">
                                 <div className="bg-slate-900/90 border border-white/[0.08] rounded-xl px-5 py-4 text-center shadow-xl">
                                   <p className="text-[12px] text-gray-300 mb-2">Upgrade to Starter to see full fix instructions</p>
-                                  <button className="px-4 py-1.5 rounded-lg text-[11px] font-medium bg-gradient-to-r from-cyan-500 to-blue-500 text-white">
+                                  <button onClick={() => { import("../../../../utils/checkout").then(m => m.goToBilling("starter")); }} className="px-4 py-1.5 rounded-lg text-[11px] font-medium bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:opacity-90 transition-opacity">
                                     Upgrade — $19/mo
                                   </button>
                                 </div>

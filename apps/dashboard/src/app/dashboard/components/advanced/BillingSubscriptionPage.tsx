@@ -35,7 +35,18 @@ export function BillingSubscriptionPage({ companyId }: { companyId: string }) {
   const [costBreakdown, setCostBreakdown] = useState<CostBreakdown | null>(
     null,
   );
-  const [currentPlan] = useState("professional");
+  const [currentPlan, setCurrentPlan] = useState("free");
+
+  // Fetch actual plan from API
+  useEffect(() => {
+    const token = typeof window !== "undefined" ? sessionStorage.getItem("sessionToken") : null;
+    if (token && companyId) {
+      fetch("/api/customer/plan", { headers: { "Authorization": `Bearer ${token}` }, credentials: "include" })
+        .then(r => r.json())
+        .then(d => { if (d.success && d.plan) setCurrentPlan(d.plan); })
+        .catch(() => {});
+    }
+  }, [companyId]);
   const [activeTab, setActiveTab] = useState("plans");
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
@@ -97,6 +108,10 @@ export function BillingSubscriptionPage({ companyId }: { companyId: string }) {
   }, [companyId]);
 
   const handleUpgrade = async (planType: string) => {
+    if (planType === "enterprise") {
+      window.location.href = "mailto:sales@governapi.com?subject=Enterprise%20Plan%20Inquiry";
+      return;
+    }
     try {
       const response = await fetch("/api/billing/create-checkout-session", {
         method: "POST",
@@ -113,9 +128,10 @@ export function BillingSubscriptionPage({ companyId }: { companyId: string }) {
       });
 
       const data = await response.json();
+      const checkoutUrl = data?.url || data?.checkout?.url;
 
-      if (data.success && data.checkout.url) {
-        window.location.href = data.checkout.url;
+      if (checkoutUrl) {
+        window.location.href = checkoutUrl;
       } else {
         showToast(data.error || "Failed to start checkout", "error");
       }
@@ -381,9 +397,11 @@ export function BillingSubscriptionPage({ companyId }: { companyId: string }) {
                     onClick={() => handleUpgrade(plan.id)}
                     className={`w-full px-6 py-3 ${plan.btnClasses} text-white rounded-xl font-semibold`}
                   >
-                    {plans.findIndex((p) => p.id === currentPlan) < index
-                      ? "Upgrade"
-                      : "Downgrade"}
+                    {plan.id === "enterprise"
+                      ? "Contact Sales"
+                      : plans.findIndex((p) => p.id === currentPlan) < index
+                        ? `Subscribe to ${plan.name}`
+                        : "Downgrade"}
                   </motion.button>
                 )}
               </motion.div>

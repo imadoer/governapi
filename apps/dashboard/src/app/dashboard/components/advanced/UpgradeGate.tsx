@@ -1,6 +1,7 @@
 "use client";
 
 import { ShieldCheckIcon } from "@heroicons/react/24/outline";
+import { goToBilling } from "../../../../utils/checkout";
 
 const PLAN_NAMES: Record<string, string> = { free: "Free", starter: "Starter", professional: "Professional" };
 const PLAN_PRICES: Record<string, string> = { starter: "$19/mo", professional: "$49/mo" };
@@ -16,7 +17,10 @@ export function UpgradeGate({ feature, requiredPlan, currentPlan }: { feature: s
           {PLAN_PRICES[requiredPlan] ? ` (${PLAN_PRICES[requiredPlan]})` : ""}.
           You&apos;re currently on <span className="text-gray-400">{PLAN_NAMES[currentPlan] || currentPlan}</span>.
         </p>
-        <button className="px-5 py-2 rounded-xl text-[13px] font-medium bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:opacity-90 transition-opacity">
+        <button
+          onClick={() => goToBilling(requiredPlan as "starter" | "professional")}
+          className="px-5 py-2 rounded-xl text-[13px] font-medium bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:opacity-90 transition-opacity"
+        >
           Upgrade to {PLAN_NAMES[requiredPlan]}
         </button>
       </div>

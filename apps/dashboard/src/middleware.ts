@@ -7,6 +7,7 @@ const authPublicRoutes = [
   "/api/admin/auth/login",
   "/api/badge/",
   "/api/ci/",
+  "/api/billing/webhook",
   "/api/customer/data-export",
   "/report/",
   // "/api/customer/", // ✅ Commented out so authentication will apply

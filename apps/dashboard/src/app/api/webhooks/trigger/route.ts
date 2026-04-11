@@ -122,9 +122,12 @@ export async function POST(req: NextRequest) {
     }
 
     // Get active webhooks for this tenant and event type
+    // For "test" event, trigger ALL active webhooks regardless of event filter
     const webhooks = await database.queryMany(
-      "SELECT * FROM webhooks WHERE tenant_id = $1 AND enabled = true AND $2 = ANY(events)",
-      [tenantId, event_type],
+      event_type === "test"
+        ? "SELECT * FROM webhooks WHERE tenant_id = $1 AND enabled = true"
+        : "SELECT * FROM webhooks WHERE tenant_id = $1 AND enabled = true AND events @> $2::jsonb",
+      event_type === "test" ? [tenantId] : [tenantId, JSON.stringify([event_type])],
     );
 
     if (webhooks.length === 0) {

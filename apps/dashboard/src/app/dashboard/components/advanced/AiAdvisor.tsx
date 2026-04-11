@@ -113,9 +113,9 @@ export function AiAdvisor({ companyId, plan }: { companyId: string; plan: string
                   <SparklesIcon className="w-10 h-10 text-violet-400/40 mx-auto mb-3" />
                   <h3 className="text-[15px] font-semibold text-white mb-2">AI Security Advisor</h3>
                   <p className="text-[12px] text-gray-500 mb-4">Get personalized security advice based on your scan data. Available on Professional plan.</p>
-                  <div className="inline-block px-4 py-2 rounded-xl text-[12px] font-medium bg-gradient-to-r from-violet-500 to-cyan-500 text-white">
+                  <button onClick={() => { import("../../../../utils/checkout").then(m => m.goToBilling("professional")); }} className="inline-block px-4 py-2 rounded-xl text-[12px] font-medium bg-gradient-to-r from-violet-500 to-cyan-500 text-white hover:opacity-90 transition-opacity cursor-pointer">
                     Upgrade to Professional
-                  </div>
+                  </button>
                 </div>
               </div>
             ) : (

@@ -54,73 +54,49 @@ const SIDEBAR_ITEMS = [
     items: [{ id: "overview", label: "Overview", icon: ChartBarIcon }],
   },
   {
-    category: "Integrations",
-    items: [
-      {
-        id: "external-integrations",
-        label: "External Integrations",
-        icon: GlobeAltIcon,
-      },
-    ],
-  },
-  {
     category: "Security",
     items: [
-      {
-        id: "security-center",
-        label: "Security Center",
-        icon: ShieldCheckIcon,
-      },
-      {
-        id: "threat-surface",
-        label: "Threat Surface",
-        icon: BoltIcon,
-      },
+      { id: "security-center", label: "Security Center", icon: ShieldCheckIcon },
+      { id: "threat-surface", label: "Threat Surface", icon: BoltIcon },
+      { id: "vulnerability-scanner", label: "Vulnerability Scanner", icon: FireIcon },
       { id: "api-discovery", label: "API Discovery", icon: GlobeAltIcon },
+      { id: "custom-rules", label: "Security Policies", icon: CubeIcon },
     ],
   },
   {
-    category: "Compliance & Scanning",
+    category: "Compliance",
     items: [
       { id: "compliance-hub", label: "Compliance Hub", icon: ChartBarIcon },
-      {
-        id: "vulnerability-scanner",
-        label: "Vulnerability Scanner",
-        icon: FireIcon,
-      },
     ],
   },
   {
     category: "Monitoring",
     items: [
-      {
-        id: "performance-monitor",
-        label: "Performance Monitor",
-        icon: ChartBarIcon,
-      },
+      { id: "performance-monitor", label: "Performance Monitor", icon: ChartBarIcon },
     ],
   },
   {
     category: "API Management",
     items: [
       { id: "api-management", label: "API Management", icon: GlobeAltIcon },
-      { id: "custom-rules", label: "Security Policies", icon: CubeIcon },
       { id: "webhook-center", label: "Webhook Center", icon: BoltIcon },
     ],
   },
   {
     category: "Insights & Data",
     items: [
-      {
-        id: "analytics-insights",
-        label: "Analytics & Insights",
-        icon: ChartBarIcon,
-      },
+      { id: "analytics-insights", label: "Analytics & Insights", icon: ChartBarIcon },
       { id: "data-management", label: "Data Management", icon: CubeIcon },
     ],
   },
   {
-    category: "Account",
+    category: "Integrations",
+    items: [
+      { id: "external-integrations", label: "External Integrations", icon: GlobeAltIcon },
+    ],
+  },
+  {
+    category: "Settings",
     items: [
       { id: "settings", label: "Settings", icon: CogIcon },
     ],
@@ -155,6 +131,13 @@ export default function AdvancedDashboard() {
         setCompany(JSON.parse(storedCompany));
       } else {
         router.push("/login");
+      }
+
+      // Read ?view= query param to switch tabs (used by upgrade buttons from anywhere)
+      const params = new URLSearchParams(window.location.search);
+      const viewParam = params.get("view");
+      if (viewParam === "billing") {
+        setActiveFeature("billing-subscription");
       }
     }
   }, []);
@@ -420,209 +403,217 @@ export default function AdvancedDashboard() {
 
   const renderContent = () => {
     if (activeFeature === "overview") {
+      const score = dashboardStats.security.overallScore;
+      const grade = getLetterGrade(score);
+      const vulns = dashboardStats.topVulnerabilities || dashboardStats.latestScanReport?.vulnerabilities || [];
+      const ranked = vulns.map((v: any) => ({ ...v, impactPts: calcImpactPoints(v) })).sort((a: any, b: any) => b.impactPts - a.impactPts);
+      const top3 = ranked.slice(0, 3);
+      const projectedScore = Math.min(100, score + top3.reduce((s: number, v: any) => s + v.impactPts, 0));
+      const projectedGrade = getLetterGrade(projectedScore);
+      const lastScan = dashboardStats.latestScanReport;
+      const lastScanTime = lastScan?.completedAt ? new Date(lastScan.completedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : null;
+      const hasScansData = dashboardStats.overview.totalScans > 0;
+      const scoreRingColor = score >= 80 ? "#10b981" : score >= 50 ? "#f59e0b" : "#ef4444";
+      const r = 62, circ = 2 * Math.PI * r;
+
+      // Zero-scan state
+      if (!hasScansData && !onboardingDone) {
+        return (
+          <div className="flex flex-col items-center justify-center py-16 max-w-lg mx-auto text-center">
+            <div className="w-20 h-20 bg-gradient-to-br from-cyan-500 to-emerald-500 rounded-2xl flex items-center justify-center mb-6 shadow-[0_0_40px_rgba(6,182,212,0.3)]">
+              <ShieldCheckIcon className="w-10 h-10 text-white" />
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-2">Scan your first API to see your security score</h2>
+            <p className="text-sm text-gray-500 mb-8">Paste any public API endpoint below. Takes about 10 seconds.</p>
+            <div className="flex gap-3 w-full">
+              <input type="url" value={addApiUrl} onChange={(e) => setAddApiUrl(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && addApiUrl) { setOnboardingStep(1); handleOnboardingScan(); } }}
+                placeholder="https://api.yourcompany.com"
+                className="flex-1 px-4 py-3.5 bg-white/[0.04] border border-cyan-500/25 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500/50 text-sm" autoFocus />
+              <button onClick={() => { setOnboardingStep(1); handleOnboardingScan(); }} disabled={!addApiUrl || onboardingLoading}
+                className="px-6 py-3.5 bg-gradient-to-r from-cyan-500 to-emerald-500 text-white rounded-xl font-semibold text-sm shadow-[0_0_24px_rgba(6,182,212,0.3)] disabled:opacity-40 flex items-center gap-2 whitespace-nowrap">
+                {onboardingLoading ? <><div className="animate-spin w-4 h-4 border-2 border-white/40 border-t-white rounded-full" /> Scanning...</> : "Scan My API"}
+              </button>
+            </div>
+            {onboardingStep >= 1 && (
+              <div className="flex items-center gap-2 mt-4 text-cyan-400 text-sm">
+                <div className="animate-spin w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full" />
+                <span>{onboardingStep <= 2 ? "Scanning your API..." : "Analyzing security..."}</span>
+              </div>
+            )}
+            <p className="text-[11px] text-gray-700 mt-4">No access to your data. Scan is read-only.</p>
+          </div>
+        );
+      }
+
       return (
         <div className="space-y-6">
-          {/* Onboarding Card — shown when customer has no APIs and hasn't completed onboarding */}
-          {endpointCount === 0 && dashboardStats.overview.totalScans === 0 && !onboardingDone && (
-            <div className="bg-slate-800/50 border border-white/[0.06] rounded-2xl p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-[15px] font-semibold text-white">Get Started</h2>
-                  <p className="text-[12px] text-gray-500 mt-0.5">Add an API endpoint to run your first security scan</p>
-                </div>
-                {/* Step indicators */}
-                <div className="flex items-center gap-2">
-                  {["Add API", "Scan", "Results"].map((label, i) => (
-                    <div key={label} className="flex items-center gap-1.5">
-                      <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                        onboardingStep > i ? "bg-emerald-500 text-white" :
-                        onboardingStep === i ? "bg-cyan-500 text-white" :
-                        "bg-slate-700 text-slate-500"
-                      }`}>
-                        {onboardingStep > i ? "✓" : i + 1}
-                      </div>
-                      <span className={`text-[11px] ${onboardingStep >= i ? "text-gray-300" : "text-gray-600"}`}>{label}</span>
-                      {i < 2 && <div className={`w-4 h-px ${onboardingStep > i ? "bg-emerald-500" : "bg-slate-700"}`} />}
-                    </div>
-                  ))}
-                </div>
-              </div>
 
-              {onboardingStep === 0 && (
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={addApiName}
-                    onChange={(e) => setAddApiName(e.target.value)}
-                    placeholder="API name"
-                    className="w-40 px-3 py-2 bg-white/[0.03] border border-white/[0.06] rounded-lg text-[13px] text-white placeholder-gray-600 focus:outline-none focus:border-white/[0.12]"
-                  />
-                  <input
-                    type="url"
-                    value={addApiUrl}
-                    onChange={(e) => setAddApiUrl(e.target.value)}
-                    placeholder="https://api.yourcompany.com/endpoint"
-                    className="flex-1 px-3 py-2 bg-white/[0.03] border border-white/[0.06] rounded-lg text-[13px] text-white placeholder-gray-600 focus:outline-none focus:border-white/[0.12]"
-                  />
-                  <button
-                    onClick={() => { setOnboardingStep(1); handleOnboardingScan(); }}
-                    disabled={!addApiUrl || onboardingLoading}
-                    className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 text-white text-[13px] font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                  >
-                    Scan
+          {/* ═══ HERO CARD: Score + Risk + Fixes as one unit ═══ */}
+          <div className="bg-gradient-to-b from-white/[0.03] to-transparent border border-white/[0.06] rounded-2xl overflow-hidden">
+
+            {/* Score + Status + Risk Summary */}
+            <div className="px-6 pt-5 pb-4">
+              <div className="flex items-start gap-6">
+                {/* Score ring */}
+                <div className="relative w-[120px] h-[120px] shrink-0">
+                  <svg viewBox="0 0 140 140" className="w-full h-full -rotate-90">
+                    <circle cx="70" cy="70" r={r} fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="8" />
+                    <motion.circle cx="70" cy="70" r={r} fill="none" stroke={scoreRingColor} strokeWidth="8" strokeLinecap="round"
+                      strokeDasharray={circ} initial={{ strokeDashoffset: circ }}
+                      animate={{ strokeDashoffset: circ * (1 - Math.min(score, 100) / 100) }}
+                      transition={{ duration: 1.2, ease: "easeOut" }} />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className={`text-xl font-black ${grade.color}`}>{grade.letter}</span>
+                    <span className="text-2xl font-bold text-white">{score}</span>
+                    <span className="text-[9px] text-gray-500">/ 100</span>
+                  </div>
+                </div>
+
+                {/* Status + risk summary */}
+                <div className="flex-1 min-w-0 pt-1">
+                  <h2 className="text-[17px] font-semibold text-white mb-1">
+                    {score >= 90 ? "Your API is well protected" : score >= 70 ? "Good, but room to improve" : score >= 50 ? "Security risks detected" : "Critical security issues found"}
+                  </h2>
+                  {lastScanTime && (
+                    <div className="flex items-center gap-3 mb-3">
+                      <span className="text-[11px] text-gray-500">Last scanned: {lastScanTime}</span>
+                      <button onClick={handleRefresh} className="text-[11px] text-cyan-500 hover:text-cyan-400 font-medium transition-colors">Rescan</button>
+                    </div>
+                  )}
+                  {vulns.length > 0 && (
+                    <p className="text-[13px] text-gray-400 leading-relaxed">
+                      {(() => {
+                        const vulnTypes = [...new Set(vulns.map((v: any) => v.type || v.title))];
+                        const endpoints = [...new Set(vulns.map((v: any) => { try { return new URL(v.affectedUrl || "").hostname; } catch { return ""; } }).filter(Boolean))];
+                        const critCount = vulns.filter((v: any) => v.severity === "CRITICAL").length;
+                        const highCount = vulns.filter((v: any) => v.severity === "HIGH").length;
+                        let s = `We found ${vulns.length} issue${vulns.length > 1 ? "s" : ""}`;
+                        if (endpoints.length > 0) s += ` across ${endpoints.length} endpoint${endpoints.length > 1 ? "s" : ""}`;
+                        s += ". ";
+                        if (critCount > 0) s += `${critCount} critical — fix immediately. `;
+                        else if (highCount > 0) s += `${highCount} high-priority to address. `;
+                        if (vulnTypes.length <= 3) s += `Main concerns: ${vulnTypes.join(", ")}.`;
+                        else s += `Main concerns: ${vulnTypes.slice(0, 3).join(", ")}, +${vulnTypes.length - 3} more.`;
+                        return s;
+                      })()}
+                    </p>
+                  )}
+                  {score >= 90 && vulns.length === 0 && (
+                    <p className="text-[13px] text-emerald-400/80 leading-relaxed">No issues found. Security headers, encryption, and access controls are properly configured.</p>
+                  )}
+                </div>
+
+                {/* Compact scan input — right side */}
+                <div className="shrink-0 hidden lg:flex items-center gap-2">
+                  <input type="url" value={addApiUrl} onChange={(e) => setAddApiUrl(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && addApiUrl) { setOnboardingStep(1); handleOnboardingScan(); } }}
+                    placeholder="Scan a URL..."
+                    className="w-48 px-3 py-2 bg-white/[0.04] border border-white/[0.06] rounded-lg text-[12px] text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500/30" />
+                  <button onClick={() => { setOnboardingStep(1); handleOnboardingScan(); }} disabled={!addApiUrl || onboardingLoading}
+                    className="px-3 py-2 bg-cyan-500/20 text-cyan-400 rounded-lg text-[12px] font-medium hover:bg-cyan-500/30 disabled:opacity-40 transition-colors whitespace-nowrap">
+                    {onboardingLoading ? "..." : "Scan"}
                   </button>
                 </div>
-              )}
-
-              {onboardingStep >= 1 && onboardingStep < 3 && (
-                <div className="flex items-center gap-2 text-cyan-400 text-[13px]">
-                  <div className="animate-spin w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full" />
-                  <span>{onboardingStep === 1 ? "Registering..." : "Scanning..."}</span>
-                </div>
-              )}
-
-              {onboardingStep === 3 && onboardingDone && (
-                <div className="flex items-center gap-2 text-emerald-400 text-[13px]">
-                  <ShieldCheckIcon className="w-4 h-4" />
-                  <span>Scan complete — your score is ready below.</span>
-                </div>
-              )}
-
-              {onboardingStep === 3 && !onboardingDone && (
-                <div className="flex items-center gap-2 text-cyan-400 text-[13px]">
-                  <div className="animate-spin w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full" />
-                  <span>Analyzing...</span>
-                </div>
-              )}
+              </div>
             </div>
-          )}
 
-          {/* Top 3 Fixes Banner */}
-          {(() => {
-            const currentScore = dashboardStats.security.overallScore;
-            const grade = getLetterGrade(currentScore);
-            const vulns = dashboardStats.topVulnerabilities || dashboardStats.latestScanReport?.vulnerabilities || [];
-            if (currentScore >= 90 && vulns.length === 0) {
-              return (
-                <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-                  className="bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border border-emerald-500/20 rounded-2xl p-5">
-                  <div className="flex items-center gap-3">
-                    <div className={`text-4xl font-black ${grade.color}`}>{grade.letter}</div>
-                    <div>
-                      <h2 className="text-[15px] font-semibold text-white">Your APIs are well secured</h2>
-                      <p className="text-[12px] text-emerald-400/80">Score: {currentScore}/100 — Keep monitoring for new threats</p>
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            }
-            const ranked = vulns.map((v: any) => ({ ...v, impactPts: calcImpactPoints(v) }))
-              .sort((a: any, b: any) => b.impactPts - a.impactPts)
-              .slice(0, 3);
-            if (ranked.length === 0) return null;
-            const projectedScore = Math.min(100, currentScore + ranked.reduce((s: number, v: any) => s + v.impactPts, 0));
-            const projectedGrade = getLetterGrade(projectedScore);
-            return (
-              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-                className="bg-gradient-to-r from-cyan-500/[0.07] to-emerald-500/[0.07] border border-cyan-500/20 rounded-2xl p-5">
+            {/* Top 3 Fixes — inside the hero card */}
+            {top3.length > 0 && (
+              <div className="px-6 pb-5 border-t border-white/[0.04] pt-4">
                 <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-[14px] font-semibold text-white">
-                    Fix these {ranked.length} issue{ranked.length > 1 ? "s" : ""} to increase your score from{" "}
-                    <span className={grade.color}>{currentScore}</span>
-                    {" → "}
-                    <span className="text-emerald-400 font-bold">{projectedScore}</span>
-                  </h2>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-2xl font-black ${grade.color}`}>{grade.letter}</span>
-                    <span className="text-gray-600">→</span>
-                    <span className={`text-2xl font-black ${projectedGrade.color}`}>{projectedGrade.letter}</span>
-                  </div>
+                  <h3 className="text-[13px] font-medium text-gray-400">Fix these to improve your score</h3>
+                  <span className="text-[12px]">
+                    <span className={grade.color}>{grade.letter} {score}</span>
+                    <span className="text-gray-600 mx-1">→</span>
+                    <span className={`font-bold ${projectedGrade.color}`}>{projectedGrade.letter} {projectedScore}</span>
+                  </span>
                 </div>
-                <div className="space-y-2">
-                  {ranked.map((v: any, i: number) => (
+                <div className="space-y-1.5">
+                  {top3.map((v: any, i: number) => (
                     <button key={v.id || i} onClick={() => setActiveFeature("vulnerability-scanner")}
-                      className="w-full flex items-center justify-between py-2 px-3 rounded-xl bg-white/[0.03] border border-white/[0.04] hover:bg-white/[0.06] transition-colors text-left">
+                      className="w-full flex items-center justify-between py-2.5 px-3 rounded-xl bg-white/[0.02] border border-white/[0.03] hover:bg-white/[0.04] transition-colors text-left">
                       <div className="flex items-center gap-3 min-w-0">
-                        <span className="text-[13px] text-gray-500 font-mono w-5">{i + 1}.</span>
+                        <span className="text-[13px] text-gray-600 font-mono w-4">{i + 1}.</span>
                         <div className="min-w-0">
-                          <div className="text-[13px] text-white truncate">{v.title}</div>
-                          {(v.remediation || v.description) && (
-                            <div className="text-[11px] text-gray-600 truncate">{v.remediation || v.description}</div>
-                          )}
+                          <div className="text-[13px] text-white">{v.title}</div>
+                          {(v.remediation || v.description) && <div className="text-[11px] text-gray-600 truncate">{(v.remediation || v.description).slice(0, 80)}</div>}
                         </div>
                       </div>
                       <span className="shrink-0 px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-500/15 text-emerald-400">+{v.impactPts} pts</span>
                     </button>
                   ))}
                 </div>
-              </motion.div>
-            );
-          })()}
-
-          {/* Hero Security Score */}
-          <SecurityScore
-            score={dashboardStats.security.overallScore}
-            totalEndpoints={endpointCount || dashboardStats.overview.totalApis}
-            threatsBlocked={dashboardStats.overview.blockedThreats}
-          />
-
-          {/* Metric Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <MetricCard icon={ShieldCheckIcon} label="Monitored Endpoints" value={endpointCount || dashboardStats.overview.totalApis} delay={0.1} />
-            <MetricCard icon={BoltIcon} label="Policies Active" value={dashboardStats.overview.activePolicies ?? 0} delay={0.15} />
-            <MetricCard icon={BugAntIcon} label="Scans (7 days)" value={dashboardStats.overview.scansLast7Days} delay={0.2} />
-            <MetricCard icon={ChartBarIcon} label="Total Scans" value={dashboardStats.overview.totalScans} delay={0.25} />
+              </div>
+            )}
           </div>
 
-          {/* Top Vulnerabilities — sorted by impact score */}
-          {dashboardStats.topVulnerabilities && dashboardStats.topVulnerabilities.length > 0 && (
+          {/* Mobile scan input (hidden on lg) */}
+          <div className="lg:hidden">
+            <div className="flex gap-2">
+              <input type="url" value={addApiUrl} onChange={(e) => setAddApiUrl(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && addApiUrl) { setOnboardingStep(1); handleOnboardingScan(); } }}
+                placeholder="Scan another URL..."
+                className="flex-1 px-3 py-2.5 bg-white/[0.04] border border-white/[0.06] rounded-lg text-[12px] text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500/30" />
+              <button onClick={() => { setOnboardingStep(1); handleOnboardingScan(); }} disabled={!addApiUrl || onboardingLoading}
+                className="px-4 py-2.5 bg-cyan-500 text-white rounded-lg text-[12px] font-medium disabled:opacity-40">Scan</button>
+            </div>
+          </div>
+
+          {/* 5. Pass/Fail Checklist */}
+          {lastScan && (
             <div className="bg-slate-800/50 border border-white/[0.06] rounded-2xl p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-[13px] font-medium text-gray-400">Top Vulnerabilities</h3>
-                <button onClick={() => setActiveFeature("vulnerability-scanner")} className="text-[11px] text-gray-500 hover:text-white transition-colors">View all →</button>
-              </div>
-              <div className="space-y-2">
-                {[...dashboardStats.topVulnerabilities]
-                  .map((v: any) => ({ ...v, impactPts: calcImpactPoints(v) }))
-                  .sort((a: any, b: any) => b.impactPts - a.impactPts)
-                  .slice(0, 5)
-                  .map((v: any, i: number) => (
-                  <div key={v.id || i} className="flex items-center justify-between py-2.5 px-3 rounded-xl bg-white/[0.02] border border-white/[0.03]">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className={`shrink-0 px-2 py-0.5 text-[10px] font-bold rounded-full ${
-                        v.severity === "CRITICAL" ? "bg-red-500/15 text-red-400" :
-                        v.severity === "HIGH" ? "bg-amber-500/15 text-amber-400" :
-                        "bg-yellow-500/15 text-yellow-400"
-                      }`}>{v.severity}</span>
-                      <div className="min-w-0">
-                        <div className="text-[13px] text-white truncate">{v.title}</div>
-                        {v.affectedUrl && <div className="text-[11px] text-gray-600 truncate">{v.affectedUrl}</div>}
+              <h3 className="text-[14px] font-semibold text-white mb-4">Security Checklist</h3>
+              {(() => {
+                const scanVulns = lastScan.vulnerabilities || [];
+                const vulnTypes = new Set(scanVulns.map((v: any) => (v.type || v.title || "").toLowerCase()));
+                const checks = [
+                  { label: "HTTPS Encryption", pass: lastScan.url?.startsWith("https"), failMsg: "Not using HTTPS" },
+                  { label: "Security Headers", pass: !["missing hsts", "missing csp", "missing x-frame-options", "missing x-content-type-options"].some(h => vulnTypes.has(h)), failMsg: "Missing security headers" },
+                  { label: "Rate Limiting", pass: !vulnTypes.has("missing rate limiting") && !vulnTypes.has("no rate limiting detected"), failMsg: "No rate limiting detected" },
+                  { label: "Server Info Hidden", pass: !vulnTypes.has("information disclosure") && !vulnTypes.has("server version disclosure") && !vulnTypes.has("technology stack disclosure"), failMsg: "Server details exposed" },
+                  { label: "No Sensitive Files Exposed", pass: ![...vulnTypes].some(t => t.includes("exposed sensitive")), failMsg: "Sensitive files accessible" },
+                  { label: "No Credential Leaks", pass: ![...vulnTypes].some(t => t.includes("credential leak")), failMsg: "Credentials found in response" },
+                ];
+                return (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {checks.map((c) => (
+                      <div key={c.label} className="flex items-center gap-3 py-2.5 px-3 rounded-xl bg-white/[0.02] border border-white/[0.03]">
+                        {c.pass ? (
+                          <span className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0"><span className="text-emerald-400 text-[12px]">✓</span></span>
+                        ) : (
+                          <span className="w-5 h-5 rounded-full bg-red-500/20 flex items-center justify-center shrink-0"><span className="text-red-400 text-[12px]">✗</span></span>
+                        )}
+                        <div>
+                          <span className={`text-[13px] ${c.pass ? "text-gray-300" : "text-white"}`}>{c.label}</span>
+                          {!c.pass && <div className="text-[11px] text-red-400/70">{c.failMsg}</div>}
+                        </div>
                       </div>
-                    </div>
-                    <span className="shrink-0 px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-500/15 text-emerald-400">+{v.impactPts} pts</span>
+                    ))}
                   </div>
-                ))}
-              </div>
+                );
+              })()}
             </div>
           )}
 
-          {/* Your APIs — per-endpoint scores */}
+          {/* 6. Your APIs */}
           {endpointsList.length > 0 && (
             <div className="bg-slate-800/50 border border-white/[0.06] rounded-2xl p-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-[13px] font-medium text-gray-400">Your APIs</h3>
-                <button onClick={() => setActiveFeature("api-management")} className="text-[11px] text-gray-500 hover:text-white transition-colors">View all →</button>
+                <h3 className="text-[14px] font-semibold text-white">Your APIs</h3>
+                <button onClick={() => setActiveFeature("api-management")} className="text-[11px] text-gray-500 hover:text-white transition-colors">Manage →</button>
               </div>
               <div className="space-y-2">
                 {endpointsList.slice(0, 6).map((ep: any) => {
-                  const score = ep.score ?? 0;
-                  const scoreColor = score >= 80 ? "text-emerald-400 bg-emerald-500/15" : score >= 60 ? "text-amber-400 bg-amber-500/15" : "text-red-400 bg-red-500/15";
+                  const s = ep.score ?? 0;
+                  const c = s >= 80 ? "text-emerald-400 bg-emerald-500/15" : s >= 60 ? "text-amber-400 bg-amber-500/15" : "text-red-400 bg-red-500/15";
                   return (
                     <div key={ep.url} className="flex items-center justify-between py-2.5 px-3 rounded-xl bg-white/[0.02] border border-white/[0.03]">
                       <span className="text-[12px] text-cyan-400 font-mono truncate max-w-[60%]">{ep.url}</span>
                       <div className="flex items-center gap-3">
-                        {ep.vulnCount > 0 && <span className="text-[11px] text-gray-500">{ep.vulnCount} vuln{ep.vulnCount !== 1 ? "s" : ""}</span>}
-                        <span className={`px-2 py-0.5 text-[11px] font-bold rounded-full ${scoreColor}`}>{score}/100</span>
+                        {ep.vulnCount > 0 && <span className="text-[11px] text-gray-500">{ep.vulnCount} issue{ep.vulnCount !== 1 ? "s" : ""}</span>}
+                        <span className={`px-2 py-0.5 text-[11px] font-bold rounded-full ${c}`}>{s}/100</span>
                       </div>
                     </div>
                   );
@@ -631,66 +622,50 @@ export default function AdvancedDashboard() {
             </div>
           )}
 
-          {/* Score Breakdown + Fix Instructions */}
-          {dashboardStats.latestScanReport && dashboardStats.latestScanReport.vulnerabilities.length > 0 && (
-            <ScoreBreakdown
-              score={dashboardStats.security.overallScore}
-              url={dashboardStats.latestScanReport.url}
-              vulnerabilities={dashboardStats.latestScanReport.vulnerabilities}
-              onNavigate={setActiveFeature}
-            />
-          )}
-
-          {/* Quick Actions */}
-          {dashboardStats.overview.totalScans > 0 && (
-            <div className="flex flex-wrap gap-2">
-              <button onClick={() => setActiveFeature("security-center")} className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-white/[0.04] text-gray-400 border border-white/[0.06] hover:bg-white/[0.08] hover:text-white transition-colors">View Full Report</button>
-              {dashboardStats.topVulnerabilities?.length > 0 && (
-                <button onClick={() => setActiveFeature("vulnerability-scanner")} className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-white/[0.04] text-gray-400 border border-white/[0.06] hover:bg-white/[0.08] hover:text-white transition-colors">Fix Top Issue</button>
-              )}
-              <button onClick={() => setActiveFeature("security-center")} className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-white/[0.04] text-gray-400 border border-white/[0.06] hover:bg-white/[0.08] hover:text-white transition-colors">Schedule Daily Scan</button>
-              <button onClick={() => setActiveFeature("security-center")} className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-white/[0.04] text-gray-400 border border-white/[0.06] hover:bg-white/[0.08] hover:text-white transition-colors">Export PDF</button>
-            </div>
-          )}
-
-          {/* Threat Detection Timeline */}
-          <ThreatTimeline companyId={company?.id?.toString()} />
-
-          {/* Recent Activity — with score + issue count */}
-          <div className="bg-slate-800/50 border border-white/[0.06] rounded-2xl p-6">
-            <h3 className="text-[13px] font-medium text-gray-400 mb-4">Recent Activity</h3>
-            {dashboardStats.recentActivity && dashboardStats.recentActivity.length > 0 ? (
+          {/* 7. Recent Activity */}
+          {dashboardStats.recentActivity && dashboardStats.recentActivity.length > 0 && (
+            <div className="bg-slate-800/50 border border-white/[0.06] rounded-2xl p-6">
+              <h3 className="text-[14px] font-semibold text-white mb-4">Recent Activity</h3>
               <div className="space-y-2">
-                {dashboardStats.recentActivity.map((activity: any, i: number) => {
-                  const url = activity.subject || "";
-                  const host = (() => { try { return new URL(url).hostname; } catch { return url; } })();
+                {dashboardStats.recentActivity.slice(0, 8).map((activity: any, i: number) => {
+                  const host = (() => { try { return new URL(activity.subject || "").hostname; } catch { return activity.subject; } })();
                   return (
                     <div key={i} className="flex items-center justify-between py-2 border-b border-white/[0.04] last:border-0">
                       <div className="flex items-center gap-3 min-w-0">
-                        <span className={`w-2 h-2 rounded-full shrink-0 ${
-                          activity.score >= 80 ? "bg-emerald-400" : activity.score >= 50 ? "bg-amber-400" : activity.score ? "bg-red-400" : "bg-gray-500"
-                        }`} />
-                        <div className="min-w-0">
-                          <span className="text-[13px] text-white">{host}</span>
-                          {activity.score != null && (
-                            <span className="ml-2 text-[11px] text-gray-500">
-                              Score: {activity.score}
-                              {activity.vulnCount > 0 && ` · ${activity.vulnCount} issue${activity.vulnCount > 1 ? "s" : ""} found`}
-                            </span>
-                          )}
-                        </div>
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${activity.score >= 80 ? "bg-emerald-400" : activity.score >= 50 ? "bg-amber-400" : activity.score ? "bg-red-400" : "bg-gray-500"}`} />
+                        <span className="text-[13px] text-white">{host}</span>
+                        {activity.score != null && <span className="text-[11px] text-gray-500">Score: {activity.score}{activity.vulnCount > 0 ? ` · ${activity.vulnCount} issue${activity.vulnCount > 1 ? "s" : ""}` : ""}</span>}
                       </div>
-                      <span className="text-[11px] text-gray-600 shrink-0 ml-2">{activity.timeAgo}</span>
+                      <span className="text-[11px] text-gray-600 shrink-0">{activity.timeAgo}</span>
                     </div>
                   );
                 })}
               </div>
-            ) : (
-              <div className="text-center py-10">
-                <p className="text-[13px] text-gray-600">No activity yet</p>
-                <p className="text-[11px] text-gray-700 mt-1">Scan an API to see activity here</p>
-              </div>
-            )}
+            </div>
+          )}
+
+          {/* 8. Security Timeline */}
+          <ThreatTimeline companyId={company?.id?.toString()} />
+
+          {/* 9. Go Deeper */}
+          <div className="bg-slate-800/50 border border-white/[0.06] rounded-2xl p-6">
+            <h3 className="text-[14px] font-semibold text-white mb-3">Want to go deeper?</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {[
+                { id: "vulnerability-scanner", label: "Vulnerability Scanner", desc: "Full list of findings with fix guides", icon: BugAntIcon },
+                { id: "compliance-hub", label: "Compliance Hub", desc: "OWASP, PCI DSS, SOC 2, GDPR, HIPAA", icon: ShieldCheckIcon },
+                { id: "security-center", label: "Security Center", desc: "Trend charts, scan history, PDF export", icon: ChartBarIcon },
+              ].map((link) => (
+                <button key={link.id} onClick={() => setActiveFeature(link.id)}
+                  className="flex items-start gap-3 p-4 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.05] hover:border-white/[0.08] transition-colors text-left">
+                  <link.icon className="w-5 h-5 text-cyan-500 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="text-[13px] font-medium text-white">{link.label}</div>
+                    <div className="text-[11px] text-gray-500 mt-0.5">{link.desc}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       );
@@ -707,7 +682,7 @@ export default function AdvancedDashboard() {
       case "vulnerability-scanner":
         return <VulnerabilitiesPage company={company} />;
       case "compliance-hub":
-        return planHasAccess(plan, "starter") ? <ComplianceHubPage company={company} /> : <UpgradeGate feature="Compliance Hub" requiredPlan="starter" currentPlan={plan} />;
+        return <ComplianceHubPage company={company} plan={plan} />;
       case "webhook-center":
         return <WebhookCenterPage companyId={company?.id.toString()} />;
       case "threat-surface":
@@ -823,7 +798,7 @@ export default function AdvancedDashboard() {
           onNavigate={setActiveFeature}
         />
 
-        <div className="flex-1 p-8 overflow-auto relative z-0">
+        <div className="flex-1 p-8 overflow-auto">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={activeFeature}

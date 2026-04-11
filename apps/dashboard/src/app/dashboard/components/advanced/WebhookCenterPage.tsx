@@ -114,7 +114,29 @@ export function WebhookCenterPage({ companyId }: { companyId: string }) {
   const handleTestWebhook = async (webhookId: string) => {
     setTestingWebhookId(webhookId);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      const token = typeof window !== "undefined" ? sessionStorage.getItem("sessionToken") : null;
+      const res = await fetch("/api/webhooks/trigger", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          event_type: "test",
+          data: {
+            message: "Test webhook from GovernAPI",
+            timestamp: new Date().toISOString(),
+            webhook_id: webhookId,
+          },
+        }),
+      });
+      const d = await res.json();
+      if (d.success) {
+        fetchWebhooks();
+      }
+    } catch (error) {
+      console.error("Webhook test failed:", error);
     } finally {
       setTestingWebhookId(null);
     }

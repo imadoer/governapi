@@ -539,8 +539,13 @@ export function SettingsPage({ companyId }: { companyId: string }) {
                             ))}
                           </div>
                           {!isCurrent ? (
-                            <button className="w-full py-2 rounded-lg text-[12px] font-medium bg-white/[0.06] text-gray-300 hover:bg-white/[0.1] border border-white/[0.06] transition-colors">
-                              {tier.price > (plan === "free" ? 0 : plan === "starter" ? 19 : 49) ? "Upgrade" : "Downgrade"}
+                            <button
+                              onClick={() => {
+                                if (tier.id === "enterprise") { window.location.href = "mailto:sales@governapi.com?subject=Enterprise%20Plan"; return; }
+                                import("../../../../utils/checkout").then(m => m.goToBilling(tier.id as "starter" | "professional"));
+                              }}
+                              className="w-full py-2 rounded-lg text-[12px] font-medium bg-white/[0.06] text-gray-300 hover:bg-white/[0.1] border border-white/[0.06] transition-colors">
+                              {tier.id === "enterprise" ? "Contact Sales" : tier.price > (plan === "free" ? 0 : plan === "starter" ? 19 : 49) ? "Upgrade" : "Downgrade"}
                             </button>
                           ) : (
                             <button className="w-full py-2 rounded-lg text-[12px] font-medium bg-white/[0.04] text-gray-600 border border-white/[0.04] cursor-default">

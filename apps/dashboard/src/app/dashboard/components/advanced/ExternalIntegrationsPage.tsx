@@ -247,10 +247,12 @@ export function ExternalIntegrationsPage({ companyId }: { companyId: string }) {
         },
         credentials: "include",
         body: JSON.stringify({
-          integrationId: integration.id,
-          event: "test",
-          message: "Test alert from GovernAPI - Integration verified!",
-          timestamp: new Date().toISOString(),
+          event_type: "test",
+          data: {
+            integrationId: integration.id,
+            message: "Test alert from GovernAPI - Integration verified!",
+            timestamp: new Date().toISOString(),
+          },
         }),
       });
 

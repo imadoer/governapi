@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     );
 
     // Send email
-    const resetLink = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/reset-password/${resetToken}`;
+    const resetLink = `${process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "https://governapi.com"}/reset-password/${resetToken}`;
 
     await resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL || "GovernAPI <noreply@governapi.com>",

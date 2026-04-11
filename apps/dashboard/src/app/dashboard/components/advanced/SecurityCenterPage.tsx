@@ -192,8 +192,14 @@ export function SecurityCenterPage({ company, onNavigate }: any) {
           <p className="text-sm text-gray-500 mt-1">Real-time security operations and monitoring</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={handleExportPDF} className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-white/5 text-gray-400 border border-white/[0.06] hover:bg-white/10 transition-colors flex items-center gap-1.5">
-            <ArrowDownTrayIcon className="w-3.5 h-3.5" /> PDF
+          <button onClick={() => {
+            if (userPlan === "free") {
+              import("../../../../utils/checkout").then(m => m.goToBilling("starter"));
+              return;
+            }
+            handleExportPDF();
+          }} className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-white/5 text-gray-400 border border-white/[0.06] hover:bg-white/10 transition-colors flex items-center gap-1.5">
+            <ArrowDownTrayIcon className="w-3.5 h-3.5" /> {userPlan === "free" ? "PDF (Upgrade)" : "PDF"}
           </button>
           <button onClick={() => refreshMetrics()} className="p-2 rounded-lg text-gray-500 hover:text-white hover:bg-white/5 transition-colors">
             <ArrowPathIcon className="w-4 h-4" />
@@ -207,7 +213,7 @@ export function SecurityCenterPage({ company, onNavigate }: any) {
           {(() => {
             const atLimit = userPlan === "free" && planInfo && (planInfo.usage?.scansThisMonth || 0) >= 3;
             return atLimit ? (
-              <button disabled className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-gray-700 text-gray-500 cursor-not-allowed flex items-center gap-1.5" title="Scan limit reached">
+              <button onClick={() => { import("../../../../utils/checkout").then(m => m.goToBilling("starter")); }} className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:opacity-90 transition-opacity flex items-center gap-1.5">
                 Scan limit reached — Upgrade
               </button>
             ) : (
